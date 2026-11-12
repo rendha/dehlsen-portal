@@ -34,6 +34,10 @@ urlpatterns = [
 
     # SCHEDULING
     path('schedule/', views.schedule_view, name='schedule'),
+    path('setup/users/', views.add_portal_users_page, name='add_portal_users'),
+    path('desk/<slug:kind>/', views.desk_section_view, name='desk_section'),
+    path('calendar/', views.view_schedule_view, name='view_schedule'),
+    path('api/calendar/events/', views.view_schedule_events_api, name='view_schedule_events_api'),
     path('schedule/add/', views.add_schedule_view, name='add_schedule'),
     path('schedule/<int:pk>/edit/', views.edit_schedule_view, name='edit_schedule'),
     path('schedule/<int:pk>/delete/', views.delete_schedule_view, name='delete_schedule'),
@@ -43,6 +47,18 @@ urlpatterns = [
     # APIs
     path('api/schedule/events/', views.schedule_events_api, name='schedule_events_api'),
     path('api/customer/<int:customer_id>/sites/', views.customer_sites_api, name='customer_sites_api'),
+
+    # EMPLOYEE: tap Accept when starting a job
+    path('schedule/<int:pk>/accept/', views.accept_schedule_view, name='accept_schedule'),
+
+    # SERVICE DESK (everybody who is not the scheduler or a site person)
+    path('desk/', views.service_desk_view, name='service_desk'),
+
+    # TO BE SCHEDULED
+    path('to-schedule/', views.to_schedule_view, name='to_schedule'),
+    path('to-schedule/add/', views.to_schedule_add, name='to_schedule_add'),
+    path('to-schedule/new/', views.to_schedule_view, {'mode': 'form'}, name='to_schedule_new'),
+    path('to-schedule/<int:pk>/delete/', views.to_schedule_delete, name='to_schedule_delete'),
 
     # CANVASSING
     path('canvassing/', views.canvassing_view, name='canvassing'),

@@ -1,9 +1,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
+from django.utils import timezone
 from django.http import HttpResponse
 from django.db.models import Sum, Count, Q
 from datetime import datetime, timedelta
-from .models import Customer,Site,CleaningJob, JobExpense,CanvassingLocation,CleaningSchedule, ServiceType
-from .forms import CleaningJobForm, JobExpenseFormSet,CleaningScheduleForm,EmployeeJobForm
+from .models import Customer,Site,CleaningJob, JobExpense,CanvassingLocation,CleaningSchedule, ServiceType, ScheduleRequest
+from .forms import CleaningJobForm, JobExpenseFormSet,CleaningScheduleForm,EmployeeJobForm, EXPENSE_OPTIONS, AUTO_LIMIT
 from django.http import JsonResponse
 import re
 import math
@@ -12,7 +14,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required, login_not_required
-from .permissions import owner_required
+from .permissions import owner_required, is_field_team
 from .geo import coords_from_text, geocode_place, place_names_near, distance_km, looks_like_link, text_matches
 
 
@@ -257,7 +259,47 @@ def schedule_view(request):
         .distinct()
         .order_by('name')
     )
-    return render(request, 'schedule.html', {'services': services, 'kind': kind})   
+    # customers waiting for a date (the "To be scheduled" list), shown under the calendar: cleaning items on the Cleaning
+    # page, everything else on the Services page
+    waiting = ScheduleRequest.objects.filter(done=False).select_related('customer', 'site', 'service_type', 'requested_by')
+    cleaning_items = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+    waiting = waiting.exclude(cleaning_items) if kind == 'services' else waiting.filter(cleaning_items)
+    return render(request, 'schedule.html', {'services': services, 'kind': kind, 'waiting': waiting})   
+
+
+def view_schedule_view(request):
+    """The same calendar as the scheduler's, but only to LOOK at: nobody here can add, edit, drag, delete or change a status."""
+    kind = 'services' if request.GET.get('type') == 'services' else 'cleaning'
+    services = (
+        ServiceType.objects
+        .exclude(name__iexact='cleaning')
+        .filter(schedules__isnull=False)
+        .distinct()
+        .order_by('name')
+    )
+    # the list of customers waiting for a date goes under the calendar: cleaning items on the Cleaning page, the rest on the Services page
+    waiting = ScheduleRequest.objects.filter(done=False).select_related('customer', 'site', 'service_type', 'requested_by')
+    cleaning_items = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+    waiting = waiting.exclude(cleaning_items) if kind == 'services' else waiting.filter(cleaning_items)
+    return render(request, 'schedule.html', {'services': services, 'kind': kind, 'read_only': True, 'page': 'view_schedule', 'waiting': waiting})
+
+
+def view_schedule_events_api(request):
+    """Calendar data for the look-only calendar: no phone numbers and no edit links."""
+    schedules = CleaningSchedule.objects.select_related('customer', 'site', 'assigned_to', 'service_type').exclude(status='Cancelled')
+    is_cleaning = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+    kind = request.GET.get('type')
+    if kind == 'cleaning':
+        schedules = schedules.filter(is_cleaning)
+    elif kind == 'services':
+        schedules = schedules.exclude(is_cleaning)
+    service_id = request.GET.get('service')
+    if service_id and service_id.isdigit():
+        schedules = schedules.filter(service_type_id=int(service_id))
+    events = _schedule_events(schedules, for_owner=False)
+    for event in events:
+        event.get('extendedProps', {}).pop('record_url', None)
+    return JsonResponse(events, safe=False)
 
 
 def _service_breakdown(jobs):
@@ -1291,6 +1333,9 @@ def _schedule_calendar_url(schedule):
 @owner_required
 def add_schedule_view(request):
 
+    # opened from the "To be scheduled" list: the form is filled from that item, and the item is closed when this is saved
+    from_request = request.POST.get('from_request') or request.GET.get('request') or ''
+
     if request.method == 'POST':
 
         form = CleaningScheduleForm(request.POST)
@@ -1298,6 +1343,8 @@ def add_schedule_view(request):
         if form.is_valid():
 
             schedule = form.save()
+
+            _close_request(request.POST.get('from_request'), schedule)
 
             return redirect(_schedule_calendar_url(schedule))
 
@@ -1312,6 +1359,10 @@ def add_schedule_view(request):
         if 'service' in request.GET:
             initial['service'] = request.GET['service']
 
+        wanted = ScheduleRequest.objects.filter(pk=int(from_request), done=False).first() if str(from_request).isdigit() else None
+        if wanted:
+            initial.update(_request_initial(wanted))
+
         form = CleaningScheduleForm(initial=initial)
 
     return render(
@@ -1325,6 +1376,7 @@ def add_schedule_view(request):
                 else 'Add Schedule'
             ),
             'button_text': 'Save Schedule',
+            'from_request': from_request,
         }
     )
 
@@ -1390,6 +1442,19 @@ def delete_schedule_view(request, pk):
 
 
 @require_POST
+@require_POST
+def accept_schedule_view(request, pk):
+    """The employee taps Accept when he starts the job: the start time is recorded (only the first tap counts)."""
+    schedule = get_object_or_404(CleaningSchedule, pk=pk, assigned_to=request.user)
+    if schedule.status in ('Scheduled', 'Rescheduled') and not schedule.accepted_at:
+        schedule.accepted_at = timezone.now()
+        schedule.save(update_fields=['accepted_at', 'updated_at'])
+    return JsonResponse({
+        'success': True,
+        'accepted_at': timezone.localtime(schedule.accepted_at).strftime('%I:%M %p').lstrip('0') if schedule.accepted_at else '',
+    })
+
+
 def update_schedule_status_view(request, pk):
 
     schedule = get_object_or_404(
@@ -1431,8 +1496,11 @@ def update_schedule_status_view(request, pk):
         )
 
     schedule.status = new_status
+    if new_status == 'Completed' and not schedule.completed_at:
+        schedule.completed_at = timezone.now()
     schedule.save(update_fields=[
         'status',
+        'completed_at',
         'updated_at',
     ])
 
@@ -1445,6 +1513,7 @@ def update_schedule_status_view(request, pk):
 STATUS_COLORS = {
     'Scheduled': '#3B73B9',
     'Completed': '#28a745',
+    'Partially done': '#8e5bd1',
     'Rescheduled': '#f0ad4e',
     'Cancelled': '#dc3545',
 }
@@ -1462,7 +1531,7 @@ def _schedule_events(schedules, for_owner):
 
         # Cleaning stays just the name; other services show first
         if service.lower() == 'cleaning':
-            title = customer_name
+            title = ('Free – ' if schedule.is_free else 'Paid – ') + customer_name
         else:
             title = f"{service} – {customer_name}"
 
@@ -1497,8 +1566,11 @@ def _schedule_events(schedules, for_owner):
                 schedule.site.solar_kw if schedule.site else schedule.solar_kw
             ) or '',
             'status': schedule.status,
+            'is_free': bool(schedule.is_free),
             'notes': schedule.notes or '',
             'assigned_to': assigned,
+            'accepted_at': timezone.localtime(schedule.accepted_at).strftime('%d %b, %I:%M %p') if schedule.accepted_at else '',
+            'took': schedule.took_text,
         }
 
         if for_owner:
@@ -1736,11 +1808,14 @@ self.addEventListener("fetch", event => {
 
 def home_view(request):
 
-    # Owner -> dashboard, employee -> his jobs
+    # Owner / scheduler -> dashboard, the people who go to site -> their jobs, everybody else -> the Service Desk
     if request.user.is_staff:
         return redirect('dashboard')
 
-    return redirect('my_schedule')
+    if is_field_team(request.user):
+        return redirect('my_schedule')
+
+    return redirect('service_desk')
 
 
 def my_schedule_view(request):
@@ -1841,9 +1916,12 @@ def employee_add_job_view(request):
                 if schedule:
 
                     schedule.status = 'Completed'
+                    if not schedule.completed_at:
+                        schedule.completed_at = timezone.now()
 
                     schedule.save(update_fields=[
                         'status',
+                        'completed_at',
                         'updated_at',
                     ])
 
@@ -1885,5 +1963,208 @@ def employee_add_job_view(request):
             'form': form,
             'formset': formset,
             'schedule': schedule,
+            'expense_options': EXPENSE_OPTIONS,
+            'auto_limit': AUTO_LIMIT,
         }
     )
+
+
+# =========================================================
+# TO BE SCHEDULED  (anybody adds, the scheduler gives the date)
+# =========================================================
+
+def _request_initial(wanted):
+    """The Add Schedule form's starting values for a "to be scheduled" item."""
+    note = wanted.note.strip()
+    who = (wanted.requested_by.get_full_name() or wanted.requested_by.get_username()) if wanted.requested_by_id else ''
+    lines = [note] if note else []
+    if who:
+        lines.append('Asked by ' + who)
+    if wanted.wanted_by:
+        lines.append('Wanted by ' + wanted.wanted_by.strftime('%d %b %Y'))
+    initial = {
+        'customer': wanted.customer_id, 'site': wanted.site_id, 'customer_name': wanted.customer_name,
+        'phone': wanted.phone or (wanted.customer.phone if wanted.customer_id else ''),
+        'location': wanted.location, 'notes': '\n'.join(lines), 'service': wanted.service_name,
+    }
+    if wanted.site_id:
+        initial['solar_kw'] = wanted.site.solar_kw
+    if wanted.wanted_by:
+        initial['scheduled_date'] = wanted.wanted_by
+    return {k: v for k, v in initial.items() if v not in (None, '')}
+
+
+def _close_request(pk, schedule):
+    """The item was scheduled: mark it done and remember which schedule it became."""
+    if str(pk or '').isdigit():
+        from django.utils import timezone
+        item = ScheduleRequest.objects.filter(pk=int(pk), done=False).first()
+        if item:
+            ScheduleRequest.objects.filter(pk=item.pk).update(done=True, done_at=timezone.now(), schedule=schedule)
+            _finish_scheduler_task(item)
+
+
+def to_schedule_view(request, mode='list'):
+    pending = ScheduleRequest.objects.filter(done=False).select_related('customer', 'site', 'service_type', 'requested_by')
+    recent = (
+        ScheduleRequest.objects.filter(done=True)
+        .select_related('customer', 'site', 'service_type', 'requested_by', 'schedule')
+        .order_by('-done_at')[:10]
+    )
+    customers = []
+    for c in Customer.objects.prefetch_related('sites').order_by('name'):
+        sites = []
+        for s in c.sites.all():
+            kw = (str(s.solar_kw) + ' kW') if s.solar_kw else ''
+            sites.append({'id': s.id, 'label': ' - '.join(x for x in (s.location, kw) if x) or 'Site'})
+        customers.append({'id': c.id, 'name': c.name, 'phone': c.phone, 'sites': sites})
+    kind = request.GET.get('type', '')
+    if not kind and not request.user.is_staff:
+        kind = 'cleaning'
+    if kind in ('cleaning', 'services'):
+        only_cleaning = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+        pending = pending.filter(only_cleaning) if kind == 'cleaning' else pending.exclude(only_cleaning)
+        recent = [r for r in recent if r.is_cleaning == (kind == 'cleaning')]
+    return render(request, 'to_schedule.html', {
+        'pending': pending, 'recent': recent, 'customers': customers,
+        'services': ServiceType.suggestions(), 'today': datetime.now().date(),
+        'page': 'to_schedule', 'kind': kind, 'scheduler': _scheduler_name(), 'mode': mode,
+        'wa_link': request.session.pop('tbs_wa', ''),
+    })
+
+
+@require_POST
+def to_schedule_add(request):
+    post = request.POST
+    customer = Customer.objects.filter(pk=post.get('customer')).first() if (post.get('customer') or '').isdigit() else None
+    site = Site.objects.filter(pk=post.get('site'), customer=customer).first() if customer and (post.get('site') or '').isdigit() else None
+    name = ' '.join((post.get('customer_name') or '').split())
+    if not customer and not name:
+        messages.error(request, 'Pick a customer, or type the name.')
+        return redirect('to_schedule')
+    wanted_by = None
+    try:
+        if post.get('wanted_by'):
+            wanted_by = datetime.strptime(post['wanted_by'], '%Y-%m-%d').date()
+    except ValueError:
+        wanted_by = None
+    created = ScheduleRequest.objects.create(
+        customer=customer, customer_name='' if customer else name[:150],
+        phone=(post.get('phone') or '')[:50], site=site, location=(post.get('location') or '')[:250],
+        service_type=ServiceType.from_text(post.get('service')) or ServiceType.cleaning(),
+        note=(post.get('note') or '').strip(), wanted_by=wanted_by, requested_by=request.user,
+    )
+    messages.success(request, 'Added to the list. %s will schedule it.' % (_scheduler_name() or 'The scheduler'))
+    _tell_scheduler(request, created)
+    kind = post.get('back') if post.get('back') in ('cleaning', 'services') else ''
+    return redirect(reverse('to_schedule') + ('?type=' + kind if kind else ''))
+
+
+@require_POST
+def to_schedule_delete(request, pk):
+    item = get_object_or_404(ScheduleRequest, pk=pk, done=False)
+    if request.user.is_staff or item.requested_by_id == request.user.id:
+        item.delete()
+        messages.success(request, 'Removed from the list.')
+    else:
+        messages.error(request, 'Only the person who added it, or the scheduler, can remove it.')
+    return redirect('to_schedule')
+
+
+def _scheduler():
+    """The person who schedules (Fidha): the first person of the task "Cleaning and Services" in the portal; None outside the portal."""
+    try:
+        from portal.models import TaskType
+        task_type = TaskType.objects.filter(name__iexact='Cleaning and Services').first()
+        person = task_type.people.filter(is_active=True).first() if task_type else None
+        if person:
+            return person
+    except Exception:
+        pass
+    # on its own (no portal): the login named fidha, if there is one
+    from django.contrib.auth import get_user_model
+    return get_user_model().objects.filter(username__iexact='fidha', is_active=True).first()
+
+
+def _scheduler_name():
+    person = _scheduler()
+    return (person.first_name or person.get_username()).strip().title() if person else ''
+
+
+def _tell_scheduler(request, item):
+    """In the portal: give the scheduler a Task (red badge, calendar, phone alert) and offer a WhatsApp message to her.
+    Outside the portal nothing happens: the red number on the menu is the signal."""
+    try:
+        from portal import notify
+        from portal.models import Task, TaskType
+        person = _scheduler()
+        task_type = TaskType.objects.filter(name__iexact='Cleaning and Services').first()
+        if person is None or task_type is None or person.id == request.user.id:
+            return
+        from django.utils import timezone
+        details = 'To be scheduled: %s - %s%s' % (item.display_name, item.service_name,
+                                                   (' (' + item.display_location + ')') if item.display_location else '')
+        if item.note:
+            details += '. ' + item.note
+        task = Task.objects.create(task_type=task_type, details=details, created_by=request.user, assigned_to=person,
+                                   due_date=item.wanted_by or (timezone.localdate() + timedelta(days=1)))
+        ScheduleRequest.objects.filter(pk=item.pk).update(task_id=task.id)
+        notify.send_push(person, 'To be scheduled from %s' % notify.name_of(request.user), details, reverse('to_schedule'))
+        link = notify.whatsapp_link(task, request.build_absolute_uri(reverse('to_schedule')))
+        if link:
+            request.session['tbs_wa'] = link
+    except Exception:
+        return
+
+
+def _finish_scheduler_task(item):
+    """It was scheduled, so the Task given to the scheduler is done."""
+    if not item.task_id:
+        return
+    try:
+        from django.utils import timezone
+        from portal.models import Task
+        Task.objects.filter(pk=item.task_id, done=False).update(done=True, done_at=timezone.now())
+    except Exception:
+        return
+
+
+def add_portal_users_page(request):
+    """Superuser only: one button that creates the team's logins (the same as  py manage.py add_portal_users)."""
+    from django.core.exceptions import PermissionDenied
+    if not request.user.is_superuser:
+        raise PermissionDenied
+    output = ''
+    if request.method == 'POST':
+        from io import StringIO
+        from django.core.management import call_command
+        buffer = StringIO()
+        try:
+            call_command('add_portal_users', stdout=buffer)
+            output = buffer.getvalue()
+        except Exception:
+            import traceback
+            output = buffer.getvalue() + '\nSOMETHING WENT WRONG (send this to Claude):\n' + traceback.format_exc()
+    return render(request, 'add_portal_users.html', {'output': output, 'page': 'add_users'})
+
+
+def desk_section_view(request, kind):
+    """Inside Cleaning / General services: two big buttons, the calendar and the pending list."""
+    kind = 'services' if kind == 'services' else 'cleaning'
+    only_cleaning = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+    waiting = ScheduleRequest.objects.filter(done=False)
+    waiting = waiting.exclude(only_cleaning) if kind == 'services' else waiting.filter(only_cleaning)
+    return render(request, 'desk_section.html', {'kind': kind, 'count': waiting.count(), 'page': 'service_desk'})
+
+
+def service_desk_view(request):
+    """The dashboard of everybody who is not the scheduler or a site person: two buttons, Cleaning and General services."""
+    only_cleaning = Q(service_type__isnull=True) | Q(service_type__name__iexact='cleaning')
+    waiting = ScheduleRequest.objects.filter(done=False)
+    cleaning_count = waiting.filter(only_cleaning).count()
+    oldest = waiting.order_by('created_at').first()
+    return render(request, 'service_desk.html', {
+        'cleaning_count': cleaning_count, 'services_count': waiting.count() - cleaning_count,
+        'scheduler': _scheduler_name(), 'oldest_days': oldest.days_waiting if oldest else 0,
+        'mine': waiting.filter(requested_by=request.user).count(), 'page': 'service_desk',
+    })

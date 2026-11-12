@@ -302,6 +302,7 @@ class CleaningSchedule(models.Model):
     STATUS_CHOICES = [
         ('Scheduled', 'Scheduled'),
         ('Completed', 'Completed'),
+        ('Partially done', 'Partially done'),
         ('Rescheduled', 'Rescheduled'),
         ('Cancelled', 'Cancelled'),
     ]
@@ -390,6 +391,24 @@ class CleaningSchedule(models.Model):
         null=True, blank=True, related_name='assigned_schedules'
     )
 
+    # The employee taps "Accept" when he starts, and the job is stamped when it is completed:
+    # the difference is the time he took.
+    # a free cleaning (no charge) or a paid one: shown on the calendar so everybody knows
+    is_free = models.BooleanField(default=False)
+
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def took_text(self):
+        """Accept only means 'I have seen this job' (it is often tapped the day before), so no time is worked out from it."""
+        return ''
+        if not (self.accepted_at and self.completed_at) or self.completed_at < self.accepted_at:
+            return ''
+        minutes = int((self.completed_at - self.accepted_at).total_seconds() // 60)
+        hours, minutes = divmod(minutes, 60)
+        return (f"{hours} h {minutes} min" if hours else f"{minutes} min")
+
     @property
     def service_name(self):
         return self.service_type.name if self.service_type_id else 'Cleaning'
@@ -432,5 +451,50 @@ class CleaningSchedule(models.Model):
         )
 
 
+class ScheduleRequest(models.Model):
+    """A "to be scheduled" item: somebody says this customer needs a cleaning / service visit, and the scheduler gives it a date.
+    When it is scheduled (Add Schedule opened from this item) it is marked done and linked to the schedule."""
 
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedule_requests')
+    customer_name = models.CharField(max_length=150, blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    site = models.ForeignKey(Site, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedule_requests')
+    location = models.CharField(max_length=250, blank=True)
+    service_type = models.ForeignKey(ServiceType, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedule_requests')
+    note = models.TextField(blank=True)
+    wanted_by = models.DateField(null=True, blank=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedule_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+    done = models.BooleanField(default=False)
+    done_at = models.DateTimeField(null=True, blank=True)
+    schedule = models.ForeignKey(CleaningSchedule, on_delete=models.SET_NULL, null=True, blank=True, related_name='from_requests')
+    task_id = models.IntegerField(null=True, blank=True)     # the Task given to the scheduler in the portal (when the portal is there)
 
+    class Meta:
+        ordering = ['created_at']
+
+    @property
+    def display_name(self):
+        return self.customer.name if self.customer_id else self.customer_name
+
+    @property
+    def is_cleaning(self):
+        return self.service_name.strip().lower() == 'cleaning'
+
+    @property
+    def days_waiting(self):
+        from django.utils import timezone
+        return (timezone.localdate() - timezone.localtime(self.created_at).date()).days
+
+    @property
+    def display_location(self):
+        if self.site_id:
+            return self.site.location or self.site.address or self.location
+        return self.location
+
+    @property
+    def service_name(self):
+        return self.service_type.name if self.service_type_id else 'Cleaning'
+
+    def __str__(self):
+        return f"{self.display_name} - {self.service_name}"

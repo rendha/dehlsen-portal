@@ -2,6 +2,7 @@
 <html lang="en">
 
 {% load static %}
+{% load cleaning_extras %}
 
 <head>
 
@@ -284,21 +285,30 @@
 
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'schedule' and kind != 'services' or page == 'add_schedule' or page == 'edit_schedule' %} active-page{% endif %}" href="{% url 'schedule' %}?type=cleaning">
-                                Cleaning Schedule
+                                Cleaning Schedule{% pending_requests_of 'cleaning' as n_cleaning %}{% if n_cleaning %} <span class="badge rounded-pill bg-danger">{{ n_cleaning }}</span>{% endif %}
                             </a>
                         </li>
 
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'schedule' and kind == 'services' %} active-page{% endif %}" href="{% url 'schedule' %}?type=services">
-                                Service Schedule
+                                Service Schedule{% pending_requests_of 'services' as n_services %}{% if n_services %} <span class="badge rounded-pill bg-danger">{{ n_services }}</span>{% endif %}
+                            </a>
+                        </li>
+
+                        {% scheduler_user user as is_scheduler %}
+                        {% if not is_scheduler %}
+                        <li class="nav-item">
+                            <a class="nav-link{% if page == 'to_schedule' %} active-page{% endif %}" href="{% url 'to_schedule' %}">
+                                To Be Scheduled{% pending_requests as waiting %}{% if waiting %} <span class="badge bg-danger">{{ waiting }}</span>{% endif %}
                             </a>
                         </li>
 
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'add_job' %} active-page{% endif %}" href="{% url 'add_job' %}">
-                                Add Job
+                                Add Expense
                             </a>
                         </li>
+                        {% endif %}
 
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'job_list' or page == 'edit_job' %} active-page{% endif %}" href="{% url 'job_list' %}">
@@ -328,6 +338,8 @@
 
                         <!-- ===== EMPLOYEE MENU ===== -->
 
+                        {% field_team user as is_field %}
+                        {% if is_field %}
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'my_schedule' %} active-page{% endif %}" href="{% url 'my_schedule' %}">
                                 My Jobs
@@ -337,6 +349,25 @@
                         <li class="nav-item">
                             <a class="nav-link{% if page == 'employee_add_job' %} active-page{% endif %}" href="{% url 'employee_add_job' %}">
                                 Record Job
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link{% if page == 'service_desk' %} active-page{% endif %}" href="{% url 'service_desk' %}">
+                                Service Desk
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        <li class="nav-item">
+                            <a class="nav-link{% if page == 'view_schedule' %} active-page{% endif %}" href="{% url 'view_schedule' %}">
+                                Schedule Calendar
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link{% if page == 'to_schedule' %} active-page{% endif %}" href="{% url 'to_schedule' %}">
+                                Ask for a Schedule
                             </a>
                         </li>
 

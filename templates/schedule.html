@@ -154,15 +154,22 @@
 
 {% block content %}
 
+{% if read_only %}
+<style>
+    /* look-only calendar: no status change, no edit, no delete */
+    label[for="modalStatus"], #modalStatus, #editButton, #deleteButton, #deleteConfirm { display: none !important; }
+</style>
+{% endif %}
+
 <!-- Switch between the two calendars -->
-<ul class="nav nav-pills mb-3">
+<ul class="nav nav-pills mb-3"{% if read_only %} hidden{% endif %}>
     <li class="nav-item">
-        <a class="nav-link {% if kind != 'services' %}active{% endif %}" href="{% url 'schedule' %}?type=cleaning">
+        <a class="nav-link {% if kind != 'services' %}active{% endif %}" href="{% if read_only %}{% url 'view_schedule' %}{% else %}{% url 'schedule' %}{% endif %}?type=cleaning">
             Cleaning
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if kind == 'services' %}active{% endif %}" href="{% url 'schedule' %}?type=services">
+        <a class="nav-link {% if kind == 'services' %}active{% endif %}" href="{% if read_only %}{% url 'view_schedule' %}{% else %}{% url 'schedule' %}{% endif %}?type=services">
             Services
         </a>
     </li>
@@ -171,10 +178,12 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
 
     <h2 class="fw-bold mb-0">
-        {% if kind == 'services' %}Service Schedule{% else %}Cleaning Schedule{% endif %}
+        {% if kind == 'services' %}Service Calendar{% else %}Cleaning Calendar{% endif %}
     </h2>
 
-    {% if kind == 'services' %}
+    {% if read_only %}
+        <span class="text-muted small">View only</span>
+    {% elif kind == 'services' %}
         <a href="{% url 'add_schedule' %}?service=" class="btn btn-primary">
             + Add Service Visit
         </a>
@@ -211,6 +220,7 @@
     <div class="legend">
         <div class="legend-item"><span class="legend-dot" style="background:#3B73B9"></span> Scheduled</div>
         <div class="legend-item"><span class="legend-dot" style="background:#28a745"></span> Completed</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#8e5bd1"></span> Partially done</div>
         <div class="legend-item"><span class="legend-dot" style="background:#f0ad4e"></span> Rescheduled</div>
         <div class="legend-item"><span class="legend-dot" style="background:#dc3545"></span> Cancelled</div>
     </div>
@@ -231,6 +241,9 @@
         <div class="detail-label">Service</div>
         <div id="modalService" class="detail-value"></div>
 
+        <div class="detail-label">Free or paid</div>
+        <div id="modalType" class="detail-value"></div>
+
         <div class="detail-label">When</div>
         <div id="modalWhen" class="detail-value"></div>
 
@@ -249,10 +262,14 @@
         <div class="detail-label">Notes</div>
         <div id="modalNotes" class="detail-value"></div>
 
+        <div class="detail-label">Accepted by the employee</div>
+        <div id="modalTook" class="detail-value"></div>
+
         <label for="modalStatus" class="detail-label d-block">Status</label>
         <select id="modalStatus" class="form-select mb-3">
             <option value="Scheduled">Scheduled</option>
             <option value="Completed">Completed</option>
+            <option value="Partially done">Partially done</option>
             <option value="Rescheduled">Rescheduled</option>
             <option value="Cancelled">Cancelled</option>
         </select>
@@ -277,6 +294,31 @@
 
 </div>
 
+
+<!-- Customers waiting for a date: Fidha's page only (everybody else has them in the Pending list button) -->
+{% if not read_only %}
+<div class="calendar-card mt-3" id="waitingBox">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h5 class="fw-bold mb-0">To be scheduled{% if waiting %} <span class="badge bg-danger">{{ waiting|length }}</span>{% endif %}</h5>
+        <a href="{% url 'to_schedule' %}" class="btn btn-outline-primary btn-sm">+ Add to the list</a>
+    </div>
+    {% for r in waiting %}
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 py-2" style="border-top:1px solid #e6ebf2">
+        <div>
+            <b>{{ r.display_name }}</b>
+            <span class="badge bg-light text-primary">{{ r.service_name }}</span>
+            {% if r.wanted_by %}<span class="badge bg-warning text-dark">Wanted by {{ r.wanted_by|date:"d M Y" }}</span>{% endif %}
+            <div class="text-muted small">{% if r.display_location %}{{ r.display_location }} &middot; {% endif %}{% if r.phone %}{{ r.phone }} &middot; {% endif %}Added {{ r.created_at|date:"d M" }}{% if r.requested_by %} by {{ r.requested_by.get_full_name|default:r.requested_by.username }}{% endif %}</div>
+            {% if r.note %}<div class="small">{{ r.note|linebreaksbr }}</div>{% endif %}
+        </div>
+        {% if not read_only %}<a class="btn btn-primary btn-sm" href="{% url 'add_schedule' %}?request={{ r.id }}">Schedule it</a>{% endif %}
+    </div>
+    {% empty %}
+    <div class="text-muted small">Nothing is waiting. Everything has a date.</div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% endblock %}
 
 
@@ -286,6 +328,7 @@
 const STATUS_COLORS = {
     Scheduled: '#3B73B9',
     Completed: '#28a745',
+    'Partially done': '#8e5bd1',
     Rescheduled: '#f0ad4e',
     Cancelled: '#dc3545',
 };
@@ -325,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
         buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
 
         events: {
-            url: "{% url 'schedule_events_api' %}",
+            url: "{% if read_only %}{% url 'view_schedule_events_api' %}{% else %}{% url 'schedule_events_api' %}{% endif %}",
             extraParams: function () {
                 const filter = document.getElementById('serviceFilter');
                 return {
@@ -355,8 +398,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         noEventsContent: CALENDAR_KIND === 'services' ? 'No service visits scheduled' : 'No cleanings scheduled',
 
-        editable: true,
-        eventStartEditable: true,
+        editable: {% if read_only %}false{% else %}true{% endif %},
+        eventStartEditable: {% if read_only %}false{% else %}true{% endif %},
         eventDurationEditable: false,
 
         eventClick: function (info) {
@@ -403,12 +446,14 @@ function showScheduleModal(event) {
         : '';
 
     setText('modalService', p.service || 'Cleaning');
+    setText('modalType', (p.service || 'Cleaning').toLowerCase() === 'cleaning' ? (p.is_free ? 'Free cleaning' : 'Paid cleaning') : '');
     setText('modalWhen', when);
     setText('modalPhone', p.phone);
     setText('modalLocation', p.location);
     setText('modalAddress', p.address);
     setText('modalAssigned', p.assigned_to || 'Not assigned');
     setText('modalNotes', p.notes);
+    setText('modalTook', p.accepted_at ? ('Accepted ' + p.accepted_at) : '-');
 
     document.getElementById('modalStatus').value = p.status;
     document.getElementById('editButton').href = p.edit_url;

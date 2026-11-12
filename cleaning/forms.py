@@ -209,6 +209,23 @@ class CleaningJobForm(ServiceFieldMixin, forms.ModelForm):
         return cleaned_data
 
 
+# Quick choices on the expense list.  The amounts are the company's fixed daily food structure (HR notice).
+# Rules shown under the buttons: Breakfast only if you left for the site before 8 am, Dinner only after 8 pm,
+# Auto at most Rs 120 one way and only with prior approval.
+EXPENSE_OPTIONS = [
+    {'name': 'Breakfast', 'cost': 100},
+    {'name': 'Lunch', 'cost': 100},
+    {'name': 'Tea', 'cost': 30},
+    {'name': 'Dinner', 'cost': 150},
+    {'name': 'Fuel', 'cost': None},
+    {'name': 'Train ticket', 'cost': None},
+    {'name': 'Bus ticket', 'cost': None},
+    {'name': 'Auto', 'cost': None},
+    {'name': 'Water', 'cost': None},
+]
+AUTO_LIMIT = 120
+
+
 JobExpenseFormSet = inlineformset_factory(
     CleaningJob,
     JobExpense,
@@ -220,6 +237,8 @@ JobExpenseFormSet = inlineformset_factory(
             attrs={
                 'class': 'form-control',
                 'placeholder': 'e.g. Fuel, Water',
+                'list': 'expense-options',
+                'autocomplete': 'off',
             }
         ),
         'cost': forms.NumberInput(
@@ -270,6 +289,7 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
             'scheduled_time',
             'assigned_to',
             'status',
+            'is_free',
             'notes',
         ]
 
@@ -346,6 +366,8 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
                 }
             ),
 
+            'is_free': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_is_free', 'role': 'switch'}),
+
             'status': forms.Select(
                 attrs={
                     'class': 'form-control',
@@ -383,12 +405,12 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
         self.fields['scheduled_time'].required = False
         self.fields['notes'].required = False
 
-        # Employee dropdown: only active, non-owner users
+        # Employee dropdown: every active person except the superuser (directors such as Fidha and Riswan also go to service)
         self.fields['assigned_to'].required = False
         self.fields['assigned_to'].label = 'Assign to employee'
         self.fields['assigned_to'].queryset = (
             get_user_model().objects
-            .filter(is_active=True, is_staff=False)
+            .filter(is_active=True, is_superuser=False)
             .order_by('first_name', 'username')
         )
         self.fields['assigned_to'].label_from_instance = (

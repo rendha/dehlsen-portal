@@ -1,0 +1,22 @@
+warning: in the working copy of 'cleaning/forms.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'cleaning/permissions.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'cleaning/urls.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'cleaning/views.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/add_job.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/base.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/my_schedule.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'templates/schedule.html', LF will be replaced by CRLF the next time Git touches it
+ cleaning/admin.py               |   8 [32m+[m[31m-[m
+ cleaning/forms.py               |  26 [32m+++[m[31m-[m
+ cleaning/models.py              |  64 [32m+++++++++[m
+ cleaning/permissions.py         |  26 [32m+++[m[31m-[m
+ cleaning/urls.py                |  16 [32m+++[m
+ cleaning/views.py               | 295 [32m+++++++++++++++++++++++++++++++++++++++[m[31m-[m
+ templates/_job_card.html        |  19 [32m++[m[31m-[m
+ templates/base.html             |  37 [32m++++[m[31m-[m
+ templates/dashboard.html        |   2 [32m+[m[31m-[m
+ templates/employee_add_job.html |  62 [32m++++++++[m[31m-[m
+ templates/my_schedule.html      |  31 [32m+++++[m
+ templates/schedule.html         |  61 [32m+++++++[m[31m--[m
+ templates/schedule_form.html    |   9 [32m++[m
+ 13 files changed, 628 insertions(+), 28 deletions(-)
