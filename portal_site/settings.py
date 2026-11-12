@@ -99,6 +99,8 @@ else:
                              "NAME": os.environ.get("SQLITE_PATH") or BASE_DIR / "db.sqlite3",
                              "OPTIONS": {"timeout": 20}}}
 
+AUTHENTICATION_BACKENDS = ["portal.backends.CaseInsensitiveBackend"]     # riswan / Riswan / RISWAN are the same person
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},

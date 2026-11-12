@@ -6,3 +6,5 @@ db.sqlite3
 staticfiles/
 .env
 .compile_test.pyc
+*.dump
+db_backup.sqlite3
