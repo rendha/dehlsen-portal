@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block extra_head %}
+<style>
+
+    /* Login: centred card on the sky-grey page, matching the rest of the app */
+
+    .login-wrap {
+        min-height: calc(100vh - 120px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-block: 2rem;
+    }
+
+    .login-card {
+        width: 100%;
+        max-width: 400px;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
+        border-radius: 20px;
+        box-shadow: var(--sc-shadow);
+        padding: 2.25rem 2rem 2rem;
+    }
+
+    .login-mark {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--sc-accent-soft);
+        border: 1px solid #BAE6FD;
+        display: grid;
+        place-items: center;
+        margin-bottom: 1.25rem;
+    }
+
+    .login-mark span {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--sc-sun);
+        box-shadow: 0 0 0 5px rgba(245, 158, 11, .18);
+    }
+
+    .login-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-bottom: .25rem;
+    }
+
+    .login-sub {
+        color: var(--sc-muted);
+        margin-bottom: 1.75rem;
+    }
+
+    .login-card .form-control {
+        padding: .7rem .9rem;
+        border-radius: 10px;
+    }
+
+    .login-card .btn-primary {
+        padding: .75rem;
+        border-radius: 10px;
+    }
+
+    .login-foot {
+        text-align: center;
+        color: var(--sc-muted);
+        font-size: .85rem;
+        margin-top: 1.25rem;
+    }
+
+    @media (max-width: 480px) {
+        .login-card { padding: 1.75rem 1.25rem 1.5rem; border-radius: 16px; }
+    }
+
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="login-wrap">
+
+    <div class="login-card">
+
+        <div class="login-mark" aria-hidden="true"><span></span></div>
+
+        <h1 class="login-title">SolarCare Manager</h1>
+        <p class="login-sub">Sign in to manage cleanings, services and schedules.</p>
+
+
+        {% if form.non_field_errors %}
+
+            <div class="alert alert-danger py-2 small">
+                Wrong username or password. Please try again.
+            </div>
+
+        {% endif %}
+
+
+        <form method="post" action="{% url 'login' %}">
+
+            {% csrf_token %}
+
+            <input type="hidden" name="next" value="{{ next }}">
+
+
+            <div class="mb-3">
+
+                <label for="id_username" class="form-label">Username</label>
+
+                <input
+                    type="text"
+                    name="username"
+                    id="id_username"
+                    class="form-control"
+                    value="{{ form.username.value|default:'' }}"
+                    autocapitalize="none"
+                    autocomplete="username"
+                    autofocus
+                    required
+                >
+
+            </div>
+
+
+            <div class="mb-4">
+
+                <label for="id_password" class="form-label">Password</label>
+
+                <input
+                    type="password"
+                    name="password"
+                    id="id_password"
+                    class="form-control"
+                    autocomplete="current-password"
+                    required
+                >
+
+            </div>
+
+
+            <button type="submit" class="btn btn-primary w-100">
+                Sign in
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dehlsen Energy - Quotations</title>
+    {% include "quotations/_pwa_head.html" %}
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .header {
+            background: #3B73B9;
+            color: white;
+            padding: 22px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .header { position: relative; }
+
+        .header-actions {
+            position: absolute;
+            right: 16px;
+            top: 16px;
+        }
+
+        .header-actions form { display: inline; }
+
+        .header-button {
+            background: rgba(255,255,255,0.18);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.55);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 6px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .new-button {
+            display: block;
+            text-decoration: none;
+            background: #3B73B9;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 25px;
+        }
+
+        /* THE FOUR TOTALS */
+        /* plain floats: the same in every browser */
+        .stats { margin: 0 -6px 16px; }
+        .stats::after, .person-stats::after { content: ""; display: table; clear: both; }
+        .stat { float: left; width: 25%; padding: 0 6px 12px; }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .stat-number {
+            font-size: 22px;
+            font-weight: bold;
+            color: #3B73B9;
+            word-break: break-word;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+
+        .loss {
+            color: #b91c1c;
+        }
+
+        /* ONE CARD PER PERSON */
+        .person-card {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            background: white;
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 5px solid #3B73B9;
+        }
+
+        .person-card:hover {
+            box-shadow: 0 4px 14px rgba(59,115,185,0.25);
+        }
+
+        .person-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .person-name span {
+            color: #3B73B9;
+            font-weight: normal;
+            font-size: 14px;
+        }
+
+        .person-stats > div {
+            float: left;
+            width: 25%;
+            padding-right: 8px;
+        }
+
+        .person-stats b {
+            display: block;
+            font-size: 16px;
+        }
+
+        .person-stats small {
+            color: #6b7280;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .stats.five .stat, .person-stats.five > div { width: 20%; }
+
+        @media (max-width: 640px) {
+            .stat, .person-stats > div, .stats.five .stat, .person-stats.five > div {
+                width: 50%;
+            }
+            .person-stats > div {
+                margin-bottom: 8px;
+            }
+        }
+
+        /* SEARCH */
+        .search-form { display: flex; gap: 8px; margin-bottom: 14px; }
+        .search-form input[type=search] { flex: 1; min-width: 0; padding: 13px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 16px; background: white; }
+        .search-form input[type=search]:focus { outline: 2px solid #3B73B9; border-color: #3B73B9; }
+        .search-form button { background: #3B73B9; color: white; border: 0; border-radius: 10px; padding: 0 20px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .count { color: #6b7280; font-size: 13px; margin: -4px 0 12px; min-height: 16px; }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h1>Dehlsen Energy</h1>
+    <div>Quotation Generator</div>
+
+    <div class="header-actions">
+        <button type="button" id="install-app" class="header-button" style="display:none">Install app</button>
+        {% url 'logout' as logout_url %}
+        {% if logout_url and user.is_authenticated %}
+        <form method="post" action="{{ logout_url }}">
+            {% csrf_token %}
+            <button type="submit" class="header-button">Log out</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="container">
+
+    <a href="{% url 'create_quotation' %}" class="new-button">
+        + NEW QUOTATION
+    </a>
+
+    <a href="{% url 'hybrid_calculator' %}" class="new-button" style="background:white;color:#3B73B9;border:2px solid #3B73B9;margin-top:-10px">
+        HYBRID CALCULATOR
+    </a>
+
+    {% if show_rates %}<p style="margin:10px 0"><a href="{% url 'daily_report' %}" style="color:#3B73B9;font-weight:bold">Reports: daily, weekly and monthly &rsaquo;</a></p>{% endif %}
+
+    <!-- SEARCH: typing narrows the people below at once; Enter / Search looks through ALL quotations -->
+    {% url 'search' as search_url %}
+    <form class="search-form" method="get" action="{{ search_url }}">
+        <input type="search" id="people-search" name="q" placeholder="Search a person, offer number, business or place" autocomplete="off" enterkeyhint="search">
+        {% if search_url %}<button type="submit">Search</button>{% endif %}
+    </form>
+
+    <!-- TOTAL OF EVERYBODY -->
+    <div class="stats{% if show_rates %} five{% endif %}">
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.count }}</div>
+            <div class="stat-label">Total quotations</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.clients }}</div>
+            <div class="stat-label">Customers</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.kw_display }}</div>
+            <div class="stat-label">Total kW</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.value_display }}</div>
+            <div class="stat-label">Total value</div>
+        </div></div>
+        {% if show_rates %}
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number {% if totals.profit_negative %}loss{% endif %}">{{ totals.profit_display }}</div>
+            <div class="stat-label">Total profit</div>
+        </div></div>
+        {% endif %}
+    </div>
+
+    <!-- ONE LINE PER PERSON: tap a name for his own totals -->
+    <h2>By person</h2>
+
+    {% if people %}
+
+        {% for person in people %}
+
+            <a class="person-card" data-search="{{ person.name }}" href="{% if person_url %}{{ person_url }}?name={{ person.link_key|urlencode }}{% else %}#{% endif %}">
+
+                <div class="person-name">
+                    {{ person.name }}
+                    <span>see details &rsaquo;</span>
+                </div>
+
+                <div class="person-stats{% if show_rates %} five{% endif %}">
+                    <div><b>{{ person.count }}</b><small>Quotations</small></div>
+                    <div><b>{{ person.clients }}</b><small>Customers</small></div>
+                    <div><b>{{ person.kw_display }}</b><small>Total kW</small></div>
+                    <div><b>{{ person.value_display }}</b><small>Total value</small></div>
+                    {% if show_rates %}<div><b class="{% if person.profit_negative %}loss{% endif %}">{{ person.profit_display }}</b><small>Total profit</small></div>{% endif %}
+                </div>
+
+            </a>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="card empty">
+            No quotations created yet.
+        </div>
+
+    {% endif %}
+
+</div>
+
+<div class="card empty" id="people-empty" style="display:none">
+    No person matches.{% if search_url %} Press <b>Search</b> to look through all quotations.{% endif %}
+</div>
+
+<!-- ADMIN passkey: shows the profit (and, on a quotation page, the rates).  No login. -->
+<div class="container">
+    <div class="card">
+        {% if show_rates %}
+            <form method="post" action="{% url 'lock_rates' %}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'quotation_dashboard' %}">
+                <span style="flex:1;color:#6b7280;font-size:14px">Admin view is ON: profit and rates are visible.</span>
+                <button type="submit" class="header-button" style="background:#3B73B9;border-color:#3B73B9;margin:0">Hide</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'unlock_rates' %}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'quotation_dashboard' %}">
+                <input type="password" name="passkey" placeholder="Admin passkey" autocomplete="off" style="padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;max-width:220px">
+                <button type="submit" class="header-button" style="background:#3B73B9;border-color:#3B73B9;margin:0">Show profit</button>
+                {% if unlock_error %}<span style="color:#b91c1c;font-size:14px">{{ unlock_error }}</span>{% endif %}
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{% include "quotations/_live_filter.html" %}
+<script>liveFilter("people-search", ".person-card", null, "people-empty");</script>
+
+{% include "quotations/_pwa_register.html" %}
+
+</body>
+</html>

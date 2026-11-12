@@ -1,0 +1,42 @@
+{% extends "portal/base.html" %}
+{% block title %}Give a task · Dehlsen Energy{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Give a task</h1><small>Pick the task, then the person</small></div><a class="pill" href="{% url 'task' %}">&lsaquo; Back</a></div>
+<div class="card" style="max-width:560px;margin:auto">
+{% if error %}<div class="note bad">{{ error }}</div>{% endif %}
+{% if not types %}<div class="note">No tasks are set up yet. In the admin (<b>Task types</b>) add the tasks and choose the people who do each one.</div>{% endif %}
+<form method="post" id="f">{% csrf_token %}
+<label for="type">1. What is the task?</label>
+<select id="type" name="type" required><option value="">Choose a task…</option>{% for t in types %}<option value="{{ t.id }}" {% if values.type == t.id|stringformat:"s" %}selected{% endif %}>{{ t.name }}</option>{% endfor %}</select>
+<label>2. Who does it? (only the people for this task are shown)</label>
+<div class="people" id="ppl"><span style="color:var(--mut);font-size:14px">Choose a task first</span></div>
+<input type="hidden" name="person" id="person" value="{{ values.person }}">
+<label for="details">3. Details</label>
+<textarea id="details" name="details" rows="3" placeholder="Customer, place, what to do…">{{ values.details }}</textarea>
+<label>4. Due date (and time, if it matters)</label>
+<div style="display:flex;gap:8px"><input type="date" name="due_date" value="{{ values.due_date }}" required><input type="time" name="due_time" value="{{ values.due_time }}"></div>
+<button class="btn o" type="submit">Give task</button>
+</form></div></div>
+{{ crew|json_script:"crew-data" }}
+<script>
+(function () {
+  var crew = JSON.parse(document.getElementById("crew-data").textContent);
+  var sel = document.getElementById("type"), box = document.getElementById("ppl"), hidden = document.getElementById("person");
+  function draw() {
+    var list = crew[sel.value] || [];
+    box.innerHTML = "";
+    if (!sel.value) { box.innerHTML = '<span style="color:var(--mut);font-size:14px">Choose a task first</span>'; return; }
+    if (!list.length) { box.innerHTML = '<span style="color:var(--red);font-size:14px">Nobody is set up for this task yet. Add people in the admin (Task types).</span>'; return; }
+    list.forEach(function (p) {
+      var d = document.createElement("div"); d.className = "person" + (String(p.id) === hidden.value ? " on" : "");
+      var av = document.createElement("span"); av.className = "av"; av.textContent = p.name.charAt(0).toUpperCase();
+      d.appendChild(av); d.appendChild(document.createTextNode(p.name));
+      if (p.note) { var n = document.createElement("small"); n.style.color = "var(--mut)"; n.textContent = "· " + p.note; d.appendChild(n); }
+      d.onclick = function () { hidden.value = p.id; draw(); };
+      box.appendChild(d);
+    });
+  }
+  sel.onchange = function () { hidden.value = ""; draw(); };
+  draw();
+})();
+</script>{% endblock %}

@@ -1,0 +1,28 @@
+from django.urls import path
+from . import views
+from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_not_required
+from django.views.generic import TemplateView
+from . import pwa_views, reports
+
+urlpatterns = [
+    path("", views.dashboard, name="quotation_dashboard"),
+    path("new/", views.create_quotation, name="create_quotation"),
+    path("quotation/<int:quotation_id>/",views.quotation_detail,name="quotation_detail"),
+    path( "quotation/<int:quotation_id>/pdf",views.quotation_pdf,name="quotation_pdf"),
+    path("person/", views.person_dashboard, name="person_dashboard"),
+    path("report/", reports.daily_report, name="daily_report"),
+    path("report/monthly/", reports.monthly_report, name="monthly_report"),
+    path("report/weekly/", reports.weekly_report, name="weekly_report"),
+    path("hybrid-calculator/", TemplateView.as_view(template_name="quotations/hybrid_calculator.html"), name="hybrid_calculator"),
+    path("search/", views.search, name="search"),
+    path("api/materials/", views.materials_api, name="materials_api"),
+    path("api/materials/estimate/", views.materials_estimate, name="materials_estimate"),
+    path("quotation/<int:quotation_id>/customer/", views.confirm_customer, name="confirm_customer"),
+    path("customer/confirm/", views.confirm_customer, name="confirm_customer_choice"),
+    path("quotation/<int:quotation_id>/counted/", views.set_counted, name="set_counted"),
+    path("rates/unlock/", views.unlock_rates, name="unlock_rates"),
+    path("rates/lock/", views.lock_rates, name="lock_rates"),
+    path("pdf/<int:quotation_id>/<str:filename>", views.quotation_pdf, name="quotation_pdf_named"),
+    path("view/<int:quotation_id>/<str:filename>", views.quotation_pdf_view, name="quotation_pdf_view"),
+]

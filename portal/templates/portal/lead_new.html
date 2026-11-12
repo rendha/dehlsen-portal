@@ -1,0 +1,71 @@
+{% extends "portal/base.html" %}
+{% block title %}Add a lead · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 12px}
+.seg.two{grid-template-columns:repeat(2,1fr)}
+.seg input{display:none}.seg label{margin:0;text-align:center;border:2px solid var(--line);border-radius:12px;padding:11px 6px;cursor:pointer;background:#fff;color:var(--ink);font-weight:600}
+.seg input:checked+label.cold{background:#e8f1fb;border-color:#3B73B9;color:#2a5a95}
+.seg input:checked+label.medium{background:#fff3e0;border-color:#E8730C;color:#b35a08}
+.seg input:checked+label.hot{background:#fde8e8;border-color:#d64545;color:#b02f2f}
+.seg input:checked+label.plain{background:#eef3fa;border-color:var(--blue);color:var(--blue)}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Add a lead</h1><small>Who to call or visit, and how important</small></div><a class="pill" href="{% url 'leads' %}">&lsaquo; Back</a></div>
+<div class="card" style="max-width:560px;margin:auto">
+{% if error %}<div class="note bad">{{ error }}</div>{% endif %}
+<form method="post">{% csrf_token %}
+<label for="cn">Customer name</label>
+<input id="cn" name="customer_name" value="{{ values.customer_name }}" required>
+<label for="ph">Phone number</label>
+<input id="ph" name="phone" type="tel" inputmode="tel" value="{{ values.phone }}">
+<label for="ar">Place</label>
+<input id="ar" name="area" value="{{ values.area }}" placeholder="Area / town">
+<label for="nc">What should be done?</label>
+<select id="nc" name="need_choice" required>
+<option value="call" {% if values.need_choice == "call" %}selected{% endif %}>Call</option>
+<option value="visit" {% if values.need_choice == "visit" %}selected{% endif %}>Site visit</option>
+<option value="call,visit" {% if values.need_choice == "call,visit" %}selected{% endif %}>Call + Site visit</option>
+<option value="other" {% if values.need_choice == "other" %}selected{% endif %}>Other (type it)</option>
+</select>
+<input id="ot" name="other_text" value="{{ values.other_text }}" placeholder="Type what has to be done" style="{% if values.need_choice != 'other' %}display:none{% endif %}">
+<label for="ct">Customer type</label>
+<select id="ct" name="customer_type"><option value="">Not decided yet</option>
+<option value="residential" {% if values.customer_type == "residential" %}selected{% endif %}>Residential</option>
+<option value="commercial" {% if values.customer_type == "commercial" %}selected{% endif %}>Commercial</option>
+<option value="industrial" {% if values.customer_type == "industrial" %}selected{% endif %}>Industrial</option></select>
+<div id="dcrbox" style="{% if values.customer_type != 'residential' %}display:none{% endif %}">
+<label for="dc">DCR or Non-DCR (residential)</label>
+<select id="dc" name="dcr_choice">
+<option value="undecided" {% if values.dcr_choice == "undecided" or not values.dcr_choice %}selected{% endif %}>Not decided yet</option>
+<option value="dcr" {% if values.dcr_choice == "dcr" %}selected{% endif %}>DCR</option>
+<option value="non_dcr" {% if values.dcr_choice == "non_dcr" %}selected{% endif %}>Non-DCR</option></select></div>
+<label for="st">System type</label>
+<select id="st" name="system_type"><option value="">Not decided yet</option>
+<option value="on_grid" {% if values.system_type == "on_grid" %}selected{% endif %}>On-grid</option>
+<option value="off_grid" {% if values.system_type == "off_grid" %}selected{% endif %}>Off-grid</option>
+<option value="hybrid" {% if values.system_type == "hybrid" %}selected{% endif %}>Hybrid</option>
+<option value="other" {% if values.system_type == "other" %}selected{% endif %}>Other (type it)</option></select>
+<input id="so" name="system_other" value="{{ values.system_other }}" placeholder="Type the system type" style="{% if values.system_type != 'other' %}display:none{% endif %}">
+<label>Priority</label>
+<div class="seg">
+<input type="radio" name="priority" id="p1" value="cold" {% if values.priority == "cold" %}checked{% endif %}><label class="cold" for="p1">Cold</label>
+<input type="radio" name="priority" id="p2" value="medium" {% if values.priority == "medium" %}checked{% endif %}><label class="medium" for="p2">Medium</label>
+<input type="radio" name="priority" id="p3" value="hot" {% if values.priority == "hot" %}checked{% endif %}><label class="hot" for="p3">Hot</label>
+</div>
+<label for="to">Give this lead to</label>
+<select id="to" name="assigned_to" required><option value="">Choose a person…</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+<label for="to2">Second person (optional)</label>
+<select id="to2" name="assigned_to2"><option value="">Nobody</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to2 == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
+<label for="nt">Note</label>
+<textarea id="nt" name="note" rows="3" placeholder="Roof size, bill amount, best time to call…">{{ values.note }}</textarea>
+<button class="btn o" type="submit">Save lead</button>
+</form></div></div>
+<script>
+(function () { var s = document.getElementById("nc"), t = document.getElementById("ot");
+  s.onchange = function () { var o = s.value === "other"; t.style.display = o ? "" : "none"; if (o) { t.focus(); } }; })();
+</script>
+<script>
+(function () { var c = document.getElementById("ct"), b = document.getElementById("dcrbox"), s = document.getElementById("st"), o = document.getElementById("so");
+  function sync() { b.style.display = c.value === "residential" ? "" : "none"; o.style.display = s.value === "other" ? "" : "none"; }
+  c.onchange = sync; s.onchange = function () { sync(); if (s.value === "other") { o.focus(); } }; })();
+</script>{% endblock %}

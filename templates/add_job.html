@@ -1,0 +1,549 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+
+    <div class="col-md-9">
+
+        <div class="card shadow-sm p-4">
+
+            <h3 class="mb-4">
+                {% if form.instance.pk %}Edit Job{% else %}Record a Job{% endif %}
+            </h3>
+
+            <form method="post">
+
+                {% csrf_token %}
+
+
+                <!-- ERRORS -->
+
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                {% if formset.non_form_errors %}
+                    <div class="alert alert-danger">
+                        {{ formset.non_form_errors }}
+                    </div>
+                {% endif %}
+
+
+                <!-- SERVICE -->
+
+                <div class="mb-4">
+
+                    <label for="{{ form.service.id_for_label }}" class="form-label fw-bold">
+                        Service
+                    </label>
+
+                    {{ form.service }}
+                    <datalist id="service-options">
+    {% for name in form.service_options %}<option value="{{ name }}">{% endfor %}
+</datalist>
+
+                    <small class="text-muted">
+                        Pick one from the list, or type a new service. New ones are saved for next time.
+                    </small>
+
+                    {% for error in form.service.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+
+                </div>
+
+
+                <!-- NEW / ONE-TIME CUSTOMER SWITCH (only when adding) -->
+
+                {% if not form.instance.pk %}
+
+                    <div class="form-check form-switch mb-3">
+
+                        {{ form.new_customer }}
+
+                        <label class="form-check-label fw-semibold" for="id_new_customer">
+                            Not an existing customer (new / one-time)
+                        </label>
+
+                    </div>
+
+
+                    <div id="new-customer-fields" class="border rounded p-3 mb-3 bg-light" style="display:none;">
+
+                        <div class="row g-3">
+
+                            {% for field in form %}
+                                {% if field.name == 'new_customer_name' or field.name == 'new_phone' or field.name == 'new_location' or field.name == 'new_address' or field.name == 'new_solar_kw' or field.name == 'new_map_link' %}
+
+                                    <div class="col-md-6">
+
+                                        <label for="{{ field.id_for_label }}" class="form-label">
+                                            {{ field.label }}
+                                        </label>
+
+                                        {{ field }}
+
+                                        {% for error in field.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+
+                                    </div>
+
+                                {% endif %}
+                            {% endfor %}
+
+                        </div>
+
+                    </div>
+
+                {% endif %}
+
+
+                <!-- EXISTING CUSTOMER -->
+
+                <div id="existing-customer-fields">
+
+                    <!-- CUSTOMER -->
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold">
+                            Customer
+                        </label>
+
+                        {{ form.customer }}
+
+                        {% for error in form.customer.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+
+                    </div>
+
+
+                    <!-- SITE -->
+
+                    <div class="mb-3">
+
+                        <label class="form-label fw-bold">
+                            Site / Location
+                        </label>
+
+                        {{ form.site }}
+
+                        <small class="text-muted">
+                            Only sites belonging to the selected customer
+                            will appear.
+                        </small>
+
+                        {% for error in form.site.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+
+                    </div>
+
+                </div>
+
+
+                <!-- CLEANING DETAILS -->
+
+                <div class="row">
+
+                    <div class="col-md-4 mb-3 cleaning-only">
+
+                        <label class="form-label">
+                            Cleaning Number
+                        </label>
+
+                        {{ form.cleaning_number }}
+
+                    </div>
+
+
+                    <div class="col-md-4 mb-3">
+
+                        <label class="form-label">
+                            Payment Status
+                        </label>
+
+                        {{ form.payment_status }}
+
+                    </div>
+
+
+                    <div class="col-md-4 mb-3">
+
+                        <label class="form-label">
+                            Date
+                        </label>
+
+                        {{ form.date }}
+
+                        {% for error in form.date.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+
+                    </div>
+
+                </div>
+
+
+                <!-- FREE CLEANING (cleaning only) -->
+
+                <div class="mb-4 cleaning-only">
+
+                    <div class="form-check">
+
+                        {{ form.is_free }}
+
+                        <label class="form-check-label fw-bold text-danger" for="{{ form.is_free.id_for_label }}">
+                            First Cleaning Free
+                        </label>
+
+                    </div>
+
+                    <small class="text-muted">
+                        Tick this if the customer is receiving the free
+                        first cleaning.
+                    </small>
+
+                </div>
+
+
+                <!-- MANUAL RATE -->
+
+                <div class="mb-4">
+
+                    <label class="form-label">
+                        Amount Charged (₹)
+                    </label>
+
+                    {{ form.manual_rate_override }}
+
+                    <small class="text-muted">
+                        For cleaning, leave empty to use the rate card.
+                        For other services, enter the amount.
+                    </small>
+
+                    {% for error in form.manual_rate_override.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+
+                </div>
+
+
+                <hr>
+
+
+                <!-- EXPENSES -->
+
+                <h5 class="mb-2">
+                    Expenses
+                </h5>
+
+                <p class="text-muted">
+                    Fuel, water, parts, etc. Add as many as you need, or leave empty if none.
+                </p>
+
+
+                {{ formset.management_form }}
+
+
+                <div id="expense-formset">
+
+                    {% for exp_form in formset %}
+
+                        <div class="row expense-row mb-2">
+
+                            {% for hidden in exp_form.hidden_fields %}
+                                {{ hidden }}
+                            {% endfor %}
+
+                            <div class="col-md-7">
+
+                                {{ exp_form.expense_name }}
+
+                                {% for error in exp_form.expense_name.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+
+                            </div>
+
+                            <div class="col-md-4">
+
+                                {{ exp_form.cost }}
+
+                                {% for error in exp_form.cost.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+
+                            </div>
+
+                            <div class="col-md-1 d-flex align-items-center">
+
+                                {% if exp_form.instance.pk %}
+                                    <label class="small text-danger d-flex align-items-center gap-1 mb-0" title="Tick to delete this expense when you save">
+                                        {{ exp_form.DELETE }} Remove
+                                    </label>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+
+                <!-- New rows are copied from here -->
+                <template id="empty-expense-row">
+
+                    <div class="row expense-row mb-2">
+
+                        {% for hidden in formset.empty_form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+
+                        <div class="col-md-7">
+                            {{ formset.empty_form.expense_name }}
+                        </div>
+
+                        <div class="col-md-4">
+                            {{ formset.empty_form.cost }}
+                        </div>
+
+                        <div class="col-md-1 d-flex align-items-center">
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-expense" aria-label="Remove this expense">✕</button>
+                        </div>
+
+                    </div>
+
+                </template>
+
+
+                <button type="button" id="add-expense" class="btn btn-outline-secondary btn-sm mt-1">
+                    + Add another expense
+                </button>
+
+
+                <!-- Running total of expenses -->
+                <div class="text-end small text-muted mt-2">
+                    Total expenses: <strong id="expense-total">₹0</strong>
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="btn btn-danger w-100 mt-4 py-2"
+                >
+                    Save Job & Calculate Profit
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+
+/* =====================================================
+   EXPENSES: add / remove rows, running total
+   ===================================================== */
+
+(function () {
+
+    const list = document.getElementById('expense-formset');
+    const addBtn = document.getElementById('add-expense');
+    const template = document.getElementById('empty-expense-row');
+    const totalInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+    const totalBox = document.getElementById('expense-total');
+
+    if (!list || !addBtn || !template || !totalInput) return;
+
+    function updateTotal() {
+        let sum = 0;
+        list.querySelectorAll('.expense-row').forEach(function (row) {
+            const del = row.querySelector('input[name$="-DELETE"]');
+            if (del && del.checked) return;          // being removed
+            const cost = row.querySelector('input[name$="-cost"]');
+            sum += parseFloat(cost && cost.value) || 0;
+        });
+        totalBox.textContent = '₹' + sum.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    }
+
+    addBtn.addEventListener('click', function () {
+        const index = parseInt(totalInput.value, 10);
+        const html = template.innerHTML.replace(/__prefix__/g, index);
+        list.insertAdjacentHTML('beforeend', html);
+        totalInput.value = index + 1;
+
+        // put the cursor in the new expense name
+        const rows = list.querySelectorAll('.expense-row');
+        const name = rows[rows.length - 1].querySelector('input[name$="-expense_name"]');
+        if (name) name.focus();
+    });
+
+    // ✕ on a new row just clears it (Django skips empty rows when saving)
+    list.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('remove-expense')) return;
+        const row = e.target.closest('.expense-row');
+        row.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (i) { i.value = ''; });
+        row.hidden = true;
+        updateTotal();
+    });
+
+    list.addEventListener('input', updateTotal);
+    list.addEventListener('change', updateTotal);
+    updateTotal();
+
+})();
+
+
+/* =====================================================
+   CLEANING-ONLY FIELDS
+   "Cleaning Number" and "First Cleaning Free" only
+   show when the service is Cleaning.
+   ===================================================== */
+
+(function () {
+
+    const serviceBox = document.getElementById('id_service');
+    if (!serviceBox) return;
+
+    const freeBox = document.getElementById('id_is_free');
+
+    function update() {
+        const isCleaning = serviceBox.value.trim().toLowerCase() === 'cleaning'
+                           || serviceBox.value.trim() === '';
+
+        document.querySelectorAll('.cleaning-only').forEach(function (el) {
+            el.hidden = !isCleaning;
+        });
+
+        // A hidden "free" tick must not stay ticked
+        if (!isCleaning && freeBox) freeBox.checked = false;
+    }
+
+    serviceBox.addEventListener('input', update);
+    serviceBox.addEventListener('change', update);
+    update();
+
+})();
+
+
+/* =====================================================
+   NEW / ONE-TIME CUSTOMER SWITCH
+   ===================================================== */
+
+(function () {
+
+    const toggle = document.getElementById("id_new_customer");
+
+    if (!toggle) return;
+
+    const newBox = document.getElementById("new-customer-fields");
+    const existingBox = document.getElementById("existing-customer-fields");
+
+    function update() {
+
+        const on = toggle.checked;
+
+        newBox.style.display = on ? "" : "none";
+
+        if (existingBox) {
+            existingBox.style.display = on ? "none" : "";
+        }
+
+    }
+
+    toggle.addEventListener("change", update);
+
+    update();   // keeps the right section open if the form reloads with errors
+
+})();
+
+
+/* =====================================================
+   LOAD SITES WHEN A CUSTOMER IS PICKED
+   ===================================================== */
+
+(function () {
+
+    const customerSelect = document.getElementById('id_customer');
+    const siteSelect = document.getElementById('id_site');
+
+    if (!customerSelect || !siteSelect) return;
+
+    customerSelect.addEventListener('change', function () {
+
+        const customerId = this.value;
+
+        siteSelect.innerHTML =
+            '<option value="">Loading sites...</option>';
+
+        if (!customerId) {
+
+            siteSelect.innerHTML =
+                '<option value="">Select customer first</option>';
+
+            return;
+        }
+
+        fetch(`/service/api/customer/${customerId}/sites/`)
+
+            .then(response => response.json())
+
+            .then(data => {
+
+                siteSelect.innerHTML =
+                    '<option value="">Select site</option>';
+
+                data.sites.forEach(site => {
+
+                    const option = document.createElement('option');
+
+                    option.value = site.id;
+
+                    option.textContent =
+                        (site.location || site.address || ('Site ' + site.id)) +
+                        (site.solar_kw ? ' - ' + site.solar_kw + ' kW' : '');
+
+                    siteSelect.appendChild(option);
+
+                });
+
+                // Pick it automatically if the customer has only one site
+                if (data.sites.length === 1) {
+                    siteSelect.value = String(data.sites[0].id);
+                    siteSelect.dispatchEvent(new Event('change'));
+                }
+
+            })
+
+            .catch(error => {
+
+                console.error(error);
+
+                siteSelect.innerHTML =
+                    '<option value="">Unable to load sites</option>';
+
+            });
+
+    });
+
+})();
+
+</script>
+
+{% endblock %}

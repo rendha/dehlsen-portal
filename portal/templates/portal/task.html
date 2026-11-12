@@ -1,0 +1,123 @@
+{% extends "portal/base.html" %}
+{% block title %}Task · Dehlsen Energy{% endblock %}
+{% block head %}
+<style>
+.calhead{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}.nav b{flex:1;text-align:center;font-size:17px}
+.nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 14px;font:inherit;cursor:pointer}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal .d{font-size:11px;color:var(--mut);text-align:center;padding:4px 0}
+.cell{min-height:70px;border:1px solid var(--line);border-radius:8px;padding:3px;background:#fff;cursor:pointer;overflow:hidden;text-align:left;font:inherit;color:inherit;display:block;width:100%}
+.cell.mut{background:#f8fafc;opacity:.55}.cell.today{border:2px solid var(--blue)}.cell.sel{background:#eef5ff;border:2px solid var(--orange)}
+.cell .n{font-size:11px;color:var(--mut)}
+.ev{font-size:10px;border-radius:4px;padding:1px 4px;margin-top:2px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}
+select.small{width:auto;padding:6px 10px;margin:0;font-size:13px}
+.dir .it{padding:8px 0}.dir small{color:var(--mut)}
+@media(max-width:600px){.cell{min-height:54px}.ev{font-size:9px}}
+</style>
+{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Task</h1><small>Calendar of schedules and tasks</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+<a class="btn o auto" href="{% url 'task_new' %}">+ Give a task</a>
+<a class="btn w auto" href="{% url 'task_mine' %}">My tasks ({{ pending_mine }})</a></div>
+<div class="row two">
+<div class="card"><div class="calhead"><div class="chips" id="filters">
+<span class="chip on" data-f="all">Everything</span><span class="chip" data-f="sched">Schedules only</span><span class="chip" data-f="task">Tasks only</span></div>
+<select class="small" id="who"><option value="">Everyone</option>{% for p in people %}<option>{{ p }}</option>{% endfor %}</select></div>
+<div class="nav"><button type="button" id="prev">&lsaquo;</button><b id="mtitle"></b><button type="button" id="next">&rsaquo;</button><button type="button" id="todaybtn">Today</button></div>
+<div class="cal" id="cal"></div>
+<div class="legend"><span><i style="background:#3B73B9"></i>Cleaning</span><span><i style="background:#2e9e5b"></i>Other service</span><span><i style="background:#E8730C"></i>Task (due date)</span><span><i style="background:#d64545"></i>Overdue task</span><span><i style="background:#9aa5b4"></i>Done</span></div>
+<p id="calmsg" style="color:var(--red);font-size:13px;margin:8px 0 0"></p></div>
+<div class="card list" id="daycard"><h3 style="margin-top:0" id="daytitle">Tap a day</h3>
+<div id="daylist" style="color:var(--mut);font-size:14px">Tap a day on the calendar to see what is planned and which tasks are due, and to give a task for that date.</div></div>
+</div>
+
+<div class="card list dir"><h3 style="margin-top:0">Who does which task</h3>
+{% for t in directory %}<div class="it"><div><b>{{ t.name }}</b>
+{% if t.people %}<small>{% for p in t.people %}{{ p.name }}{% if p.note %} ({{ p.note }}){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</small>
+{% else %}<small style="color:var(--red)">nobody yet: add people in the admin (Task types)</small>{% endif %}</div></div>
+{% empty %}<p style="color:var(--mut);margin:0">No tasks are set up yet. In the admin (<b>Task types</b>) add the tasks and the people who do each one.</p>{% endfor %}</div>
+
+<div class="card list"><h3 style="margin-top:0">All tasks given</h3>
+{% for r in rows %}<div class="it {% if r.done %}dim{% endif %}"><span class="dot" style="background:{% if r.done %}#9aa5b4{% elif r.overdue %}#d64545{% else %}#E8730C{% endif %}"></span>
+<div><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>Given by {{ r.by }} to {{ r.to }} · added {{ r.added }}</small>{% if r.details %}<small> · {{ r.details|truncatechars:60 }}</small>{% endif %}<br>
+<span class="tag{% if r.overdue %} r{% elif r.done %} g{% endif %}">{{ r.due }} · {{ r.left }}</span></div></div>
+{% empty %}<p style="color:var(--mut)">No tasks yet. Tap <b>+ Give a task</b>.</p>{% endfor %}</div>
+</div>
+<script>
+(function () {
+  var EVENTS_URL = "{% url 'task_events' %}", NEW_URL = "{% url 'task_new' %}";
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var view = new Date(); view.setDate(1); view.setHours(0, 0, 0, 0);
+  var events = [], filter = "all", who = "", selected = null, loadId = 0;
+  var grid = document.getElementById("cal"), panel = document.getElementById("daylist"), panelTitle = document.getElementById("daytitle");
+  var msg = document.getElementById("calmsg");
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function iso(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function esc(t) { var d = document.createElement("div"); d.textContent = t == null ? "" : t; return d.innerHTML; }
+  function visible(e) {
+    var p = e.extendedProps || {}, isTask = p.kind === "task";
+    if (filter === "task" && !isTask) return false;
+    if (filter === "sched" && isTask) return false;
+    if (who && p.person !== who) return false;
+    return true;
+  }
+  function dayEvents(key) { return events.filter(function (e) { return e.start.slice(0, 10) === key && visible(e); }); }
+
+  function draw() {
+    document.getElementById("mtitle").textContent = MONTHS[view.getMonth()] + " " + view.getFullYear();
+    var start = new Date(view); start.setDate(1 - view.getDay());
+    var todayKey = iso(new Date()), html = "";
+    ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function (n) { html += '<div class="d">' + n + "</div>"; });
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start); d.setDate(start.getDate() + i);
+      if (i >= 35 && d.getMonth() !== view.getMonth()) { break; }
+      var key = iso(d), list = dayEvents(key);
+      html += '<button type="button" class="cell' + (d.getMonth() !== view.getMonth() ? " mut" : "") + (key === todayKey ? " today" : "") + (key === selected ? " sel" : "") + '" data-key="' + key + '"><div class="n">' + d.getDate() + "</div>" +
+        list.slice(0, 3).map(function (e) { return '<div class="ev" style="background:' + e.backgroundColor + '">' + esc(e.title) + "</div>"; }).join("") +
+        (list.length > 3 ? '<div class="n">+' + (list.length - 3) + " more</div>" : "") + "</button>";
+    }
+    grid.innerHTML = html;
+    grid.querySelectorAll(".cell").forEach(function (c) { c.onclick = function () { select(c.getAttribute("data-key"), true); }; });
+  }
+
+  function select(key, scroll) {
+    selected = key;
+    var parts = key.split("-"), day = parseInt(parts[2], 10), mon = parseInt(parts[1], 10) - 1;
+    panelTitle.textContent = day + " " + MONTHS[mon] + " " + parts[0];
+    var list = dayEvents(key);
+    var html = list.map(function (e) {
+      var p = e.extendedProps;
+      if (p.kind === "task") {
+        return '<div class="it"><span class="dot" style="background:' + e.backgroundColor + '"></span><div><a href="' + p.url + '"><b>' + esc(p.type) + '</b></a><small>Given by ' + esc(p.by) + " to " + esc(p.to) + " · added " + esc(p.added) + '</small><br><span class="tag' + (p.overdue ? " r" : "") + '">' + esc(p.due) + " · " + esc(p.left) + "</span></div></div>";
+      }
+      return '<div class="it"><span class="dot" style="background:' + e.backgroundColor + '"></span><div><b>' + esc(e.title) + "</b><small>" + (p.kind === "cleaning" ? "Cleaning" : "Service") + " schedule" + (p.place ? " · " + esc(p.place) : "") + (p.person ? " · " + esc(p.person) : "") + " · " + esc(p.status) + "</small></div></div>";
+    }).join("") || '<p style="color:var(--mut);margin:0">Nothing planned on this day.</p>';
+    panel.innerHTML = html + '<a id="givehere" class="btn o" style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="' + NEW_URL + "?date=" + key + '">+ Give a task for ' + day + " " + SHORT[mon] + "</a>";
+    draw();
+    if (scroll && window.innerWidth < 820) { document.getElementById("daycard").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+
+  function load() {
+    var first = new Date(view), start = new Date(first); start.setDate(1 - first.getDay());
+    var end = new Date(start); end.setDate(start.getDate() + 42);
+    var id = ++loadId;
+    msg.textContent = "";
+    fetch(EVENTS_URL + "?start=" + iso(start) + "&end=" + iso(end), { credentials: "same-origin" })
+      .then(function (r) { if (!r.ok) { throw new Error("status " + r.status); } return r.json(); })
+      .then(function (data) { if (id !== loadId) { return; } events = data; draw(); if (selected) { select(selected, false); } })
+      .catch(function () { msg.textContent = "Could not load the schedule and tasks. Pull down to refresh and try again."; });
+  }
+  document.getElementById("prev").onclick = function () { view.setMonth(view.getMonth() - 1); draw(); load(); };
+  document.getElementById("next").onclick = function () { view.setMonth(view.getMonth() + 1); draw(); load(); };
+  document.getElementById("todaybtn").onclick = function () { view = new Date(); view.setDate(1); view.setHours(0, 0, 0, 0); draw(); load(); select(iso(new Date()), false); };
+  document.querySelectorAll("#filters .chip").forEach(function (c) {
+    c.onclick = function () { filter = c.getAttribute("data-f"); document.querySelectorAll("#filters .chip").forEach(function (x) { x.classList.toggle("on", x === c); }); draw(); if (selected) { select(selected, false); } };
+  });
+  document.getElementById("who").onchange = function () { who = this.value; draw(); if (selected) { select(selected, false); } };
+  draw(); load(); select(iso(new Date()), false);
+})();
+</script>
+{% endblock %}

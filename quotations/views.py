@@ -1,0 +1,1019 @@
+"""
+quotations/views.py
+
+HTTP only:  read the form  ->  save selections / quantities  ->  calculate_quotation(quotation)
+            ->  render / redirect / PDF.
+
+No money is calculated here.  Every amount comes from quotations/calculations.py.
+"""
+import hmac
+import os
+import time
+from decimal import Decimal
+
+from django.core import signing
+from django.db import transaction
+from django.db.models import Q
+from django.contrib.auth.decorators import login_not_required
+from django.http import FileResponse, Http404, HttpResponseBadRequest, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
+
+from .calculations import (
+    labour_amounts,
+    material_list,
+    PANEL_SHORTFALL_ALLOWED_PERCENT,
+    calculate_panel_quantity,
+    parse_manual_panels,
+    parse_structure_kw,
+    _compute,
+    calculate_quotation,
+    clean_text,
+    decimal_or_zero,
+    find_quotation_item,
+    is_hybrid,
+    normalized_text,
+    plain_number,
+    structure_kind,
+)
+from .models import (
+    PanelOption,
+    Product,
+    Quotation,
+    QuotationItem,
+    SolarPackage,
+)
+from . import dashboard_stats as stats
+from .filenames import pdf_filename
+from .pdf_generator import build_quotation_pdf
+
+
+# =========================================================
+# PANEL TYPE
+# =========================================================
+# Only DCR panels are in the rate sheet for now, so the create page does not ask for the panel type.
+# To ask for it again later, put the DCR / Non-DCR radio buttons back on the page (they post "panel_type").
+
+DEFAULT_PANEL_DCR_STATUS = "dcr"
+
+
+def _people_names():
+    """Every person who already has a quotation, once - offered as suggestions under the "Quotation For" box (same spelling = one person)."""
+    return stats.distinct_names(Quotation.objects.exclude(customer_name="").values_list("customer_name", flat=True))
+
+
+def _model_has_field(model, name):
+    """True when the model has this field (the page offers the manual panel number only once the field has been added and migrated)."""
+    return any(field.name == name for field in model._meta.get_fields())
+
+
+# =========================================================
+# ADMIN PASSKEY  (no login: the passkey only decides whether the rates, margin and charges are shown)
+# =========================================================
+# Set the passkey in the environment variable ADMIN_PASSKEY (Render: Environment).  Nothing is shown to anybody while it is not set.
+# Entering it stores a signed cookie on that device for RATES_UNLOCK_HOURS hours.
+
+RATES_COOKIE = "rates_unlock"
+RATES_SALT = "dehlsen-rates-v1"
+RATES_UNLOCK_HOURS = 8
+
+
+def rates_unlocked(request):
+    """True when this browser entered the right passkey in the last RATES_UNLOCK_HOURS hours."""
+    token = request.COOKIES.get(RATES_COOKIE)
+    if not token:
+        return False
+    try:
+        return signing.loads(token, salt=RATES_SALT, max_age=RATES_UNLOCK_HOURS * 3600) == "ok"
+    except signing.BadSignature:
+        return False
+
+
+def _safe_next(request, fallback):
+    """Only go back to a page of this site."""
+    target = request.POST.get("next", "")
+    return target if target.startswith("/") and not target.startswith("//") else fallback
+
+
+def unlock_rates(request):
+    if request.method != "POST":
+        return redirect("quotation_dashboard")
+    passkey = os.environ.get("ADMIN_PASSKEY", "")
+    given = request.POST.get("passkey", "")
+    target = _safe_next(request, reverse("quotation_dashboard"))
+    if passkey and hmac.compare_digest(given.encode(), passkey.encode()):
+        response = redirect(target)
+        response.set_cookie(RATES_COOKIE, signing.dumps("ok", salt=RATES_SALT), max_age=RATES_UNLOCK_HOURS * 3600,
+                            httponly=True, secure=request.is_secure(), samesite="Lax")
+        return response
+    time.sleep(1)                                           # slows down guessing
+    return redirect(target + ("&" if "?" in target else "?") + "passkey=wrong")
+
+
+def lock_rates(request):
+    response = redirect(_safe_next(request, reverse("quotation_dashboard")))
+    response.delete_cookie(RATES_COOKIE)
+    return response
+
+
+# =========================================================
+# PRODUCT LOOKUP / APPLY PRODUCT
+# =========================================================
+
+def find_product_for_selection(selection, category=None):
+    """Exact name, exact make, then partial name / make.  The category is preferred when it has products."""
+    selection = clean_text(selection)
+    if not selection:
+        return None
+
+    queryset = Product.objects.filter(is_active=True)
+
+    if category:
+        category_qs = queryset.filter(category=category)
+        if category_qs.exists():
+            queryset = category_qs
+
+    for lookup in ("name__iexact", "make__iexact", "name__icontains", "make__icontains"):
+        product = queryset.filter(**{lookup: selection}).first()
+        if product:
+            return product
+
+    return None
+
+
+def apply_product_to_item(item, selection, category=None):
+    """The selected Product's rate becomes the item's rate (tax fields are kept for old data, never used)."""
+    selection = clean_text(selection)
+
+    if not item:
+        return None
+    if not selection:
+        return item
+
+    product = find_product_for_selection(selection, category=category)
+
+    if product:
+        item.product = product
+        item.make = product.make or selection
+        item.specification = product.specification or item.specification
+        item.rate = product.rate
+        item.tax_percent = product.tax_percent
+        item.save(update_fields=["product", "make", "specification", "rate", "tax_percent"])
+        return item
+
+    # Product not found: keep the selected text visible but do NOT silently change the rate.
+    item.make = selection
+    item.save(update_fields=["make"])
+    return item
+
+
+# =========================================================
+# FIND SOLAR PACKAGE
+# =========================================================
+
+def find_solar_package(system_size, phase):
+    """The SolarPackage for this capacity and phase."""
+    selected_phase = clean_text(phase).lower()
+
+    for package in SolarPackage.objects.filter(is_active=True):
+        capacity_text = clean_text(package.capacity).upper()
+
+        digits = ""
+        for character in capacity_text:
+            if character.isdigit() or character == ".":
+                digits += character
+            elif digits:
+                break
+
+        if not digits:
+            continue
+
+        try:
+            package_size = Decimal(digits)
+        except Exception:
+            continue
+
+        if package_size != system_size:
+            continue
+
+        package_phase = clean_text(package.phase).lower()
+
+        if not package_phase:
+            return package
+
+        if selected_phase in package_phase or package_phase in selected_phase:
+            return package
+
+    return None
+
+
+# =========================================================
+# CREATE QUOTATION
+# =========================================================
+
+def _create_error(request, message, posted=None):
+    lead_id = request.POST.get("lead", "")
+    return render(request, "quotations/create_quotation.html", {"error": message, "posted": posted or {}, "people_names": _people_names(),
+                                                                "lead_id": lead_id if lead_id.isdigit() else "", "lead_enabled": _lead_model() is not None})
+
+
+def _lead_model():
+    """The portal's Lead model, or None when this is the stand-alone quotation website (then no lead is asked for)."""
+    try:
+        from portal.models import Lead
+        return Lead
+    except Exception:
+        return None
+
+
+def _open_lead_by_phone(Lead, phone):
+    digits = "".join(c for c in (phone or "") if c.isdigit())[-10:]
+    if len(digits) < 10:
+        return None
+    for lead in Lead.objects.filter(lost=False).order_by("-created_at"):
+        if "".join(c for c in lead.phone if c.isdigit())[-10:] == digits:
+            return lead
+    return None
+
+
+@transaction.atomic
+def create_quotation(request):
+
+    if request.method != "POST":
+        posted = {}
+        source = Quotation.objects.filter(id=request.GET.get("from") or 0).first() if str(request.GET.get("from") or "").isdigit() else None
+        if source is not None:             # "Quote again": the same customer's details, nothing else
+            posted = {"business_name": source.business_name, "customer_name": source.customer_name, "phone": source.phone,
+                      "email": source.email, "address": source.address, "location": source.location}
+        lead_id = request.GET.get("lead") if str(request.GET.get("lead") or "").isdigit() else ""
+        Lead = _lead_model()
+        if not lead_id and source is not None and Lead is not None:      # quoting again: the customer's lead is used
+            found = _open_lead_by_phone(Lead, source.phone)
+            lead_id = str(found.pk) if found else ""
+        if lead_id:                        # "Make quotation" on a lead: its details are filled in
+            try:
+                from portal.models import Lead
+                lead = Lead.objects.select_related("assigned_to").filter(pk=int(lead_id)).first()
+                if lead:
+                    seller = lead.assigned_to
+                    profile = getattr(seller, "portal_profile", None) if seller else None
+                    posted = {"business_name": lead.customer_name, "phone": lead.phone, "location": lead.area,
+                              "panel_type": {"dcr": "dcr", "non_dcr": "non_dcr"}.get(lead.dcr_choice, ""),
+                              "system_type": {"on_grid": "On-Grid", "off_grid": "Off-Grid", "hybrid": "Hybrid"}.get(lead.system_type, ""),
+                              "customer_name": (getattr(profile, "sales_name", "") or (seller.first_name if seller else "") or (seller.get_username() if seller else ""))}
+            except Exception:
+                lead_id = ""
+        return render(request, "quotations/create_quotation.html", {"posted": posted, "people_names": _people_names(), "quote_again": source is not None, "lead_id": lead_id, "lead_enabled": _lead_model() is not None})
+
+    posted = {key: clean_text(request.POST.get(key)) for key in (
+        "business_name", "customer_name", "phone", "email", "address", "location",
+        "phase", "system_size", "panel_type", "structure", "system_type", "lead_need", "lead_other", "lead_priority")}
+
+    business_name = posted["business_name"]
+    location = posted["location"]
+    phase = posted["phase"]
+    system_size_raw = posted["system_size"]
+    panel_dcr_status = posted["panel_type"] if posted["panel_type"] in ("dcr", "non_dcr", "both") else DEFAULT_PANEL_DCR_STATUS
+    structure_type = posted["structure"]
+    system_type = posted["system_type"]
+
+    # ---- validation ----
+    if not business_name:
+        return _create_error(request, "Please enter customer name.", posted)
+    if not posted["customer_name"]:
+        return _create_error(request, "Please enter who the quotation is for (Quotation For).", posted)
+    if not location:
+        return _create_error(request, "Please enter project location.", posted)
+    Lead = _lead_model()
+    posted_lead = request.POST.get("lead", "")
+    if Lead is not None and not posted_lead.isdigit():
+        if posted["lead_need"] not in ("", "call", "visit", "call,visit", "other"):
+            posted["lead_need"] = ""
+        if posted["lead_need"] == "other" and not posted["lead_other"]:
+            return _create_error(request, "Please type what was done for this lead.", posted)
+        if posted["lead_priority"] not in ("hot", "medium", "cold"):
+            return _create_error(request, "Please choose the lead priority (Cold, Medium or Hot).", posted)
+    if not phase:
+        return _create_error(request, "Please select phase.", posted)
+    if not system_size_raw:
+        return _create_error(request, "Please select system size.", posted)
+    if not structure_type:
+        return _create_error(request, "Please select structure.", posted)
+    if not system_type:
+        return _create_error(request, "Please select system type.", posted)
+
+    try:
+        system_size = Decimal(system_size_raw)
+    except Exception:
+        return _create_error(request, "Invalid system size.", posted)
+
+    if system_size <= 0:
+        return _create_error(request, "System size must be greater than zero.", posted)
+
+    selected_package = find_solar_package(system_size, phase)
+
+    quotation = Quotation.objects.create(
+        offer_no=f"INQ-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
+
+        # customer
+        business_name=business_name,
+        customer_name=posted["customer_name"],
+        phone=posted["phone"],
+        email=posted["email"],
+        address=posted["address"],
+        location=location,
+
+        # system
+        phase=phase,
+        system_size=system_size,
+        panel_dcr_status=panel_dcr_status,
+        structure_type=structure_type,
+        system_type=system_type,
+        capacity=system_size_raw,
+        date=timezone.localdate(),
+        validity_days=15,
+
+        # default editable charges (structure_work 0 = use the calculated wage)
+        electrical_work=Decimal("8000"),
+        structure_work=Decimal("0"),
+        transportation_travel=Decimal("2000"),
+        kseb_fee=Decimal("4720"),
+        loading_charge=Decimal("1000"),
+        documentation=Decimal("2500"),
+
+        solar_package=selected_package,
+    )
+
+    # ---- package items: the matching product's rate when it exists, else the package rate ----
+    if selected_package:
+        for package_item in selected_package.items.all():
+
+            product = Product.objects.filter(name__iexact=package_item.product_name, is_active=True).first()
+
+            if not product and package_item.make:
+                product = Product.objects.filter(make__iexact=package_item.make, is_active=True).first()
+
+            QuotationItem.objects.create(
+                quotation=quotation,
+                product=product,
+                description=package_item.product_name,
+                specification=(product.specification if product and product.specification else package_item.specification),
+                quantity=package_item.quantity,
+                make=(product.make if product and product.make else package_item.make),
+                rate=product.rate if product else package_item.rate,
+                tax_percent=product.tax_percent if product else package_item.tax_percent,
+            )
+
+    calculate_quotation(quotation)
+
+    lead_id = request.POST.get("lead", "")
+    if Lead is not None:                   # every quotation belongs to a lead: the chosen one, or one made here
+        try:
+            from portal.models import LeadEvent
+            offer = quotation.offer_no or "#%s" % quotation.id
+            if lead_id.isdigit() and Lead.objects.filter(pk=int(lead_id)).exists():
+                again = Lead.objects.filter(pk=int(lead_id), quotation_id__isnull=False).exists()
+                Lead.objects.filter(pk=int(lead_id)).update(quotation_id=quotation.id, next_step="")
+                LeadEvent.objects.create(lead_id=int(lead_id), by=request.user, kind="quoted", text=("made a new quotation %s (re-quote)" if again else "made the quotation %s") % offer)
+            else:
+                lead = _open_lead_by_phone(Lead, quotation.phone)
+                if lead is not None:
+                    lead.quotation_id = quotation.id
+                    lead.next_step = ""
+                    lead.save(update_fields=["quotation_id", "next_step"])
+                    LeadEvent.objects.create(lead=lead, by=request.user, kind="quoted", text="made the quotation %s" % offer)
+                else:
+                    new_lead = Lead.objects.create(
+                        customer_name=quotation.business_name or quotation.customer_name, phone=quotation.phone or "", area=quotation.location or "",
+                        need=posted["lead_need"], need_other=posted["lead_other"] if posted["lead_need"] == "other" else "",
+                        priority=posted["lead_priority"], note="Made together with the quotation", entered_by=request.user,
+                        assigned_to=request.user, quotation_id=quotation.id)
+                    LeadEvent.objects.create(lead=new_lead, by=request.user, kind="quoted", text="made the quotation %s (quotation first)" % offer)
+        except Exception:
+            pass
+    return redirect("quotation_detail", quotation_id=quotation.id)
+
+
+# =========================================================
+# OPTION RULE -> QUOTATION ITEM
+# =========================================================
+
+def find_item_for_rule(quotation, rule):
+    """1) field name ~ description   2) current value ~ make   3) excel row position."""
+    field_name = normalized_text(rule.field_name)
+    current_value = normalized_text(rule.current_value)
+    items = list(quotation.items.order_by("id"))
+
+    if field_name:
+        for item in items:
+            description = normalized_text(item.description)
+            if field_name == description or field_name in description or description in field_name:
+                return item
+
+    if current_value:
+        for item in items:
+            make = normalized_text(item.make)
+            if make and (current_value == make or current_value in make or make in current_value):
+                return item
+
+    if rule.excel_row > 0:
+        index = rule.excel_row - 1
+        if 0 <= index < len(items):
+            return items[index]
+
+    return None
+
+
+# =========================================================
+# QUOTATION DETAIL
+# =========================================================
+
+def _quantity_from_post(request, name, current):
+    """A quantity box left blank keeps the current value; a negative number is ignored."""
+    raw = clean_text(request.POST.get(name))
+    if raw == "":
+        return current
+    value = decimal_or_zero(raw)
+    return value if value >= 0 else current
+
+
+INVERTER_SIZES = (3, 4, 5, 8, 10)
+
+
+def allowed_inverter_kws(system_size):
+    """The inverter sizes offered for a plant: its own size and every bigger one (3 -> 3, 4, 5, 8, 10 | 4 -> 4, 5, 8, 10 | 5 -> 5, 8, 10 |
+    8 -> 8, 10), and for 10 kW the 8 kW inverter as well (10 -> 10, 8)."""
+    size = decimal_or_zero(system_size)
+    if size >= 10:
+        return [8, 10]
+    return [s for s in INVERTER_SIZES if s >= size]
+
+
+def hybrid_inverter_kws(system_size):
+    """The hybrid inverter sizes offered for a plant: its own size and the bigger ones up to twice the plant (at least 10 kW), and the 8 kW one for a 10 kW plant."""
+    size = decimal_or_zero(system_size)
+    capacities = sorted({p.inverter_capacity for p in Product.objects.filter(
+        category="inverter", is_active=True, name__icontains="HYBRID", inverter_capacity__isnull=False)})
+    return [c for c in capacities if (c >= size and c <= max(size * 2, 10)) or (size >= 10 and c == 8)]
+
+
+def _missing_fields(request, quotation):
+    """The names of the quotation-page fields that were left empty (or a length of 0).  Quotation For is required; phone, email and address stay optional, as on the first page."""
+    post = request.POST
+
+    def empty(name):
+        return not clean_text(post.get(name))
+
+    def zero(name):
+        return decimal_or_zero(post.get(name)) <= 0
+
+    missing = []
+    if "customer_name" in post and empty("customer_name"):
+        missing.append("Quotation For")
+    if clean_text(quotation.panel_dcr_status).lower() == "both":
+        if empty("panel_option"):
+            missing.append("DCR panel")
+        if zero("panel_quantity_manual"):
+            missing.append("Number of DCR panels")
+        if empty("panel2_option"):
+            missing.append("Non-DCR panel")
+        if zero("panel2_quantity"):
+            missing.append("Number of Non-DCR panels")
+    for name, label in (("panel_option", "Panel"), ("inverter_kw", "Inverter capacity"), ("inverter_type", "Inverter"), ("dc_cable", "DC cable"), ("ac_wire", "AC wire")):
+        if empty(name):
+            missing.append(label)
+    if zero("dc_cable_quantity"):
+        missing.append("DC cable length")
+    if zero("ac_wire_quantity"):
+        missing.append("AC wire length")
+    if clean_text(post.get("inverter_type")).lower() == "other":
+        if not clean_text(post.get("other_inverter_name") or post.get("other_inverter")):
+            missing.append("Inverter name")
+        if zero("other_inverter_rate"):
+            missing.append("Inverter rate")
+    if structure_kind(quotation.structure_type) in ("gp", "gi"):
+        if empty("structure_height"):
+            missing.append("Structure height")
+        elif clean_text(post.get("structure_height")) == "other" and zero("custom_height"):
+            missing.append("Structure height (FT)")
+    for name, label in (("electrical_work", "Electrical work"), ("transportation_travel", "Transportation / travel"), ("kseb_fee", "KSEB fee"),
+                        ("loading_charge", "Loading charge"), ("documentation", "Documentation")):
+        if name in post and empty(name):
+            missing.append(label)
+    return missing
+
+
+@transaction.atomic
+def quotation_detail(request, quotation_id):
+
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+
+    is_both = clean_text(quotation.panel_dcr_status).lower() == "both"
+    # DCR quotation: only DCR panels.  Non-DCR quotation: only non-DCR panels.  Both: the first list is DCR, the second list non-DCR.
+    panel_options = PanelOption.objects.filter(
+        is_active=True,
+        dcr_status__iexact=("dcr" if is_both else clean_text(quotation.panel_dcr_status)),
+    ).order_by("company", "panel_type", "wattage")
+    panel2_options = (PanelOption.objects.filter(is_active=True, dcr_status__iexact="non_dcr").order_by("company", "panel_type", "wattage")
+                      if is_both else panel_options)             # a DCR / Non-DCR quotation: the second panel offered is of the same kind
+
+    if quotation.solar_package:
+        option_rules = list(quotation.solar_package.option_rules.filter(is_active=True).order_by("excel_row"))
+    else:
+        option_rules = []
+
+    # =====================================================
+    # POST: save what the user chose, then calculate once
+    # =====================================================
+    if request.method == "POST":
+
+        # ---- every field must be filled in (a blank or zero value is refused before anything is saved) ----
+        missing = _missing_fields(request, quotation)
+        if missing:
+            return HttpResponseBadRequest("Please fill in: " + ", ".join(missing) + ". Go back, fill them in and press Save again.")
+
+        # ---- panel (quantity = the nearest whole number of system size / wattage) ----
+        panel_option_id = clean_text(request.POST.get("panel_option"))
+
+        if panel_option_id:
+            panel_option = get_object_or_404(PanelOption, id=panel_option_id, is_active=True)
+
+            expected_status = "dcr" if is_both else quotation.panel_dcr_status
+            if normalized_text(panel_option.dcr_status) != normalized_text(expected_status):
+                return HttpResponseBadRequest("Invalid panel DCR selection.")
+
+            quotation.panel_option = panel_option
+            quotation.panel_quantity = calculate_panel_quantity(quotation.system_size, panel_option.wattage)
+        else:
+            quotation.panel_option = None
+            quotation.panel_quantity = 0
+
+        # ---- panel number: calculated by the system unless a number is typed in (an empty box = calculated) ----
+        if _model_has_field(Quotation, "panel_quantity_manual"):
+            manual_panels, problem = parse_manual_panels(request.POST.get("panel_quantity_manual"))
+            if problem:
+                return HttpResponseBadRequest(problem)
+            quotation.panel_quantity_manual = manual_panels
+
+        # ---- "both": the second panel (NON-DCR) and its number ----
+        if is_both:
+            panel2_id = clean_text(request.POST.get("panel2_option"))
+            panel2 = get_object_or_404(PanelOption, id=panel2_id, is_active=True) if panel2_id else None
+            if panel2 is not None and normalized_text(panel2.dcr_status) != normalized_text("non_dcr"):
+                return HttpResponseBadRequest("The second panel must be a Non-DCR panel.")
+            panel2_quantity, problem = parse_manual_panels(request.POST.get("panel2_quantity"))
+            if problem:
+                return HttpResponseBadRequest(problem)
+            quotation.panel2_option = panel2
+            quotation.panel2_quantity = int(panel2_quantity or 0) if panel2 is not None else 0
+        else:
+            # DCR / Non-DCR: an optional SECOND panel (same kind) offered to the customer.  The price uses the first panel only
+            # (quantity 0 = not priced); the PDF prints both makes.
+            alt_id = clean_text(request.POST.get("panel2_option"))
+            quotation.panel2_option = PanelOption.objects.filter(
+                id=alt_id, is_active=True, dcr_status__iexact=clean_text(quotation.panel_dcr_status)).first() if alt_id.isdigit() else None
+            quotation.panel2_quantity = 0
+
+        # ---- inverter ----
+        inverter_kw_raw = clean_text(request.POST.get("inverter_kw"))
+        quotation.inverter_kw = decimal_or_zero(inverter_kw_raw) if inverter_kw_raw else quotation.system_size
+
+        inverter_type = clean_text(request.POST.get("inverter_type"))
+        quotation.inverter_type = inverter_type
+
+        other_inverter_name = clean_text(request.POST.get("other_inverter_name") or request.POST.get("other_inverter"))
+        other_inverter_rate = decimal_or_zero(request.POST.get("other_inverter_rate"))
+
+        inverter_item = find_quotation_item(quotation, "INVERTER")
+
+        if inverter_item:
+            if inverter_type and inverter_type.lower() != "other":
+                apply_product_to_item(inverter_item, inverter_type, category="inverter")
+                quotation.inverter_make = inverter_item.make
+                quotation.inverter_rate = inverter_item.rate
+
+            elif inverter_type.lower() == "other":
+                # the entered name and rate REPLACE the product rate (they are never added to it)
+                inverter_item.make = other_inverter_name
+                inverter_item.rate = other_inverter_rate
+                inverter_item.product = None
+                inverter_item.save()
+                quotation.inverter_make = other_inverter_name
+                quotation.inverter_rate = other_inverter_rate
+
+        # ---- Enphase: on-grid only; the IQ8HC microinverter is for bifacial panels only ----
+        if "MICRO" in inverter_type.upper() and "on" not in clean_text(quotation.system_type).lower()[:2]:
+            return HttpResponseBadRequest("The Enphase microinverters are for On-Grid quotations only.")
+        if "IQ8HC" in inverter_type.upper() and quotation.panel_option is not None and "TOPCON" in (quotation.panel_option.panel_type or "").upper():
+            return HttpResponseBadRequest("The IQ8HC microinverter is for bifacial panels. For TOPCon panels use the IQ8P.")
+
+        # ---- hybrid: the battery and how many ----
+        if is_hybrid(quotation):
+            quotation.battery_type = clean_text(request.POST.get("battery_type"))
+            try:
+                battery_quantity = int(clean_text(request.POST.get("battery_quantity")) or 1)
+            except ValueError:
+                return HttpResponseBadRequest("The number of batteries must be a whole number.")
+            if battery_quantity < 1 or battery_quantity > 50:
+                return HttpResponseBadRequest("The number of batteries must be between 1 and 50.")
+            quotation.battery_quantity = battery_quantity
+
+        # ---- DC cable / AC wire: product + editable quantity ----
+        dc_cable = clean_text(request.POST.get("dc_cable"))
+        quotation.dc_cable = dc_cable
+        dc_cable_item = find_quotation_item(quotation, "DC_CABLE")
+        if dc_cable_item and dc_cable:
+            apply_product_to_item(dc_cable_item, dc_cable, category="dc_cable")
+        quotation.dc_cable_quantity = _quantity_from_post(request, "dc_cable_quantity", quotation.dc_cable_quantity)
+
+        ac_wire = clean_text(request.POST.get("ac_wire"))
+        quotation.ac_wire = ac_wire
+        ac_wire_item = find_quotation_item(quotation, "AC_WIRE")
+        if ac_wire_item and ac_wire:
+            apply_product_to_item(ac_wire_item, ac_wire, category="ac_wire")
+        quotation.ac_wire_quantity = _quantity_from_post(request, "ac_wire_quantity", quotation.ac_wire_quantity)
+
+        # ---- earth rods: always 3 nos (set by calculate_quotation), nothing to read here ----
+
+        # ---- structure kW: empty = the panels' total watts; a number (8) = that many kW (8,000 W) for the structure ----
+        if _model_has_field(Quotation, "structure_kw_manual"):
+            structure_kw, problem = parse_structure_kw(request.POST.get("structure_kw_manual"))
+            if problem:
+                return HttpResponseBadRequest(problem)
+            quotation.structure_kw_manual = structure_kw
+
+        # ---- structure height ----
+        structure_height = clean_text(request.POST.get("structure_height"))
+        custom_height = clean_text(request.POST.get("custom_height"))
+
+        if structure_kind(quotation.structure_type) == "roof":
+            quotation.structure_feet = Decimal("2")
+        elif structure_height == "other":
+            quotation.structure_feet = decimal_or_zero(custom_height) if custom_height else Decimal("0")
+        elif structure_height:
+            quotation.structure_feet = decimal_or_zero(structure_height)
+
+        # ---- additional charges ----
+        # (these boxes are on the page only in the admin view: when they are missing, the saved amounts are kept)
+        for field in ("electrical_work", "transportation_travel", "kseb_fee", "loading_charge", "documentation"):
+            if field in request.POST:
+                setattr(quotation, field, decimal_or_zero(request.POST.get(field)))
+
+        # ---- structure wage and final price ----
+        # They are handed on exactly as submitted.  calculations.py decides whether they were typed by
+        # hand (kept) or are just the previously displayed automatic values (recalculated).
+        # A blank box means "automatic".
+        if "structure_wage" in request.POST:
+            quotation.structure_work = decimal_or_zero(request.POST.get("structure_wage"))
+        quotation.final_quotation_price = decimal_or_zero(request.POST.get("final_quotation_price"))
+
+        # ---- customer details (editable on the detail page too) ----
+        for field in ("customer_name", "phone", "email", "address"):
+            if field in request.POST:
+                setattr(quotation, field, clean_text(request.POST.get(field)))
+
+        quotation.save()
+
+        # ---- package option rules (BOS dropdowns) ----
+        for rule in option_rules:
+            selected_option = clean_text(request.POST.get(f"option_{rule.excel_cell}"))
+            if not selected_option:
+                continue
+            item = find_item_for_rule(quotation, rule)
+            if item:
+                apply_product_to_item(item, selected_option)
+
+        # ---- ONE calculation ----
+        calculate_quotation(quotation)
+
+        return redirect("quotation_detail", quotation_id=quotation.id)
+
+    # =====================================================
+    # GET: always show the current calculation
+    # =====================================================
+    calculate_quotation(quotation)
+    summary = quotation.cost_breakdown
+
+    is_other_inverter = clean_text(quotation.inverter_type).lower() == "other"
+    hybrid = is_hybrid(quotation)
+    allowed_kws = hybrid_inverter_kws(quotation.system_size) if hybrid else allowed_inverter_kws(quotation.system_size)
+    if hybrid:
+        inverter_products = Product.objects.filter(category="inverter", is_active=True, rate__gt=0, name__icontains="HYBRID").filter(
+            Q(inverter_capacity__in=allowed_kws) | Q(name=clean_text(quotation.inverter_type))).order_by("inverter_capacity", "name")
+    else:
+        inverter_products = Product.objects.filter(category="inverter", is_active=True, rate__gt=0).exclude(name__icontains="HYBRID").filter(
+            Q(inverter_capacity__in=allowed_kws) | Q(inverter_capacity__isnull=True) | Q(inverter_capacity__lte=0)
+            | Q(name=clean_text(quotation.inverter_type))).order_by("name")
+        if "off" in clean_text(quotation.system_type).lower():             # Enphase microinverters are for on-grid plants only
+            inverter_products = inverter_products.exclude(name__icontains="MICRO")
+    saved_kw = decimal_or_zero(quotation.inverter_kw)
+    kw_options = sorted(set(allowed_kws) | ({int(saved_kw) if saved_kw == int(saved_kw) else saved_kw} if saved_kw > 0 else set()))
+
+    return render(
+        request,
+        "quotations/quotation_detail.html",
+        {
+            "quotation": quotation,
+            "panel_options": panel_options,
+            "panel2_options": panel2_options,
+            "is_both": is_both,
+            "summary": summary,
+            "structure_kind": structure_kind(quotation.structure_type),
+            "inverter_products": inverter_products,
+            "is_hybrid": hybrid,
+            "battery_quantity_options": sorted(set(range(1, 11)) | {int(quotation.battery_quantity or 1)}),
+            "battery_products": Product.objects.filter(category="battery", is_active=True, rate__gt=0).order_by("name"),
+            "inverter_kw_options": kw_options,
+            "dc_cable_products": Product.objects.filter(category="dc_cable", is_active=True, rate__gt=0).order_by("name"),
+            "ac_wire_products": Product.objects.filter(category="ac_wire", is_active=True, rate__gt=0).order_by("name"),
+            "other_inverter_name": quotation.inverter_make if is_other_inverter else "",
+            "other_inverter_rate": plain_number(quotation.inverter_rate) if is_other_inverter else "",
+            "panel_shortfall_percent": PANEL_SHORTFALL_ALLOWED_PERCENT,          # the page's live panel count uses the same rule
+            "can_edit_panels": _model_has_field(Quotation, "panel_quantity_manual"),
+            "can_edit_structure_kw": _model_has_field(Quotation, "structure_kw_manual"),
+            "show_rates": rates_unlocked(request),
+            "unlock_error": "Wrong passkey." if request.GET.get("passkey") == "wrong" else "",
+            "pdf_name": pdf_filename(quotation),
+            "people_names": _people_names(),
+        },
+    )
+
+
+# =========================================================
+# QUOTATION PDF
+# =========================================================
+
+def quotation_pdf(request, quotation_id, filename=None):
+    """The PDF only PRINTS the saved calculation; recalculating first makes sure it is the current one.
+    `filename` is only the last part of the address (/pdf/12/HUDA_3kW.pdf): phones name a saved PDF after the address, not after the header."""
+    quotation = get_object_or_404(
+        Quotation.objects.select_related("panel_option", "solar_package").prefetch_related("items__product"),
+        id=quotation_id,
+    )
+
+    calculate_quotation(quotation)
+
+    pdf_buffer = build_quotation_pdf(request, quotation)
+
+    response = FileResponse(
+        pdf_buffer,
+        as_attachment=False,
+        filename=pdf_filename(quotation),                       # HUDA_3kW.pdf
+        content_type="application/pdf",
+    )
+    # never reuse an earlier copy: the PDF must always show the current saved quotation
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    return response
+
+
+def quotation_pdf_view(request, quotation_id, filename):
+    """The PDF inside our own page, with a Back button and a Share / Save button.
+    (An installed phone app has no browser menu, and the phone's plain PDF viewer has no share button.)"""
+    get_object_or_404(Quotation, id=quotation_id)
+    return render(request, "quotations/pdf_view.html", {
+        "pdf_url": reverse("quotation_pdf_named", args=[quotation_id, filename]),
+        "pdf_name": filename,
+    })
+
+
+# =========================================================
+# DASHBOARD
+# =========================================================
+
+def _person_url():
+    """The address of the person page ('' if its line has not been added to urls.py yet: the dashboard then still works)."""
+    try:
+        return reverse("person_dashboard")
+    except NoReverseMatch:
+        return ""
+
+
+def dashboard(request):
+    """All quotations, the totals of everybody, and one line per person (click a name for his own totals)."""
+    quotations = list(Quotation.objects.order_by("-created_at"))
+    rows = stats.rows_of(quotations)
+    return render(request, "quotations/dashboard.html", {
+        "quotations": quotations,
+        "totals": stats.format_summary(stats.summarize_clients(rows)),
+        "people": stats.people(rows),
+        "person_url": _person_url(),
+        "show_rates": rates_unlocked(request),
+        "unlock_error": "Wrong passkey." if request.GET.get("passkey") == "wrong" else "",
+    })
+
+
+def person_dashboard(request):
+    """One person's total quotations, kW, value and profit, with his quotations.   /person/?name=Imran"""
+    link_name = request.GET.get("name", "")
+    key = stats.key_from_link(link_name)
+    quotations = [q for q in Quotation.objects.order_by("-created_at") if stats.name_key(q.customer_name) == key]
+    if not quotations:
+        raise Http404("There is no quotation for this name.")
+
+    def make_item(q):
+        line = stats.format_summary(stats.summarize(stats.rows_of([q])))
+        return {"id": q.id, "offer_no": q.offer_no, "business_name": q.business_name, "location": q.location, "date": q.date,
+                "pdf_name": pdf_filename(q), "is_customer": q.is_customer,
+                "category": q.category, "kw_display": line["kw_display"], "value_display": line["value_display"],
+                "profit_display": line["profit_display"], "profit_negative": line["profit_negative"],
+                "search": stats.search_text(q) + " " + line["value_text"] + " " + line["kw_text"]}
+
+    by_id = {q.id: q for q in quotations}
+    items = []
+    for group in stats.group_clients(stats.rows_of(quotations)):
+        item = make_item(by_id[group["picked"]["id"]])
+        item["others"] = [make_item(by_id[r["id"]]) for r in group["others"]]
+        item["chosen"] = group["chosen"]
+        confirmed = [x for x in [item] + item["others"] if x["is_customer"]]
+        item["customer_id"] = confirmed[0]["id"] if confirmed else None
+        item["customer_offer"] = confirmed[0]["offer_no"] if confirmed else ""
+        item["preselect"] = item["customer_id"] or item["id"]
+        item["search"] += " " + " ".join(o["search"] for o in item["others"])
+        items.append(item)
+
+    return render(request, "quotations/person.html", {
+        "person_name": stats.most_common_name(q.customer_name for q in quotations) or stats.NO_NAME_TEXT,
+        "totals": stats.format_summary(stats.summarize_clients(stats.rows_of(quotations))),
+        "items": items,
+        "show_rates": rates_unlocked(request),
+    })
+
+
+@login_not_required
+def materials_api(request):
+    """
+    Read-only data for the separate materials website.  Needs the header  X-API-Key  equal to the environment variable
+    MATERIALS_API_KEY (switched off when that is not set).      /api/materials/?q=huda       a search, newest first
+                                                               /api/materials/?id=12        one quotation with its material list
+    """
+    expected = os.environ.get("MATERIALS_API_KEY", "")
+    given = request.headers.get("X-API-Key", "")
+    if not expected or not hmac.compare_digest(expected.encode(), given.encode()):
+        raise Http404()
+
+    def header(q):
+        return {"id": q.id, "offer_no": q.offer_no, "business_name": q.business_name, "customer_name": q.customer_name,
+                "phone": q.phone, "location": q.location, "system_size": str(q.system_size), "date": str(q.date)}
+
+    if request.GET.get("id", "").isdigit():
+        quotation = get_object_or_404(Quotation, id=int(request.GET["id"]), is_customer=True)
+        try:
+            data = header(quotation)
+            data["items"] = material_list(quotation)
+            data.update(labour_amounts(quotation))
+        except Exception as problem:         # show the real reason to the materials website (this address needs the secret key anyway)
+            return JsonResponse({"error": "%s: %s" % (type(problem).__name__, problem)}, status=500)
+        return JsonResponse(data)
+
+    query = request.GET.get("q", "").strip()
+    found = [q for q in Quotation.objects.filter(is_customer=True).order_by("-created_at")[:500] if not query or stats.matches(stats.search_text(q), query)]
+    return JsonResponse({"quotations": [header(q) for q in found[:30]]})
+
+
+class _EstimateDone(Exception):
+    """Raised on purpose to roll the estimate quotation back: nothing of it is kept."""
+
+
+def _pick_panel(company, watts, watts_max, panel_type, dcr):
+    """The panel of the rate sheet for what a PDF says: the brand, the watts (a range such as 600-620 takes the highest inside it) and,
+    when given, the technology (TOPCon ...) and DCR."""
+    options = PanelOption.objects.filter(is_active=True)
+    if company:
+        options = options.filter(company__icontains=company.strip())
+    if panel_type:
+        narrowed = options.filter(panel_type__icontains=panel_type.strip())
+        options = narrowed if narrowed.exists() else options
+    if dcr in ("dcr", "non_dcr"):
+        narrowed = options.filter(dcr_status=dcr)
+        options = narrowed if narrowed.exists() else options
+    options = list(options)
+    if not options:
+        return None
+    if not watts:
+        return None if len(options) > 1 else options[0]
+    low, high = watts, (watts_max or watts)
+    inside = [p for p in options if low <= Decimal(p.wattage) <= high]
+    if inside:
+        return max(inside, key=lambda p: Decimal(p.wattage))
+    return min(options, key=lambda p: abs(Decimal(p.wattage) - high))
+
+
+@login_not_required
+def materials_estimate(request):
+    """
+    The REVERSE of a quotation, for a quotation that was not made here: the materials website sends only the specifications it read
+    from the other quotation, and gets back the same data as /api/materials/?id=  (the material list with this app's rates, the structure
+    wage and the electrical work), worked out with this app's own rules.  Nothing is saved.   Needs the X-API-Key header.
+        /api/materials/estimate/?system_size=5&phase=single&panel_company=adani&panel_watts=620&panel_quantity=5&inverter_kw=5
+                                 &structure=roof&dc_cable_m=50&ac_wire_m=20
+    Also: panel_watts_max (a range 600-620), panel_type (topcon), dcr (dcr / non_dcr), structure_feet, dc_cable_sqmm.
+    """
+    expected = os.environ.get("MATERIALS_API_KEY", "")
+    given = request.headers.get("X-API-Key", "")
+    if not expected or not hmac.compare_digest(expected.encode(), given.encode()):
+        raise Http404()
+
+    get = request.GET
+
+    def number(key):
+        try:
+            value = Decimal(str(get.get(key, "")).strip())
+            return value if value > 0 else None
+        except Exception:
+            return None
+
+    size = number("system_size")
+    if size is None:
+        return JsonResponse({"error": "system_size (kW) is needed."}, status=400)
+    phase = "three" if get.get("phase", "").strip().lower().startswith(("3", "three")) else "single"
+    structure = get.get("structure", "roof").strip().lower().replace("_", " ").replace("-", " ")
+    structure = "TATA GI" if structure == "tata gi" else ("No structure" if structure in ("none", "no", "no structure") else (structure if structure in ("roof", "gp", "gi") else "roof"))
+    panel = _pick_panel(get.get("panel_company", ""), number("panel_watts"), number("panel_watts_max"), get.get("panel_type", ""), get.get("dcr", ""))
+    panels = number("panel_quantity")
+    sqmm = number("dc_cable_sqmm")
+
+    result = {}
+    try:
+        with transaction.atomic():
+            quotation = Quotation.objects.create(
+                offer_no="ESTIMATE-%s" % timezone.now().strftime("%Y%m%d%H%M%S%f"), business_name="Estimate", location="-",
+                phase=phase, system_size=size, system_type="on_grid", capacity=plain_number(size), date=timezone.localdate(),
+                panel_dcr_status=panel.dcr_status if panel is not None else "dcr", structure_type=structure, structure_feet=number("structure_feet"),
+                panel_option=panel, panel_quantity_manual=int(panels) if panels else None, inverter_kw=number("inverter_kw"),
+                dc_cable=("%s SQMM" % plain_number(sqmm)) if sqmm else "",
+                dc_cable_quantity=number("dc_cable_m") or Decimal("30"), ac_wire_quantity=number("ac_wire_m") or Decimal("20"),
+                electrical_work=Decimal("8000"), structure_work=Decimal("0"), transportation_travel=Decimal("2000"),
+                kseb_fee=Decimal("4720"), loading_charge=Decimal("1000"), documentation=Decimal("2500"))
+            computed = _compute(quotation)
+            result = {"id": "", "offer_no": "", "business_name": "", "customer_name": "", "phone": "", "location": "",
+                      "system_size": str(size), "date": "", "items": material_list(quotation),
+                      "panel_used": str(panel) if panel is not None else "", "warnings": computed["warnings"],
+                      "price_estimate": str(computed["final_price"])}
+            result.update(labour_amounts(quotation))
+            raise _EstimateDone
+    except _EstimateDone:
+        pass
+    except Exception as problem:
+        return JsonResponse({"error": "%s: %s" % (type(problem).__name__, problem)}, status=500)
+    return JsonResponse(result)
+
+
+def confirm_customer(request, quotation_id=None):
+    """
+    POST: the client said yes - this quotation becomes a customer (and is the one that counts for the client).
+    With the id in the address, pressing again undoes it.  Without it (the choice list on the person page) the chosen
+    quotation_id is only ever CONFIRMED, never undone.
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST only")
+    choice = quotation_id is None
+    if choice:
+        raw = request.POST.get("quotation_id", "")
+        if not raw.isdigit():
+            return HttpResponseBadRequest("Choose a quotation.")
+        quotation_id = int(raw)
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+    if quotation.is_customer and choice:
+        pass
+    elif quotation.is_customer:
+        Quotation.objects.filter(id=quotation.id).update(is_customer=False)
+    else:
+        key = stats.client_key(stats.rows_of([quotation])[0])
+        same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
+        Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False)     # one confirmed quotation per client
+        Quotation.objects.filter(id=quotation.id).update(counted=True, is_customer=True)
+    return redirect(_safe_next(request, reverse("quotation_detail", args=[quotation.id])))
+
+
+def set_counted(request, quotation_id):
+    """POST: make this quotation the one that counts for its client (action=clear: back to the lowest price)."""
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST only")
+    quotation = get_object_or_404(Quotation, id=quotation_id)
+    key = stats.client_key(stats.rows_of([quotation])[0])
+    same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
+    Quotation.objects.filter(id__in=same).update(counted=False)
+    if request.POST.get("action") != "clear":
+        Quotation.objects.filter(id=quotation.id).update(counted=True)
+    return redirect(_safe_next(request, reverse("quotation_dashboard")))
+
+
+def search(request):
+    """Looks through ALL quotations: offer number, business, person, place, phone ...   /search/?q=huda kozhikode"""
+    query = request.GET.get("q", "").strip()
+    if not query:
+        return redirect("quotation_dashboard")
+
+    found = [q for q in Quotation.objects.order_by("-created_at") if stats.matches(stats.search_text(q), query)]
+    items = []
+    for q in found:
+        line = stats.format_summary(stats.summarize(stats.rows_of([q])))
+        items.append({"id": q.id, "offer_no": q.offer_no, "business_name": q.business_name, "location": q.location, "date": q.date,
+                      "pdf_name": pdf_filename(q),
+                      "category": q.category, "person_name": q.customer_name, "person_link": stats.link_key_for(q.customer_name),
+                      "kw_display": line["kw_display"], "value_display": line["value_display"],
+                      "profit_display": line["profit_display"], "profit_negative": line["profit_negative"]})
+
+    return render(request, "quotations/search.html", {"query": query, "items": items, "person_url": _person_url(), "show_rates": rates_unlocked(request)})

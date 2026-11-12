@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+<style>
+    .day-heading {
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #6c757d;
+        margin: 1.25rem 0 0.5rem;
+    }
+
+    .day-heading .count { font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+    #myCalendar .fc-event { cursor: pointer; }
+    #myCalendar .fc-daygrid-event .fc-event-title { white-space: normal; }
+
+    @media (max-width: 700px) {
+        #myCalendar .fc .fc-toolbar { flex-direction: column; gap: 8px; }
+        #myCalendar .fc .fc-toolbar-title { font-size: 1.2rem; }
+    }
+
+    /* Month view: time on its own line, so nothing gets cut off */
+    .fc-daygrid-block-event .fc-event-main-frame {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .fc-daygrid-block-event .fc-event-time {
+        font-weight: 700;
+        overflow: visible;
+    }
+    .fc-daygrid-block-event .fc-event-title {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    /* Keep the original calendar look (stop Bootstrap styling dates as links) */
+    .fc {
+        font-family: Arial, Helvetica, sans-serif;
+        color: #222;
+    }
+    .fc a,
+    .fc a:hover {
+        color: inherit;
+        text-decoration: none;
+    }
+    .fc .fc-col-header-cell-cushion {
+        font-weight: 700;
+        padding: 6px 4px;
+    }
+    .fc .fc-daygrid-day-number {
+        padding: 6px;
+    }
+    .fc .fc-day-other .fc-daygrid-day-number {
+        color: #aaa;
+    }
+    .fc .fc-toolbar-title {
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: 700;
+    }
+    .fc .fc-event,
+    .fc .fc-event a {
+        color: #fff;
+    }
+    .fc .fc-list-event a,
+    .fc .fc-list-event-title {
+        color: #222;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
+
+    <div>
+        <h3 class="fw-bold mb-0">My Jobs</h3>
+        <div class="text-muted">{{ today|date:"l, j F Y" }}</div>
+    </div>
+
+    <div class="text-end small">
+        <div><strong>{{ today_jobs|length }}</strong> today{% if done_today %} · {{ done_today }} done{% endif %}</div>
+        <div class="text-muted">{{ pending_count }} pending in total</div>
+    </div>
+
+</div>
+
+
+<!-- Tabs -->
+<ul class="nav nav-pills mb-2" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-list" data-bs-toggle="pill" data-bs-target="#pane-list" type="button" role="tab">
+            📋 Jobs
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-calendar" data-bs-toggle="pill" data-bs-target="#pane-calendar" type="button" role="tab">
+            📅 Calendar
+        </button>
+    </li>
+</ul>
+
+
+<div class="tab-content">
+
+    <!-- ===================== LIST ===================== -->
+
+    <div class="tab-pane fade show active" id="pane-list" role="tabpanel">
+
+        {% if overdue %}
+            <div class="day-heading text-danger">
+                Overdue <span class="count">({{ overdue|length }})</span>
+            </div>
+            {% for schedule in overdue %}
+                {% include '_job_card.html' with late=True %}
+            {% endfor %}
+        {% endif %}
+
+
+        <div class="day-heading">
+            Today <span class="count">· {{ today|date:"D, j M" }}</span>
+        </div>
+
+        {% for schedule in today_jobs %}
+            {% include '_job_card.html' with late=False %}
+        {% empty %}
+            <div class="text-muted border rounded bg-white p-3 mb-3">
+                No jobs today 🎉
+            </div>
+        {% endfor %}
+
+
+        {% if upcoming %}
+
+            {% regroup upcoming by scheduled_date as days %}
+
+            {% for day in days %}
+
+                <div class="day-heading">
+                    {% if day.grouper == tomorrow %}
+                        Tomorrow <span class="count">· {{ day.grouper|date:"D, j M" }}</span>
+                    {% else %}
+                        {{ day.grouper|date:"l" }} <span class="count">· {{ day.grouper|date:"j M Y" }}</span>
+                    {% endif %}
+                    <span class="count">({{ day.list|length }})</span>
+                </div>
+
+                {% for schedule in day.list %}
+                    {% include '_job_card.html' with late=False %}
+                {% endfor %}
+
+            {% endfor %}
+
+        {% endif %}
+
+    </div>
+
+
+    <!-- ===================== CALENDAR ===================== -->
+
+    <div class="tab-pane fade" id="pane-calendar" role="tabpanel">
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-2 p-md-3">
+                <div id="calendarLoading" class="text-muted small mb-2" hidden>Loading jobs…</div>
+    <div id="calendarError" class="alert alert-danger py-2" hidden>
+        Couldn't load the jobs. Check your internet connection and that you're logged in, then
+        <a href="" class="alert-link">reload the page</a>.
+    </div>
+    <div id="myCalendar"></div>
+            </div>
+        </div>
+
+        <!-- Job details shown under the calendar when a job is tapped -->
+        <div id="calDetail" class="card shadow-sm border-0 mt-3" hidden>
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <h5 id="calName" class="fw-bold mb-1"></h5>
+                    <button type="button" class="btn-close" aria-label="Close" onclick="document.getElementById('calDetail').hidden = true"></button>
+                </div>
+                <div id="calService" class="mb-1"></div>
+                <div id="calWhen" class="fw-semibold mb-1"></div>
+                <div id="calLocation" class="text-muted"></div>
+                <div id="calNotes" class="small mt-1"></div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a id="calMap" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">🗺️ Map</a>
+                    <a id="calRecord" class="btn btn-dark btn-sm ms-auto">✅ Done – Record Job</a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+/* ---------- Mark completed (jobs without a site) ---------- */
+
+function markCompleted(scheduleId, button) {
+
+    button.disabled = true;
+    button.textContent = 'Saving…';
+
+    fetch(`/service/schedule/${scheduleId}/status/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'status=Completed',
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById(`schedule-${scheduleId}`).remove();
+            } else {
+                alert(data.error || 'Could not update status.');
+                button.disabled = false;
+                button.textContent = '✅ Mark Completed';
+            }
+        })
+        .catch(() => {
+            alert('No internet connection. Please try again.');
+            button.disabled = false;
+            button.textContent = '✅ Mark Completed';
+        });
+}
+
+
+/* ---------- Calendar tab (built the first time it is opened) ---------- */
+
+let myCalendar = null;
+
+document.getElementById('tab-calendar').addEventListener('shown.bs.tab', function () {
+
+    if (myCalendar) {
+        myCalendar.updateSize();
+        return;
+    }
+
+    myCalendar = new FullCalendar.Calendar(document.getElementById('myCalendar'), {
+
+        initialView: 'dayGridMonth',
+
+        // "List" = the next 30 days from today, so upcoming jobs always show
+        views: {
+            listUpcoming: {
+                type: 'list',
+                duration: { days: 30 },
+                buttonText: 'List',
+                noEventsContent: 'No jobs in the next 30 days',
+            },
+        },
+
+        height: 'auto',
+
+        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listUpcoming' },
+        buttonText: { today: 'Today', month: 'Month', list: 'List' },
+
+        events: {
+            url: "{% url 'my_schedule_events_api' %}",
+            failure: function () {
+                showCalendarError();
+            },
+        },
+
+        // Shows "Loading jobs..." while the phone fetches them
+        loading: function (isLoading) {
+            const note = document.getElementById('calendarLoading');
+            if (note) note.hidden = !isLoading;
+        },
+
+        eventDisplay: 'block',
+        dayMaxEvents: 3,       // up to 3 per day, then "+ more"
+        nextDayThreshold: '23:59:59',
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+        noEventsContent: 'No jobs this week',
+
+        eventClick: function (info) {
+
+            info.jsEvent.preventDefault();
+
+            const e = info.event;
+            const p = e.extendedProps;
+
+            document.getElementById('calName').textContent = p.customer_name || e.title;
+
+            const serviceBox = document.getElementById('calService');
+            serviceBox.innerHTML = '';
+            const tag = document.createElement('span');
+            const isCleaning = (p.service || 'Cleaning').toLowerCase() === 'cleaning';
+            tag.className = 'badge ' + (isCleaning ? 'text-bg-secondary' : 'text-bg-warning');
+            tag.textContent = (p.service || 'Cleaning');
+            serviceBox.appendChild(tag);
+
+            document.getElementById('calWhen').textContent =
+                e.start.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+                + (e.allDay ? '' : ' · ' + e.start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }))
+                + (p.status !== 'Scheduled' ? ' · ' + p.status : '');
+
+            document.getElementById('calLocation').textContent =
+                [p.location, p.solar_kw ? p.solar_kw + ' kW' : ''].filter(Boolean).join(' · ');
+
+            document.getElementById('calNotes').textContent = p.notes ? '📝 ' + p.notes : '';
+
+            const map = document.getElementById('calMap');
+            map.hidden = !p.map_link;
+            map.href = p.map_link || '#';
+
+            const record = document.getElementById('calRecord');
+            record.hidden = !p.record_url || p.status === 'Completed';
+            record.href = p.record_url || '#';
+            record.textContent = '✅ Done – Record ' + (p.service || 'Cleaning');
+
+            const detail = document.getElementById('calDetail');
+            detail.hidden = false;
+            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+    });
+
+    myCalendar.render();
+});
+
+
+function showCalendarError() {
+    const box = document.getElementById('calendarError');
+    if (box) box.hidden = false;
+}
+</script>
+{% endblock %}

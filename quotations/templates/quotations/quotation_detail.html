@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ quotation.offer_no }}</title>
+    {% include "quotations/_pwa_head.html" %}
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body { margin: 0; font-family: Arial, sans-serif; background: #f4f7fb; color: #1f2937; }
+
+        /* HEADER */
+        .header { background: #3B73B9; color: white; padding: 22px 25px; }
+        .header-inner { max-width: 1100px; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+        .top-back { display: inline-block; margin-bottom: 8px; color: white; text-decoration: none; font-size: 14px; opacity: 0.95; }
+        .top-back:hover { text-decoration: underline; }
+        .header h1 { margin: 0; font-size: 23px; }
+        .header p { margin: 5px 0 0; font-size: 14px; opacity: 0.9; }
+        .header-price { text-align: right; }
+        .header-price .label { font-size: 12px; opacity: 0.85; }
+        .header-price .value { font-size: 24px; font-weight: bold; }
+
+        /* MAIN */
+        .container { max-width: 1100px; margin: auto; padding: 25px 20px 50px; }
+
+        /* CARDS */
+        .card { background: white; border-radius: 15px; padding: 22px; margin-bottom: 20px; box-shadow: 0 3px 14px rgba(0,0,0,0.06); }
+        .card-title { margin: 0 0 18px; font-size: 19px; color: #102a43; }
+        .card-note { margin: -10px 0 16px; color: #6b7280; font-size: 13px; line-height: 1.5; }
+
+        /* SUMMARY */
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .summary-item { background: #f5f8fc; padding: 13px; border-radius: 9px; }
+        .summary-label { font-size: 12px; color: #6b7280; margin-bottom: 5px; }
+        .summary-value { font-weight: 600; font-size: 14px; color: #1f2937; word-break: break-word; }
+
+        /* FORM */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 25px; }
+        .field { display: flex; flex-direction: column; gap: 7px; }
+        .field.full { grid-column: 1 / -1; }
+        label { font-size: 14px; font-weight: 600; color: #172b4d; }
+        .hint { font-size: 12px; color: #6b7280; font-weight: normal; }
+
+        input, select, textarea {
+            width: 100%; height: 45px; padding: 0 12px;
+            border: 1px solid #d1d5db; border-radius: 8px; background: white;
+            font-size: 14px; color: #111827; outline: none; font-family: inherit;
+        }
+        textarea { height: auto; min-height: 70px; padding: 10px 12px; resize: vertical; }
+        input:focus, select:focus, textarea:focus { border-color: #3B73B9; box-shadow: 0 0 0 3px rgba(59,115,185,0.12); }
+        input[readonly] { background: #f3f4f6; cursor: not-allowed; }
+
+        /* INVERTER */
+        .inverter-other { display: none; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 18px; padding: 15px; background: #f7f9fc; border-radius: 10px; }
+
+        /* STRUCTURE */
+        .structure-info { padding: 14px; background: #f5f8fc; border-radius: 9px; font-weight: 600; }
+        .height-section { margin-top: 5px; }
+        .custom-height { display: none; margin-top: 15px; }
+        .structure-calculation, .calc-box { margin-top: 18px; padding: 8px 16px; background: #f5f9ff; border: 1px solid #d8e7f8; border-radius: 10px; }
+        .structure-row, .calc-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 8px 0; }
+        .structure-row + .structure-row, .calc-row + .calc-row { border-top: 1px solid #e5edf7; }
+        .structure-label, .calc-label { color: #6b7280; font-size: 14px; }
+        .structure-value, .calc-value { font-weight: 600; text-align: right; white-space: nowrap; }
+        .calc-label small { display: block; font-size: 12px; color: #9ca3af; }
+        .calc-row.total .calc-label, .calc-row.total .calc-value { color: #172b4d; font-weight: 700; }
+        .calc-row.final { padding: 12px 0; }
+        .calc-row.final .calc-label { color: #3B73B9; font-weight: 700; }
+        .calc-row.final .calc-value { color: #3B73B9; font-size: 22px; font-weight: 700; }
+
+        /* BOS */
+        .bos-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+        .bos-description { color: #6b7280; font-size: 14px; margin-top: -8px; margin-bottom: 18px; }
+        .bos-editor { display: none; margin-top: 20px; }
+        .bos-editor.show { display: block; }
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; min-width: 900px; border-collapse: collapse; }
+        th { background: #eef4fb; text-align: left; font-size: 13px; color: #172b4d; }
+        th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+        td { font-size: 13px; }
+        td.num, th.num { text-align: right; white-space: nowrap; }
+        table select { height: 38px; min-width: 100px; }
+        tr.display-only td { color: #9ca3af; }
+        .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; background: #dcfce7; color: #166534; }
+        .pill.off { background: #f3f4f6; color: #6b7280; }
+
+        .bos-summary { display: flex; justify-content: space-between; align-items: center; padding: 17px; background: #f5f9ff; border: 1px solid #d8e7f8; border-radius: 10px; }
+        .bos-total-label { font-weight: 600; }
+        .bos-total-value { font-size: 20px; font-weight: bold; color: #3B73B9; }
+
+        /* MANUAL PANEL NUMBER */
+        .panel-note { margin-top: 6px; }
+        .manual-badge { background: #fff3cd; color: #7a5c00; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+
+        /* COST DETAILS (checking list) */
+        .cost-details { margin-top: 16px; font-size: 13px; color: #374151; }
+        .cost-details summary { cursor: pointer; color: #3B73B9; font-weight: 600; }
+        .cost-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+        .cost-details ul { margin: 6px 0 0 18px; padding: 0; line-height: 1.6; }
+
+        /* PRICING */
+        .pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 25px; margin-top: 22px; }
+        .final-price { border: 2px solid #3B73B9; background: #f5f9ff; font-weight: 700; }
+        .recalculate-note { margin-top: 15px; padding: 12px 14px; background: #f8fafc; border-left: 4px solid #3B73B9; border-radius: 6px; color: #64748b; font-size: 13px; line-height: 1.5; }
+        .warning { margin-bottom: 18px; padding: 12px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; color: #92400e; font-size: 14px; }
+        .warning ul { margin: 6px 0 0 18px; padding: 0; }
+
+        /* BUTTONS */
+        button { border: none; border-radius: 8px; padding: 11px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .primary-button { background: #3B73B9; color: white; }
+        .primary-button:hover { background: #315f99; }
+        .secondary-button { background: #eef4fb; color: #3B73B9; }
+        .secondary-button:hover { background: #e1ebf7; }
+        .pdf-button { display: inline-block; background: #3B73B9; color: white; text-decoration: none; border-radius: 8px; padding: 11px 20px; font-size: 14px; font-weight: 600; }
+        .pdf-button:hover { background: #315f99; }
+
+        /* ACTIONS */
+        .actions { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 15px; margin-top: 25px; }
+        .back { color: #3B73B9; text-decoration: none; font-size: 14px; }
+        .back:hover { text-decoration: underline; }
+
+        /* MOBILE */
+        @media (max-width: 700px) {
+            .container { padding: 15px 12px 40px; }
+            .card { padding: 17px; }
+            .header-price { text-align: left; }
+            .summary-grid { grid-template-columns: 1fr 1fr; }
+            .form-grid, .pricing-grid, .cost-columns { grid-template-columns: 1fr; }
+            .field.full { grid-column: auto; }
+            .inverter-other { grid-template-columns: 1fr; }
+            .bos-header { align-items: flex-start; flex-direction: column; }
+            .bos-summary { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .actions { grid-template-columns: 1fr; align-items: stretch; }
+            .actions button, .actions a { width: 100%; text-align: center; }
+            .structure-row { flex-direction: column; align-items: flex-start; gap: 3px; }
+            .structure-value { text-align: left; }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <a href="{% url 'quotation_dashboard' %}" class="top-back">&larr; Back to Quotations</a>
+            <h1>{{ quotation.offer_no }}</h1>
+            <p>Quotation Builder &middot; {{ quotation.business_name }}</p>
+        </div>
+        <div class="header-price">
+            <div class="label">Final Quotation Price</div>
+            <div class="value">&#8377;{{ quotation.final_quotation_price|floatformat:2 }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+<form method="post">
+    {% csrf_token %}
+
+    <!-- =================================================
+         CUSTOMER & PROJECT
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Customer &amp; Project</h2>
+
+        <div class="summary-grid">
+            <div class="summary-item"><div class="summary-label">Customer / Business</div><div class="summary-value">{{ quotation.business_name }}</div></div>
+            <div class="summary-item"><div class="summary-label">Location</div><div class="summary-value">{{ quotation.location }}</div></div>
+            <div class="summary-item"><div class="summary-label">System Size</div><div class="summary-value">{{ quotation.system_size|floatformat:"-2" }} kW</div></div>
+            <div class="summary-item"><div class="summary-label">Phase</div><div class="summary-value">{{ quotation.get_phase_display }}</div></div>
+            <div class="summary-item"><div class="summary-label">System Type</div><div class="summary-value">{{ quotation.get_system_type_display }}</div></div>
+            <div class="summary-item"><div class="summary-label">Structure</div><div class="summary-value">{% if structure_kind == "roof" %}Roof Mounted{% elif structure_kind == "gp" %}GP{% elif structure_kind == "gi" %}{% if "TATA" in quotation.structure_type|upper %}TATA GI{% else %}GI{% endif %}{% else %}{{ quotation.structure_type }}{% endif %}</div></div>
+            <div class="summary-item"><div class="summary-label">Panel Type</div><div class="summary-value">{{ quotation.get_panel_dcr_status_display }}</div></div>
+            <div class="summary-item"><div class="summary-label">Date</div><div class="summary-value">{{ quotation.date|date:"d/m/Y" }}</div></div>
+            <div class="summary-item"><div class="summary-label">Validity</div><div class="summary-value">{{ quotation.validity_days }} days</div></div>
+        </div>
+
+        <div class="form-grid" style="margin-top:20px">
+            <div class="field">
+                <label for="customer_name">Quotation For (person) <span style="color:#c0392b">*</span></label>
+                <input type="text" id="customer_name" name="customer_name" value="{{ quotation.customer_name }}"
+                       placeholder="e.g. Imran" list="people-names" autocomplete="off" required>
+                <datalist id="people-names">
+                    {% for name in people_names %}<option value="{{ name }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="field">
+                <label for="phone">Phone</label>
+                <input type="tel" id="phone" name="phone" value="{{ quotation.phone }}">
+            </div>
+            <div class="field">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" value="{{ quotation.email }}">
+            </div>
+            <div class="field">
+                <label for="address">Address</label>
+                <textarea id="address" name="address">{{ quotation.address }}</textarea>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- =================================================
+         SOLAR PANEL
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Solar Panel</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="panel_option">{% if is_both %}DCR panel{% else %}Panel{% endif %}</label>
+                <select name="panel_option" id="panel_option" required onchange="calculatePanelQuantity()">
+                    <option value="">Select Panel</option>
+                    {% for panel in panel_options %}
+                        <option value="{{ panel.id }}"
+                                data-wattage="{{ panel.wattage }}"
+                                data-rate="{{ panel.rate_per_watt }}"
+                                data-tech="{{ panel.panel_type }}"
+                                {% if quotation.panel_option_id == panel.id %}selected{% endif %}>
+                            {{ panel.company }} - {{ panel.panel_type }} - {{ panel.wattage|floatformat:"-2" }}W - {{ panel.get_dcr_status_display }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% if is_both %}
+            <div class="field">
+                <label for="panel_quantity_manual">Number of DCR panels</label>
+                <input type="number" min="1" max="500" step="1" id="panel_quantity_manual" name="panel_quantity_manual" required
+                       value="{{ quotation.panel_quantity_manual|default_if_none:'' }}" placeholder="How many DCR panels">
+            </div>
+
+            <div class="field">
+                <label for="panel2_option">Non-DCR panel</label>
+                <select name="panel2_option" id="panel2_option" required>
+                    <option value="">Select Non-DCR Panel</option>
+                    {% for panel in panel2_options %}
+                        <option value="{{ panel.id }}"
+                                data-wattage="{{ panel.wattage }}"
+                                data-rate="{{ panel.rate_per_watt }}"
+                                {% if quotation.panel2_option_id == panel.id %}selected{% endif %}>
+                            {{ panel.company }} - {{ panel.panel_type }} - {{ panel.wattage|floatformat:"-2" }}W - {{ panel.get_dcr_status_display }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="panel2_quantity">Number of Non-DCR panels</label>
+                <input type="number" min="1" max="500" step="1" id="panel2_quantity" name="panel2_quantity" required
+                       value="{% if quotation.panel2_quantity %}{{ quotation.panel2_quantity }}{% endif %}" placeholder="How many Non-DCR panels">
+            </div>
+            {% else %}
+            <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="offer_second_panel" style="width:auto" {% if quotation.panel2_option_id %}checked{% endif %}>
+                    <span>Offer one more panel <span class="hint">(the price uses the panel above, the PDF shows both makes)</span></span>
+                </label>
+            </div>
+
+            <div class="field" id="second-panel-box" style="{% if not quotation.panel2_option_id %}display:none{% endif %}">
+                <label for="panel2_option">One more panel</label>
+                <select name="panel2_option" id="panel2_option">
+                    <option value="">None</option>
+                    {% for panel in panel2_options %}
+                        {% if panel.id != quotation.panel_option_id %}
+                        <option value="{{ panel.id }}" {% if quotation.panel2_option_id == panel.id %}selected{% endif %}>
+                            {{ panel.company }} - {{ panel.panel_type }} - {{ panel.wattage|floatformat:"-2" }}W - {{ panel.get_dcr_status_display }}
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="panel_quantity_manual">Number of Panels <span class="hint">(the system calculates it{% if panel_shortfall_percent < 100 %}, never more than {{ panel_shortfall_percent|floatformat:"-2" }}% under the system size{% endif %}; type a number here only to change it)</span></label>
+                {% if can_edit_panels %}
+                <input type="number" min="1" max="500" step="1" id="panel_quantity_manual" name="panel_quantity_manual"
+                       value="{{ quotation.panel_quantity_manual|default_if_none:'' }}" placeholder="{{ summary.panel_quantity_auto|floatformat:'0' }}">
+                <div class="hint panel-note">
+                    Calculated by the system: <strong id="panel-auto">{{ summary.panel_quantity_auto|floatformat:"0" }}</strong>
+                    {% if summary.panel_quantity_is_manual %}&nbsp;&middot;&nbsp;<span class="manual-badge">set by hand: {{ quotation.panel_quantity }}</span>
+                    &nbsp;&middot;&nbsp;empty the box to use the calculated number{% endif %}
+                </div>
+                {% else %}
+                <input type="number" id="panel_quantity" name="panel_quantity" value="{{ quotation.panel_quantity }}" readonly>
+                <div class="hint panel-note">To change the number of panels by hand, the new field has to be added to the Quotation model first (see the instructions).</div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if quotation.panel_option and show_rates %}
+        <div class="calc-box">
+            <div class="calc-row"><div class="calc-label">Total panel capacity</div><div class="calc-value">{{ quotation.panel_total_watt|floatformat:"-2" }} W</div></div>
+            <div class="calc-row"><div class="calc-label">Panel cost <small>{% if is_both %}DCR {{ quotation.panel_quantity }} &times; {{ quotation.panel_option.wattage|floatformat:"-2" }} W &times; &#8377;{{ quotation.panel_option.rate_per_watt|floatformat:"-2" }}{% if quotation.panel2_option %} + Non-DCR {{ quotation.panel2_quantity }} &times; {{ quotation.panel2_option.wattage|floatformat:"-2" }} W &times; &#8377;{{ quotation.panel2_option.rate_per_watt|floatformat:"-2" }}{% endif %} per watt{% else %}{{ quotation.panel_quantity }} &times; {{ quotation.panel_option.wattage|floatformat:"-2" }} W &times; &#8377;{{ quotation.panel_option.rate_per_watt|floatformat:"-2" }} per watt{% endif %}</small></div><div class="calc-value">&#8377;{{ quotation.panel_base_amount|floatformat:2 }}</div></div>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <!-- =================================================
+         INVERTER
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Inverter{% if is_hybrid %} (Hybrid){% endif %}</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="inverter_kw">Inverter Capacity</label>
+                <select name="inverter_kw" id="inverter_kw" required>
+                    <option value="">Select Inverter KW</option>
+                    {% for kw in inverter_kw_options %}
+                        <option value="{{ kw|floatformat:"-2" }}" {% if quotation.inverter_kw|floatformat:"-2" == kw|floatformat:"-2" %}selected{% endif %}>{{ kw|floatformat:"-2" }} kW</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="inverter_type">Inverter</label>
+                <select name="inverter_type" id="inverter_type" required onchange="toggleOtherInverter()">
+                    <option value="">Select Inverter</option>
+                    {% for product in inverter_products %}
+                        <option value="{{ product.name }}" {% if "MICRO" in product.name %}data-micro="{% if "IQ8HC" in product.name %}IQ8HC{% else %}IQ8P{% endif %}"{% endif %} {% if quotation.inverter_type == product.name %}selected{% endif %}>
+                            {{ product.name }}{% if product.make %} - {{ product.make }}{% endif %} {% if show_rates %}(&#8377;{{ product.rate|floatformat:2 }}){% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="polycab" {% if quotation.inverter_type == "polycab" %}selected{% endif %}>Polycab</option>
+                    {% endfor %}
+                    <option value="other" {% if quotation.inverter_type == "other" %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- OTHER INVERTER: the entered rate REPLACES the product rate -->
+        <div id="other-inverter" class="inverter-other">
+            <div class="field">
+                <label for="other_inverter">Inverter Name</label>
+                <input type="text" id="other_inverter" name="other_inverter" value="{{ other_inverter_name }}" placeholder="Enter inverter name">
+            </div>
+            <div class="field">
+                <label for="other_inverter_rate">Rate (&#8377;)</label>
+                <input type="number" id="other_inverter_rate" name="other_inverter_rate" value="{{ other_inverter_rate }}" step="0.01" placeholder="Enter rate">
+            </div>
+        </div>
+    </div>
+
+
+    {% if is_hybrid %}
+    <!-- =================================================
+         BATTERY  (hybrid only)
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Battery</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="battery_type">Battery</label>
+                <select name="battery_type" id="battery_type">
+                    {% for product in battery_products %}
+                        <option value="{{ product.name }}" {% if quotation.battery_type == product.name %}selected{% endif %}>
+                            {{ product.name }}{% if show_rates %} (&#8377;{{ product.rate|floatformat:2 }}){% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="">No battery in the product list</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="battery_quantity">Number of batteries</label>
+                <select name="battery_quantity" id="battery_quantity">
+                    {% for n in battery_quantity_options %}
+                        <option value="{{ n }}" {% if quotation.battery_quantity == n %}selected{% endif %}>{{ n }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    <script>
+    // hybrid: choosing a Solis inverter picks the Enprimo battery (and Polycab -> Polycab), with the same warranty
+    (function () {
+        const inverter = document.getElementById("inverter_type"), battery = document.getElementById("battery_type");
+        if (!inverter || !battery) return;
+        inverter.addEventListener("change", function () {
+            const name = inverter.value.toUpperCase(), brand = name.indexOf("SOLIS") >= 0 ? "ENPRIMO" : "POLYCAB";
+            const years = name.indexOf("10 YEARS") >= 0 ? "10 YEARS" : "5 YEARS";
+            let pick = null;
+            Array.from(battery.options).forEach(function (o) {
+                const t = o.value.toUpperCase();
+                if (t.indexOf(brand) === 0 && (pick === null || t.indexOf(years) >= 0)) pick = o;
+            });
+            if (pick) battery.value = pick.value;
+        });
+    }());
+    </script>
+    {% endif %}
+
+
+    <!-- =================================================
+         DC CABLE
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">DC Cable</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="dc_cable">DC Cable</label>
+                <select name="dc_cable" id="dc_cable" required>
+                    <option value="">Select DC Cable</option>
+                    {% for product in dc_cable_products %}
+                        <option value="{{ product.name }}" {% if quotation.dc_cable == product.name %}selected{% endif %}>
+                            {{ product.name }}{% if product.make %} - {{ product.make }}{% endif %} {% if show_rates %}(&#8377;{{ product.rate|floatformat:2 }}/{{ product.unit }}){% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="4 SQMM"  {% if quotation.dc_cable == "4 SQMM"  %}selected{% endif %}>4 SQMM</option>
+                        <option value="6 SQMM"  {% if quotation.dc_cable == "6 SQMM"  %}selected{% endif %}>6 SQMM</option>
+                        <option value="10 SQMM" {% if quotation.dc_cable == "10 SQMM" %}selected{% endif %}>10 SQMM</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="dc_cable_quantity">Length (metres)</label>
+                <input type="number" id="dc_cable_quantity" name="dc_cable_quantity" required value="{{ quotation.dc_cable_quantity|floatformat:"-2" }}" step="0.01" min="0">
+            </div>
+        </div>
+    </div>
+
+
+    <!-- =================================================
+         AC WIRE
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">AC Wire &mdash; FR Copper</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="ac_wire">AC Wire &mdash; FR Copper</label>
+                <select name="ac_wire" id="ac_wire" required>
+                    <option value="">Select AC Wire</option>
+                    {% for product in ac_wire_products %}
+                        <option value="{{ product.name }}" {% if quotation.ac_wire == product.name %}selected{% endif %}>
+                            {{ product.name }}{% if product.make %} - {{ product.make }}{% endif %} {% if show_rates %}(&#8377;{{ product.rate|floatformat:2 }}/{{ product.unit }}){% endif %}
+                        </option>
+                    {% empty %}
+                        <option value="2.5 SQMM FR Copper"  {% if quotation.ac_wire == "2.5 SQMM FR Copper"  %}selected{% endif %}>2.5 SQMM FR Copper</option>
+                        <option value="4 SQMM FR Copper"    {% if quotation.ac_wire == "4 SQMM FR Copper"    %}selected{% endif %}>4 SQMM FR Copper</option>
+                        <option value="6 SQMM FR Copper"    {% if quotation.ac_wire == "6 SQMM FR Copper"    %}selected{% endif %}>6 SQMM FR Copper</option>
+                        <option value="10 SQMM FR Copper"   {% if quotation.ac_wire == "10 SQMM FR Copper"   %}selected{% endif %}>10 SQMM FR Copper</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="ac_wire_quantity">Length (metres)</label>
+                <input type="number" id="ac_wire_quantity" name="ac_wire_quantity" required value="{{ quotation.ac_wire_quantity|floatformat:"-2" }}" step="0.01" min="0">
+            </div>
+        </div>
+    </div>
+
+
+    <!-- =================================================
+         STRUCTURE
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Structure</h2>
+
+        {% if structure_kind == "roof" %}
+            <div class="structure-info">Structure Height: <strong>2 FT (Fixed)</strong></div>
+        {% endif %}
+
+        {% if structure_kind == "gp" or structure_kind == "gi" %}
+            <div class="height-section">
+                <div class="field">
+                    <label for="structure_height">Structure Height {% if structure_kind == "gi" %}<span class="hint">({% if quotation.system_size|floatformat:"-2" == "3" %}GI is calculated on the selected height{% else %}GI is calculated as selected height plus 2 FT{% endif %})</span>{% elif structure_kind == "gp" and quotation.system_size|floatformat:"-2" == "3" %}<span class="hint">(GP is calculated as selected height minus 1 FT)</span>{% endif %}</label>
+                    <select name="structure_height" id="structure_height" required onchange="toggleCustomHeight()">
+                        <option value="">Select Height</option>
+                        <option value="4" {% if quotation.structure_feet == 4 %}selected{% endif %}>4 FT</option>
+                        <option value="6" {% if quotation.structure_feet == 6 %}selected{% endif %}>6 FT</option>
+                        <option value="8" {% if quotation.structure_feet == 8 %}selected{% endif %}>8 FT</option>
+                        <option value="other" {% if quotation.structure_feet and quotation.structure_feet != 4 and quotation.structure_feet != 6 and quotation.structure_feet != 8 %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+
+                <div id="custom-height" class="custom-height">
+                    <div class="field">
+                        <label for="custom_height">Height (FT)</label>
+                        <input type="number" id="custom_height" name="custom_height" step="0.01"
+                               value="{% if quotation.structure_feet and quotation.structure_feet != 4 and quotation.structure_feet != 6 and quotation.structure_feet != 8 %}{{ quotation.structure_feet|floatformat:"-2" }}{% endif %}"
+                               placeholder="Enter height">
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="form-grid" style="margin-top:18px">
+            <div class="field">
+                <label>Structure watts <span class="hint">(total panel watts; the structure cost is worked out on this)</span></label>
+                <input type="text" id="structure-watts" value="{{ summary.structure_watts|floatformat:'-2' }} W" readonly>
+                <div class="hint panel-note">Calculated from the panels: <strong id="structure-auto-watts">{{ summary.structure_watts_auto|floatformat:"-2" }}</strong> W
+                    {% if summary.structure_is_manual %}&nbsp;&middot;&nbsp;<span class="manual-badge">structure set by hand: {{ quotation.structure_kw_manual|floatformat:"-2" }} kW = {{ summary.structure_watts|floatformat:"-2" }} W</span>{% endif %}</div>
+            </div>
+            {% if can_edit_structure_kw %}
+            <div class="field">
+                <label for="structure_kw_manual">Structure kW <span class="hint">(optional &mdash; type 8 to calculate the structure on 8,000 W; empty = use the panel watts)</span></label>
+                <input type="number" min="0.1" max="100" step="0.01" id="structure_kw_manual" name="structure_kw_manual"
+                       value="{{ quotation.structure_kw_manual|default_if_none:''|floatformat:'-2' }}" placeholder="empty = automatic" oninput="updateStructureWatts()">
+                {% if summary.structure_is_manual %}<div class="hint panel-note">Empty the box and save to go back to the panel watts.</div>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if show_rates %}
+        <div class="structure-calculation">
+            <div class="structure-row"><div class="structure-label">Structure Wage Factor (&#8377; per watt)</div><div class="structure-value">{{ quotation.structure_wage_factor|floatformat:"-2" }}</div></div>
+            <div class="structure-row"><div class="structure-label">Structure Material Cost <small class="hint">{{ summary.structure_note }}</small></div><div class="structure-value">&#8377;{{ quotation.structure_cost|floatformat:2 }}</div></div>
+            <div class="structure-row"><div class="structure-label">Structure Wage (calculated)</div><div class="structure-value">&#8377;{{ quotation.structure_wage|floatformat:2 }}</div></div>
+        </div>
+        {% endif %}
+    </div>
+
+
+    <!-- =================================================
+         ADDITIONAL CHARGES  (admin only)
+    ================================================= -->
+    {% if show_rates %}
+    <div class="card">
+        <h2 class="card-title">Additional Charges</h2>
+
+        <div class="form-grid">
+            <div class="field">
+                <label for="electrical_work">Electrical Work</label>
+                <input type="number" id="electrical_work" name="electrical_work" required step="0.01" value="{{ quotation.electrical_work|floatformat:"-2" }}">
+            </div>
+
+            <div class="field">
+                <label for="structure_wage">Structure Wage <span class="hint">(automatic &mdash; type a number only to override)</span></label>
+                <input type="number" id="structure_wage" name="structure_wage" step="0.01" value="{{ summary.structure_work|floatformat:"-2" }}">
+            </div>
+
+            <div class="field">
+                <label for="transportation_travel">Transportation / Travel</label>
+                <input type="number" id="transportation_travel" name="transportation_travel" required step="0.01" value="{{ quotation.transportation_travel|floatformat:"-2" }}">
+            </div>
+
+            <div class="field">
+                <label for="kseb_fee">KSEB Fee</label>
+                <input type="number" id="kseb_fee" name="kseb_fee" required step="0.01" value="{{ quotation.kseb_fee|floatformat:"-2" }}">
+            </div>
+
+            <div class="field">
+                <label for="loading_charge">Loading Charge</label>
+                <input type="number" id="loading_charge" name="loading_charge" required step="0.01" value="{{ quotation.loading_charge|floatformat:"-2" }}">
+            </div>
+
+            <div class="field">
+                <label for="documentation">Documentation</label>
+                <input type="number" id="documentation" name="documentation" required step="0.01" value="{{ quotation.documentation|floatformat:"-2" }}">
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <!-- =================================================
+         PRICE CALCULATION
+    ================================================= -->
+    <div class="card">
+        <h2 class="card-title">Price Calculation</h2>
+        {% if show_rates %}<div class="card-note">Total cost = the items you selected (including the structure and its calculated wage) + the fixed BOS + the fixed charges. The margin is worked out as in the costing sheet: amount after margin = total cost &divide; {{ summary.margin_factor|floatformat:"-2" }} &times; 100, so the margin is {{ summary.margin_percent|floatformat:"-2" }}% of the amount after margin. Then {{ summary.gst_rate|floatformat:"-2" }}% GST is added, and the total is rounded to the nearest &#8377;100. The result is the final quotation price.</div>{% endif %}
+
+        {% if summary.warnings %}
+            <div class="warning"><strong>Check before sending this quotation:</strong>
+                <ul>{% for w in summary.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+            </div>
+        {% endif %}
+
+        {% if show_rates %}
+        <div class="calc-box">
+            {% for line in summary.lines %}
+            <div class="calc-row">
+                <div class="calc-label">{{ line.label }}{% if line.note %}<small>{{ line.note }}</small>{% endif %}</div>
+                <div class="calc-value">&#8377;{{ line.amount|floatformat:2 }}</div>
+            </div>
+            {% endfor %}
+
+            <div class="calc-row total"><div class="calc-label">TOTAL COST</div><div class="calc-value">&#8377;{{ quotation.calculated_cost|floatformat:2 }}</div></div>
+            <div class="calc-row"><div class="calc-label">+ MARGIN <small>{{ summary.margin_percent|floatformat:"-2" }}% of the amount after margin (cost &divide; {{ summary.margin_factor|floatformat:"-2" }} &times; 100)</small></div><div class="calc-value">&#8377;{{ quotation.margin_amount|floatformat:2 }}</div></div>
+            <div class="calc-row total"><div class="calc-label">AMOUNT AFTER MARGIN</div><div class="calc-value">&#8377;{{ quotation.calculated_selling_price|floatformat:2 }}</div></div>
+            <div class="calc-row"><div class="calc-label">+ GST <small>{{ summary.gst_rate|floatformat:"-2" }}% of the amount after margin</small></div><div class="calc-value">&#8377;{{ quotation.gst_amount|floatformat:2 }}</div></div>
+            <div class="calc-row total"><div class="calc-label">QUOTATION AMOUNT <small>before rounding</small></div><div class="calc-value">&#8377;{{ quotation.suggested_quotation_price|floatformat:2 }}</div></div>
+            <div class="calc-row final"><div class="calc-label">FINAL PRICE <small>{% if summary.final_is_manual %}entered by hand{% else %}rounded to the nearest &#8377;100{% endif %}</small></div><div class="calc-value">&#8377;{{ quotation.final_quotation_price|floatformat:2 }}</div></div>
+        </div>
+        {% endif %}
+
+        {% if show_rates %}
+        <details class="cost-details">
+            <summary>Show how the cost is made up (for checking)</summary>
+            <div class="cost-columns">
+                {% if summary.counted_items %}
+                <div>
+                    <strong>Priced from the rate sheet (rate &times; quantity)</strong>
+                    <ul>
+                        {% for i in summary.counted_items %}<li>{{ i.name }} &mdash; {{ i.quantity|floatformat:"-2" }} &times; &#8377;{{ i.rate|floatformat:2 }} = &#8377;{{ i.amount|floatformat:2 }}</li>
+                        {% empty %}<li class="hint">Nothing.</li>{% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div>
+                    <strong>Package items on this quotation (their own rates are never used)</strong>
+                    <ul>
+                        {% for i in summary.display_only_items %}<li>{{ i.name }} <span class="hint">&mdash; {{ i.note }}</span></li>
+                        {% empty %}<li class="hint">Nothing.</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </details>
+        {% endif %}
+
+        <div class="pricing-grid">
+            <div class="field">
+                <label for="final_quotation_price">Final Quotation Price {% if summary.final_is_manual %}<span class="hint">(entered by hand)</span>{% else %}<span class="hint">(automatic)</span>{% endif %}</label>
+                <input class="final-price" type="number" id="final_quotation_price" name="final_quotation_price" step="0.01" value="{{ quotation.final_quotation_price|floatformat:"-2" }}">
+            </div>
+        </div>
+
+        <div class="recalculate-note">
+            The final price follows the calculated price automatically. Type a different amount to override it,
+            or clear the box and save to go back to the calculated price. Changes to the panel, inverter,
+            cables, quantities, structure or charges take effect when you click
+            <strong>Save &amp; Recalculate</strong>.
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="actions">
+            <a href="{% url 'quotation_dashboard' %}" class="back">&larr; Back to Quotations</a>
+            <button type="submit" class="primary-button">Save &amp; Recalculate</button>
+            <a href="{% url 'quotation_pdf_view' quotation.id pdf_name %}" class="pdf-button">Open PDF</a>
+        </div>
+    </div>
+
+</form>
+
+<!-- ADMIN: the passkey shows the rates, margin and charges on this page (no login; it lasts 8 hours on this device) -->
+<div class="card" style="margin-top:20px">
+    {% if show_rates %}
+        <form method="post" action="{% url 'lock_rates' %}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <span class="hint" style="flex:1">Admin view is ON: rates, margin and charges are visible.</span>
+            <button type="submit" class="secondary-button">Hide rates</button>
+        </form>
+    {% else %}
+        <form method="post" action="{% url 'unlock_rates' %}" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <input type="password" name="passkey" placeholder="Admin passkey" autocomplete="off" style="max-width:240px">
+            <button type="submit" class="secondary-button">Show rates</button>
+            {% if unlock_error %}<span class="hint" style="color:#b91c1c">{{ unlock_error }}</span>{% endif %}
+        </form>
+    {% endif %}
+</div>
+
+</div>
+
+
+<script>
+
+/* INVERTER */
+function toggleOtherInverter() {
+    const type = document.getElementById("inverter_type");
+    const other = document.getElementById("other-inverter");
+    if (!type || !other) { return; }
+    other.style.display = (type.value === "other") ? "grid" : "none";
+}
+
+/* STRUCTURE CUSTOM HEIGHT */
+function toggleCustomHeight() {
+    const height = document.getElementById("structure_height");
+    const custom = document.getElementById("custom-height");
+    if (!height || !custom) { return; }
+    custom.style.display = (height.value === "other") ? "block" : "none";
+}
+
+/* PANEL QUANTITY - display hint only.  The server calculates and saves the real number with the
+   same rule: the NEAREST whole panel (halves up), but the panels may not add up to more than the allowed % below the
+   requested size (5 kW / 620 W = 8.06 -> 8 panels;  3 kW / 580 W = 5.17 -> 5 would be 3.3% under -> 6). */
+function calculatePanelQuantity() {
+    const panelSelect = document.getElementById("panel_option");
+    if (!panelSelect) { return; }
+    if ({{ is_both|yesno:"true,false" }}) { updateStructureWatts(); return; }          /* DCR + Non-DCR: both numbers are typed */
+
+    /* Shows the CALCULATED number only: as the text "Calculated by the system: N" and as the placeholder of the editable box.
+       It never overwrites a number the user typed. */
+    function show(value) {
+        const autoText = document.getElementById("panel-auto");
+        const manualInput = document.getElementById("panel_quantity_manual");
+        const readonlyInput = document.getElementById("panel_quantity");          /* read-only fallback (field not added yet) */
+        if (autoText) { autoText.textContent = value === "" ? "-" : String(value); }
+        if (manualInput) { manualInput.placeholder = String(value); }
+        if (readonlyInput) { readonlyInput.value = value; }
+    }
+
+    const selected = panelSelect.options[panelSelect.selectedIndex];
+    if (!selected || !selected.value) { show(""); return; }
+
+    const wattage = parseFloat(selected.dataset.wattage);
+    const systemSize = parseFloat("{{ quotation.system_size|floatformat:'-2' }}");
+
+    if (!Number.isFinite(wattage) || wattage <= 0 || !Number.isFinite(systemSize) || systemSize <= 0) {
+        show("");
+        return;
+    }
+
+    /* nearest: floor((2a + b) / 2b) is a / b rounded to the nearest whole number, halves up, with no floating-point noise.
+       smallestAllowed: the fewest panels that are not more than shortfallPercent % below the requested size.
+       A plant always has at least one panel. */
+    const shortfallPercent = parseFloat("{{ panel_shortfall_percent|floatformat:'-2' }}") || 0;
+    const requiredWatts = Math.round(systemSize * 1000);
+    const nearest = Math.floor((2 * requiredWatts + wattage) / (2 * wattage));
+    const smallestAllowed = Math.ceil(Number((requiredWatts * (100 - shortfallPercent) / 100 / wattage).toFixed(6)));
+    const count = Math.max(1, nearest, smallestAllowed);
+    show(count);
+    window.autoPanelWatts = count * wattage;
+    updateStructureWatts();
+}
+
+/* STRUCTURE WATTS - display only.  The typed structure kW (x 1000) wins, otherwise the panels' total watts.
+   The server calculates the real amount when you press Save & Recalculate. */
+function updateStructureWatts() {
+    const box = document.getElementById("structure-watts");
+    const kw = document.getElementById("structure_kw_manual");
+    const auto = document.getElementById("structure-auto-watts");
+    if (!box) { return; }
+
+    let panelWatts = Number.isFinite(window.autoPanelWatts) ? window.autoPanelWatts : parseFloat("{{ summary.structure_watts_auto|floatformat:'2'|cut:',' }}") || 0;
+    const manualPanels = document.getElementById("panel_quantity_manual");
+    const selected = document.getElementById("panel_option");
+    if (manualPanels && manualPanels.value && selected && selected.selectedIndex > 0) {
+        const wattage = parseFloat(selected.options[selected.selectedIndex].dataset.wattage);
+        if (Number.isFinite(wattage)) { panelWatts = parseFloat(manualPanels.value) * wattage; }
+    }
+    if ({{ is_both|yesno:"true,false" }}) {                                           /* DCR + Non-DCR: the watts of both panels */
+        panelWatts = 0;
+        [["panel_option", "panel_quantity_manual"], ["panel2_option", "panel2_quantity"]].forEach(function (pair) {
+            const sel = document.getElementById(pair[0]), num = document.getElementById(pair[1]);
+            if (sel && num && sel.selectedIndex > 0 && num.value) {
+                const w = parseFloat(sel.options[sel.selectedIndex].dataset.wattage);
+                if (Number.isFinite(w)) { panelWatts += w * parseFloat(num.value); }
+            }
+        });
+    }
+    if (auto) { auto.textContent = String(Math.round(panelWatts * 100) / 100); }
+
+    const typed = kw ? parseFloat(kw.value) : NaN;
+    const watts = Number.isFinite(typed) && typed > 0 ? typed * 1000 : panelWatts;
+    box.value = String(Math.round(watts * 100) / 100) + " W";
+}
+
+/* Enphase: TOPCon panels take only the IQ8P microinverter; bifacial panels take the IQ8P or the IQ8HC */
+function filterMicroInverters() {
+    const panel = document.getElementById("panel_option"), inverter = document.getElementById("inverter_type");
+    if (!panel || !inverter) { return; }
+    const tech = panel.selectedIndex > 0 ? (panel.options[panel.selectedIndex].dataset.tech || "").toUpperCase() : "";
+    const onlyP = tech.indexOf("TOPCON") >= 0;
+    Array.from(inverter.options).forEach(function (o) {
+        if (o.dataset.micro === "IQ8HC") { o.hidden = onlyP; o.disabled = onlyP; }
+    });
+    const chosen = inverter.options[inverter.selectedIndex];
+    if (chosen && chosen.disabled) { inverter.value = ""; }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    const panelSelect = document.getElementById("panel_option");
+    if (panelSelect) { panelSelect.addEventListener("change", filterMicroInverters); }
+    filterMicroInverters();
+    const offer = document.getElementById("offer_second_panel"), secondBox = document.getElementById("second-panel-box");
+    if (offer && secondBox) {                       /* DCR / Non-DCR: the second panel box is shown only after the tick; unticking clears it */
+        offer.addEventListener("change", function () {
+            secondBox.style.display = offer.checked ? "" : "none";
+            if (!offer.checked) { document.getElementById("panel2_option").value = ""; }
+        });
+    }
+    ["panel_option", "panel2_option", "panel2_quantity", "panel_quantity_manual"].forEach(function (id) {
+        const e = document.getElementById(id);
+        if (e) { e.addEventListener("input", updateStructureWatts); e.addEventListener("change", updateStructureWatts); }
+    });
+    const manualPanelsBox = document.getElementById("panel_quantity_manual");
+    if (manualPanelsBox) { manualPanelsBox.addEventListener("input", function () { calculatePanelQuantity(); }); }
+    toggleOtherInverter();
+    toggleCustomHeight();
+});
+
+</script>
+
+{% include "quotations/_pwa_register.html" %}
+
+
+</body>
+</html>

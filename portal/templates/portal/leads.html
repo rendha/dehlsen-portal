@@ -1,0 +1,123 @@
+{% extends "portal/base.html" %}
+{% block title %}Leads · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.p{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+.p.hot{background:#fde8e8;color:#b02f2f}.p.medium{background:#fff3e0;color:#b35a08}.p.cold{background:#e8f1fb;color:#2a5a95}
+.sum{width:100%;border-collapse:collapse}.sum th,.sum td{padding:9px 6px;text-align:center;border-bottom:1px solid var(--line);font-size:14px}
+.sum th:first-child,.sum td:first-child{text-align:left}.sum th{font-size:12px;color:var(--mut);font-weight:600}
+.sum a.n{display:inline-block;min-width:34px;padding:3px 8px;border-radius:10px;text-decoration:none;font-weight:700}
+.sum a.n.hot{background:#fde8e8;color:#b02f2f}.sum a.n.medium{background:#fff3e0;color:#b35a08}.sum a.n.cold{background:#e8f1fb;color:#2a5a95}.sum a.n.tot{background:#eef3fa;color:var(--blue)}
+.sum a.n.zero{opacity:.35}
+.lead{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start}.lead:last-child{border:0}
+.lead .b{flex:1;min-width:0}.lead small{color:var(--mut);display:block}.lead.done{opacity:.5}
+.lead form{margin:0}.mini{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
+.st{display:inline-block;font-size:11px;border-radius:999px;padding:2px 9px;background:#eef3fa;color:var(--blue);font-weight:600}.st.quoted{background:#e8f1fb}.st.waiting{background:#fff3e0;color:#b35a08}.st.confirmed{background:#e3f5ea;color:var(--green)}.st.lost{background:#eee;color:#666}
+.hist{border-left:2px solid var(--line);margin:6px 0 0 4px;padding-left:10px}.hist small{margin:3px 0}details>summary{cursor:pointer;color:var(--blue);font-size:12px;margin-top:6px}.upd{background:#f7f9fc;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px}.upd select,.upd input{margin:4px 0 6px;padding:7px 9px;font-size:13px}.upd label{font-size:12px}
+.trk{display:flex;align-items:flex-start;overflow-x:auto;padding:8px 0 4px;margin:8px 0 2px}
+.trk .n{flex:0 0 auto;width:84px;text-align:center;position:relative;font-size:12px;line-height:1.2;color:var(--ink)}
+.trk .n+.n:before{content:"";position:absolute;top:12px;left:-42px;width:84px;height:2px;background:#cfd6df}
+.trk .nb{display:block;width:100%;background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;text-decoration:none;cursor:pointer;text-align:center}.trk .nb:hover i{background:#eaf6ef}
+.trk .n i{position:relative;z-index:1;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #2e9e5b;color:#2e9e5b;font-style:normal;font-size:15px;font-weight:700}
+.trk .n.pending i{border-color:#b8c0cc;color:#8a94a3}
+.trk .n.lost i{border-color:#d64545;color:#d64545}
+.trk .n span{display:block;margin-top:4px}.trk .n small{display:block;margin:0;font-size:10px;color:var(--mut)}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs a{text-decoration:none}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+{% for m in messages %}<div class="note ok">{{ m }}</div>{% endfor %}
+<a class="btn o auto" href="{% url 'lead_new' %}" style="margin-bottom:14px;display:block;text-align:center;text-decoration:none">+ Add a lead</a>
+
+{% if head %}
+<div class="card"><h3 style="margin:0 0 6px">Needs attention today</h3>
+{% for a in attention %}<div class="lead"><b style="font-size:26px;width:44px;color:{% if a.n %}#8a5a00{% else %}var(--mut){% endif %}">{{ a.n }}</b><div class="b"><b>{{ a.title }}</b><small>{{ a.sub }}</small></div><a class="mini" style="text-decoration:none;color:var(--ink)" href="{{ a.url }}">Open</a></div>{% endfor %}
+</div>
+<div class="card">
+<div class="tabs">
+<a class="chip {% if by == 'entered' %}on{% endif %}" href="?by=entered">Who entered</a>
+<a class="chip {% if by == 'assigned' %}on{% endif %}" href="?by=assigned">Who has to follow up</a>
+</div>
+<table class="sum"><tr><th>Person</th><th>Hot</th><th>Medium</th><th>Cold</th><th>All</th></tr>
+{% for r in summary %}<tr><td><b>{{ r.name }}</b></td>
+<td><a class="n hot {% if not r.hot %}zero{% endif %}" href="?by={{ by }}&who={{ r.id }}&p=hot">{{ r.hot }}</a></td>
+<td><a class="n medium {% if not r.medium %}zero{% endif %}" href="?by={{ by }}&who={{ r.id }}&p=medium">{{ r.medium }}</a></td>
+<td><a class="n cold {% if not r.cold %}zero{% endif %}" href="?by={{ by }}&who={{ r.id }}&p=cold">{{ r.cold }}</a></td>
+<td><a class="n tot" href="?by={{ by }}&who={{ r.id }}">{{ r.total }}</a></td></tr>
+{% empty %}<tr><td colspan="5" style="color:var(--mut);padding:16px">No open leads yet.</td></tr>{% endfor %}
+</table>
+<small style="color:var(--mut)">Tap a number to see those leads. Open leads only.</small>
+</div>
+{% endif %}
+
+<div class="card">
+<h3 style="margin:0 0 8px">{% if who_name %}{{ who_name }}{% else %}Leads{% endif %}{% if prio %} · <span class="p {{ prio }}">{{ prio|title }}</span>{% endif %}</h3>
+<div class="tabs">
+{% if who or prio %}<a class="chip" href="?by={{ by }}">Show all</a>{% endif %}
+<a class="chip {% if not prio %}on{% endif %}" href="?by={{ by }}{% if who %}&who={{ who }}{% endif %}{% if show_done %}&done=1{% endif %}">All priorities</a>
+<a class="chip {% if prio == 'hot' %}on{% endif %}" href="?by={{ by }}&p=hot{% if who %}&who={{ who }}{% endif %}{% if show_done %}&done=1{% endif %}">Hot</a>
+<a class="chip {% if prio == 'medium' %}on{% endif %}" href="?by={{ by }}&p=medium{% if who %}&who={{ who }}{% endif %}{% if show_done %}&done=1{% endif %}">Medium</a>
+<a class="chip {% if prio == 'cold' %}on{% endif %}" href="?by={{ by }}&p=cold{% if who %}&who={{ who }}{% endif %}{% if show_done %}&done=1{% endif %}">Cold</a>
+<a class="chip {% if show_done %}on{% endif %}" href="?by={{ by }}{% if who %}&who={{ who }}{% endif %}{% if prio %}&p={{ prio }}{% endif %}{% if not show_done %}&done=1{% endif %}">Include done</a>
+</div>
+{% for l in items %}<div class="lead {% if l.done %}done{% endif %}">
+<div class="b"><span class="p {{ l.priority }}">{{ l.get_priority_display }}</span> {% for n in l.need_list %}<span class="tag">{{ n }}</span>{% endfor %}{% for c in l.type_chips %}<span class="tag">{{ c }}</span>{% endfor %}
+<b style="display:block;margin-top:4px">{{ l.customer_name }}</b>
+<small>{% if l.phone %}<a href="tel:{{ l.phone }}">{{ l.phone }}</a>{% endif %}{% if l.phone and l.area %} · {% endif %}{{ l.area }}</small>
+{% if l.note %}<small>{{ l.note }}</small>{% endif %}
+<small style="margin-top:4px"><span class="st {{ l.stage }}">{{ l.stage_label }}</span>{% if l.quote %} <a href="/sales/quotation/{{ l.quote.id }}/">{{ l.quote.offer_no|default:"quotation" }}</a>{% endif %}</small>
+{% if l.next_step and not l.lost and l.stage != "confirmed" %}<small>Next: <b>{{ l.next_step }}</b> &middot; {% if l.assigned_to %}{{ l.assigned_to.first_name|default:l.assigned_to.username }}{% endif %}</small>{% endif %}
+<small>By {{ l.entered_by.first_name|default:l.entered_by.username }} → {% if l.assigned_to %}{{ l.assigned_to.first_name|default:l.assigned_to.username }}{% else %}nobody{% endif %}{% if l.assigned_to2 %} + {{ l.assigned_to2.first_name|default:l.assigned_to2.username }}{% endif %} · {{ l.created_at|date:"j M" }}</small>
+<div class="trk">{% for s in l.track %}<div class="n {{ s.state }}">{% if s.action == "quote" %}<button type="button" class="nb qbtn" data-view="{{ s.url }}" data-requote="/sales/new/?lead={{ l.id }}" data-name="{{ l.customer_name }}" data-offer="{{ l.quote.offer_no }}" title="Tap to see or re-quote">{% include "portal/_lead_node.html" %}</button>{% elif s.action == "call" or s.action == "visit" %}<form method="post" action="{% url 'lead_quick' l.id %}"{% if s.action == "call" %} onsubmit="return confirm('{% if s.state == "pending" %}Mark {{ l.customer_name|escapejs }} as called?{% else %}Log another call to {{ l.customer_name|escapejs }}?{% endif %}');"{% endif %}>{% csrf_token %}<input type="hidden" name="what" value="{{ s.action }}"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button type="submit" class="nb" title="Tap to do this again">{% include "portal/_lead_node.html" %}</button></form>{% elif s.url %}<a class="nb" href="{{ s.url }}">{% include "portal/_lead_node.html" %}</a>{% else %}{% include "portal/_lead_node.html" %}{% endif %}</div>{% endfor %}</div>
+<details><summary>Details ({{ l.events.all|length|add:1 }})</summary><div class="hist">
+<small>{{ l.created_at|date:"j M" }} &middot; <b>{{ l.entered_by.first_name|default:l.entered_by.username }}</b> entered the lead{% if l.assigned_to %} for {{ l.assigned_to.first_name|default:l.assigned_to.username }}{% endif %}</small>
+{% for e in l.events.all %}<small>{{ e.created_at|date:"j M" }} &middot; <b>{{ e.by.first_name|default:e.by.username|default:"Someone" }}</b> {{ e.text }}</small>{% endfor %}</div></details>
+{% if not l.lost %}<details><summary>Type{% if not l.type_chips %} (not set){% endif %}</summary><form class="upd" method="post" action="{% url 'lead_type' l.id %}">{% csrf_token %}<input type="hidden" name="next_url" value="{{ request.get_full_path }}">
+<label>Customer type</label><select name="customer_type" class="ctsel"><option value="">Not decided yet</option><option value="residential" {% if l.customer_type == "residential" %}selected{% endif %}>Residential</option><option value="commercial" {% if l.customer_type == "commercial" %}selected{% endif %}>Commercial</option><option value="industrial" {% if l.customer_type == "industrial" %}selected{% endif %}>Industrial</option></select>
+<div class="dcrbox" style="{% if l.customer_type != 'residential' %}display:none{% endif %}"><label>DCR or Non-DCR</label><select name="dcr_choice"><option value="undecided" {% if l.dcr_choice == "undecided" or not l.dcr_choice %}selected{% endif %}>Not decided yet</option><option value="dcr" {% if l.dcr_choice == "dcr" %}selected{% endif %}>DCR</option><option value="non_dcr" {% if l.dcr_choice == "non_dcr" %}selected{% endif %}>Non-DCR</option></select></div>
+<label>System type</label><select name="system_type" class="stsel"><option value="">Not decided yet</option><option value="on_grid" {% if l.system_type == "on_grid" %}selected{% endif %}>On-grid</option><option value="off_grid" {% if l.system_type == "off_grid" %}selected{% endif %}>Off-grid</option><option value="hybrid" {% if l.system_type == "hybrid" %}selected{% endif %}>Hybrid</option><option value="other" {% if l.system_type == "other" %}selected{% endif %}>Other (type it)</option></select>
+<input class="sother" name="system_other" value="{{ l.system_other }}" placeholder="Type the system type" style="{% if l.system_type != 'other' %}display:none{% endif %}">
+<button class="mini" type="submit" style="width:100%">Save type</button></form></details>{% endif %}
+{% if not l.lost and l.stage != "confirmed" %}<details><summary>Update</summary><form class="upd" method="post" action="{% url 'lead_update' l.id %}">{% csrf_token %}<input type="hidden" name="next_url" value="{{ request.get_full_path }}">
+<label>What happened?</label><select name="what"><option value="">Nothing / just a note</option><option value="call">I called</option><option value="visit">I did the site visit</option><option value="other">Other work done</option></select>
+<label>Note</label><input name="note" placeholder="What the customer said">
+<label>What comes next?</label><select name="next"><option value="">No change</option><option value="visit">Site visit</option><option value="call">Call</option><option value="quotation">Quotation</option><option value="other">Other (type)</option><option value="later">Decide later</option></select>
+<input name="next_other" placeholder="Type the next step (only for Other)">
+<label>Who does it?</label><select name="person"><option value="">Same person</option>{% for p in people_options %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+<button class="mini" type="submit" style="width:100%">Save update</button></form></details>{% endif %}
+</div>
+<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+{% if not l.lost and l.stage != "confirmed" %}{% if not l.has_call %}<form method="post" action="{% url 'lead_quick' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as called?');">{% csrf_token %}<input type="hidden" name="what" value="call"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Called</button></form>{% endif %}
+{% if not l.has_visit %}<form method="post" action="{% url 'lead_quick' l.id %}">{% csrf_token %}<input type="hidden" name="what" value="visit"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Site visit</button></form>{% endif %}{% endif %}
+<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="{% url 'lead_site' l.id %}">Site details{% if l.site %} &#10004;{% endif %}</a>
+{% if l.stage == "lead" and not l.done %}<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="/sales/new/?lead={{ l.id }}">Make quotation</a>{% endif %}
+{% if l.stage == "quoted" or l.stage == "waiting" %}{% if not l.done %}<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="/sales/new/?lead={{ l.id }}">&#8635; Re-quote</a><form method="post" action="{% url 'lead_won' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as WON? The quotation becomes a customer.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%;background:#e3f5ea;border-color:#2e9e5b;color:#1f7a43;font-weight:700">Won</button></form>{% endif %}{% endif %}
+{% if l.lost %}<form method="post" action="{% url 'lead_lost' l.id %}">{% csrf_token %}<input type="hidden" name="undo" value="1"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">Reopen</button></form>
+{% elif not l.done and l.stage != "confirmed" %}<form method="post" action="{% url 'lead_lost' l.id %}" onsubmit="var r=prompt('Why was it lost? (price / went elsewhere / not interested)','');if(r===null){return false}this.reason.value=r;">{% csrf_token %}<input type="hidden" name="reason" value=""><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">Lost</button></form>{% endif %}
+{% if l.done and not l.lost %}<form method="post" action="{% url 'lead_done' l.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit">Reopen</button></form>{% endif %}</div>
+</div>{% empty %}<p style="color:var(--mut)">No leads here.</p>{% endfor %}
+</div></div><dialog id="qd" style="border:0;border-radius:16px;padding:18px;max-width:340px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
+<h3 style="margin:0 0 4px" id="qd-name">Quotation</h3><p style="margin:0 0 12px;color:var(--mut);font-size:13px" id="qd-offer"></p>
+<a class="btn auto" id="qd-view" href="#" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px">See the existing quotation</a>
+<a class="btn o auto" id="qd-re" href="#" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px">&#8635; Re-quote (make a new one)</a>
+<button type="button" class="btn w" id="qd-x">Close</button></dialog>
+<script>
+(function () {
+  var d = document.getElementById("qd");
+  if (!d) { return; }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest(".qbtn");
+    if (!b) { return; }
+    document.getElementById("qd-name").textContent = b.dataset.name;
+    document.getElementById("qd-offer").textContent = b.dataset.offer ? "Quotation " + b.dataset.offer : "";
+    document.getElementById("qd-view").href = b.dataset.view;
+    document.getElementById("qd-re").href = b.dataset.requote;
+    if (d.showModal) { d.showModal(); } else { d.setAttribute("open", ""); }
+  });
+  document.getElementById("qd-x").onclick = function () { if (d.close) { d.close(); } else { d.removeAttribute("open"); } };
+})();
+</script><script>
+document.addEventListener("change", function (e) { var f = e.target.closest && e.target.closest("form.upd"); if (!f) { return; }
+  var c = f.querySelector(".ctsel"), b = f.querySelector(".dcrbox"), s = f.querySelector(".stsel"), o = f.querySelector(".sother");
+  if (c && b) { b.style.display = c.value === "residential" ? "" : "none"; } if (s && o) { o.style.display = s.value === "other" ? "" : "none"; } });
+</script>
+{% endblock %}

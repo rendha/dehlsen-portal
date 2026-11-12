@@ -1,0 +1,19 @@
+# Render Blueprint for the Dehlsen portal (one web service).
+# It does NOT create a database: DATABASE_URL is typed in once in the Render dashboard (sync: false), so the portal can use
+# an existing Postgres database. First test it against a COPY of your data, not the live database.
+services:
+  - type: web
+    name: dehlsen-portal
+    runtime: docker
+    plan: starter                  # PDFs need memory; the free plan is too small and sleeps
+    region: singapore              # same region as your database
+    healthCheckPath: /offline/
+    envVars:
+      - key: DATABASE_URL
+        sync: false                # paste the INTERNAL database URL in the dashboard
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSKEY
+        sync: false
+      - key: WEB_CONCURRENCY
+        value: "1"

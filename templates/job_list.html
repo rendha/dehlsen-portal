@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col-md-6">
+        <h2>{% if needs_amount %}Service Jobs Without an Amount{% else %}All Jobs{% endif %}</h2>
+        {% if needs_amount %}<a href="{% url 'job_list' %}" class="small">← Show all jobs</a>{% endif %}
+    </div>
+    <div class="col-md-6">
+        <form method="get" class="d-flex">
+            <input type="text" name="q" class="form-control me-2" placeholder="Search customer, site, kW or service..." value="{{ query }}">
+            <button type="submit" class="btn btn-outline-dark">Search</button>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm p-3">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Date</th>
+                    <th>Service</th>
+                    <th>Customer / Site</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                    <th>Revenue</th>
+                    <th>Expenses</th>
+                    <th>Net Profit/Loss</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in jobs %}
+                <tr>
+                    <td>{{ job.date }}</td>
+                    <td>
+                        {% if job.service_name|lower == 'cleaning' %}
+                            <span class="badge text-bg-secondary">Cleaning</span>
+                        {% else %}
+                            <span class="badge text-bg-warning">{{ job.service_name }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ job.customer.name }}</strong><br>
+                        <small class="text-muted">{{ job.site.location }}</small>
+                    </td>
+                    <td>{{ job.site.solar_kw}}kW</td>
+                    <td>
+
+    {% if job.is_free %}
+
+        <span class="badge bg-info text-dark">
+            Free Promo
+        </span>
+
+    {% else %}
+
+        <form
+            method="POST"
+            action="{% url 'update_payment_status' job.id %}"
+            class="payment-status-form"
+        >
+
+            {% csrf_token %}
+
+            <select
+                name="payment_status"
+                class="form-select form-select-sm payment-status-select
+                {% if job.payment_status == 'Paid' %}
+                    border-success text-success
+                {% else %}
+                    border-warning text-dark
+                {% endif %}"
+                onchange="this.form.submit()"
+            >
+
+                <option
+                    value="Unpaid"
+                    {% if job.payment_status == 'Unpaid' %}
+                        selected
+                    {% endif %}
+                >
+                    Unpaid
+                </option>
+
+                <option
+                    value="Paid"
+                    {% if job.payment_status == 'Paid' %}
+                        selected
+                    {% endif %}
+                >
+                    Paid
+                </option>
+
+            </select>
+
+        </form>
+
+    {% endif %}
+
+</td>
+                    <td>
+                        ₹{{ job.revenue }}
+                        {% if not job.is_free and job.revenue == 0 and job.service_name|lower != 'cleaning' %}
+                            <br><a href="{% url 'edit_job' job.id %}" class="badge text-bg-danger text-decoration-none">⚠ Add amount</a>
+                        {% endif %}
+                    </td>
+                    <td>
+                        ₹{{ job.total_expenses }}
+                        <button class="btn btn-sm btn-link p-0 ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#exp-{{ job.id }}">
+                            (View details)
+                        </button>
+                        <div class="collapse mt-1" id="exp-{{ job.id }}">
+                            <ul class="list-unstyled small text-muted mb-0">
+                                {% for exp in job.expenses.all %}
+                                    <li>- {{ exp.expense_name }}: ₹{{ exp.cost }}</li>
+                                {% empty %}
+                                    <li>No manual expenses</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </td>
+                    <td class="fw-bold {% if job.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        ₹{{ job.net_profit }}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">No jobs found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

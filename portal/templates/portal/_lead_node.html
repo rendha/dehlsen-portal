@@ -1,0 +1,1 @@
+<i>{% if s.state == "pending" %}!{% elif s.state == "lost" %}&times;{% else %}&#10003;{% endif %}</i><span>{{ s.label }}</span>{% if s.date %}<small>{{ s.date|date:"j M" }}{% if s.by %} &middot; {{ s.by }}{% endif %}</small>{% endif %}

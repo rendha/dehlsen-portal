@@ -1,0 +1,558 @@
+{% extends 'base.html' %}
+
+{% block extra_head %}
+<link
+    href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css"
+    rel="stylesheet"
+>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+<style>
+
+    .calendar-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .fc-event { cursor: pointer; font-size: 13px; }
+
+    /* Event text wraps instead of being cut off */
+    .fc-daygrid-event .fc-event-title,
+    .fc-daygrid-event .fc-event-time {
+        white-space: normal;
+    }
+
+    /* ---------- legend ---------- */
+
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        margin-top: 20px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+        font-size: 13px;
+    }
+
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    /* ---------- details popup (own names, so Bootstrap's .modal doesn't interfere) ---------- */
+
+    .sched-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        background: rgba(0, 0, 0, 0.5);
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+
+    .sched-modal.open { display: flex; }
+
+    .sched-modal-box {
+        background: #fff;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        border-radius: 12px;
+        padding: 24px;
+        position: relative;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .sched-close {
+        position: absolute;
+        top: 8px;
+        right: 14px;
+        font-size: 28px;
+        line-height: 1;
+        background: none;
+        border: 0;
+        color: #666;
+    }
+
+    .detail-label {
+        font-size: 12px;
+        color: #777;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 2px;
+    }
+
+    .detail-value { font-size: 15px; font-weight: 500; margin-bottom: 12px; }
+
+    /* ---------- phones ---------- */
+
+    @media (max-width: 700px) {
+
+        .calendar-card { padding: 8px; }
+
+        .fc .fc-toolbar {
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fc .fc-toolbar-title { font-size: 1.3rem; }
+    }
+
+
+    /* Month view: time on its own line, so nothing gets cut off */
+    .fc-daygrid-block-event .fc-event-main-frame {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .fc-daygrid-block-event .fc-event-time {
+        font-weight: 700;
+        overflow: visible;
+    }
+    .fc-daygrid-block-event .fc-event-title {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    /* Keep the original calendar look (stop Bootstrap styling dates as links) */
+    .fc {
+        font-family: Arial, Helvetica, sans-serif;
+        color: #222;
+    }
+    .fc a,
+    .fc a:hover {
+        color: inherit;
+        text-decoration: none;
+    }
+    .fc .fc-col-header-cell-cushion {
+        font-weight: 700;
+        padding: 6px 4px;
+    }
+    .fc .fc-daygrid-day-number {
+        padding: 6px;
+    }
+    .fc .fc-day-other .fc-daygrid-day-number {
+        color: #aaa;
+    }
+    .fc .fc-toolbar-title {
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: 700;
+    }
+    .fc .fc-event,
+    .fc .fc-event a {
+        color: #fff;
+    }
+    .fc .fc-list-event a,
+    .fc .fc-list-event-title {
+        color: #222;
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<!-- Switch between the two calendars -->
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if kind != 'services' %}active{% endif %}" href="{% url 'schedule' %}?type=cleaning">
+            Cleaning
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if kind == 'services' %}active{% endif %}" href="{% url 'schedule' %}?type=services">
+            Services
+        </a>
+    </li>
+</ul>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+
+    <h2 class="fw-bold mb-0">
+        {% if kind == 'services' %}Service Schedule{% else %}Cleaning Schedule{% endif %}
+    </h2>
+
+    {% if kind == 'services' %}
+        <a href="{% url 'add_schedule' %}?service=" class="btn btn-primary">
+            + Add Service Visit
+        </a>
+    {% else %}
+        <a href="{% url 'add_schedule' %}?service=Cleaning" class="btn btn-primary">
+            + Add Cleaning
+        </a>
+    {% endif %}
+
+</div>
+
+
+<div class="calendar-card">
+
+    {% if kind == 'services' and services %}
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <label for="serviceFilter" class="fw-semibold mb-0">Show:</label>
+            <select id="serviceFilter" class="form-select form-select-sm" style="width:auto; max-width:100%;">
+                <option value="">All services</option>
+                {% for s in services %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    {% endif %}
+
+    <div id="calendarLoading" class="text-muted small mb-2" hidden>Loading jobs…</div>
+    <div id="calendarError" class="alert alert-danger py-2" hidden>
+        Couldn't load the jobs. Check your internet connection and that you're logged in, then
+        <a href="" class="alert-link">reload the page</a>.
+    </div>
+    <div id="calendar"></div>
+
+    <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#3B73B9"></span> Scheduled</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#28a745"></span> Completed</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f0ad4e"></span> Rescheduled</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#dc3545"></span> Cancelled</div>
+    </div>
+
+</div>
+
+
+<!-- ========================== DETAILS POPUP ========================== -->
+
+<div id="scheduleModal" class="sched-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+
+    <div class="sched-modal-box">
+
+        <button type="button" class="sched-close" onclick="closeModal()" aria-label="Close">&times;</button>
+
+        <h4 id="modalTitle" class="mb-3 pe-4">Schedule</h4>
+
+        <div class="detail-label">Service</div>
+        <div id="modalService" class="detail-value"></div>
+
+        <div class="detail-label">When</div>
+        <div id="modalWhen" class="detail-value"></div>
+
+        <div class="detail-label">Phone</div>
+        <div id="modalPhone" class="detail-value"></div>
+
+        <div class="detail-label">Location</div>
+        <div id="modalLocation" class="detail-value"></div>
+
+        <div class="detail-label">Address</div>
+        <div id="modalAddress" class="detail-value"></div>
+
+        <div class="detail-label">Assigned to</div>
+        <div id="modalAssigned" class="detail-value"></div>
+
+        <div class="detail-label">Notes</div>
+        <div id="modalNotes" class="detail-value"></div>
+
+        <label for="modalStatus" class="detail-label d-block">Status</label>
+        <select id="modalStatus" class="form-select mb-3">
+            <option value="Scheduled">Scheduled</option>
+            <option value="Completed">Completed</option>
+            <option value="Rescheduled">Rescheduled</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+
+        <!-- Delete confirmation lives in the popup itself -->
+        <div id="deleteConfirm" class="alert alert-danger py-2 d-none">
+            Delete this schedule?
+            <div class="mt-2 d-flex gap-2">
+                <button type="button" id="deleteYes" class="btn btn-sm btn-danger">Yes, delete</button>
+                <button type="button" id="deleteNo" class="btn btn-sm btn-outline-secondary">Keep it</button>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+            <a id="editButton" href="#" class="btn btn-primary">Edit</a>
+            <a id="mapButton" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary">🗺️ Map</a>
+            <button id="deleteButton" type="button" class="btn btn-outline-danger">Delete</button>
+            <button type="button" class="btn btn-light ms-auto" onclick="closeModal()">Close</button>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+
+const STATUS_COLORS = {
+    Scheduled: '#3B73B9',
+    Completed: '#28a745',
+    Rescheduled: '#f0ad4e',
+    Cancelled: '#dc3545',
+};
+
+const CALENDAR_KIND = "{% if kind == 'services' %}services{% else %}cleaning{% endif %}";
+
+let calendar;
+let currentEvent = null;
+
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+
+        // Always open on the month calendar
+        initialView: 'dayGridMonth',
+
+        // "List" = the next 30 days from today, so upcoming jobs always show
+        views: {
+            listUpcoming: {
+                type: 'list',
+                duration: { days: 30 },
+                buttonText: 'List',
+                noEventsContent: CALENDAR_KIND === 'services' ? 'No service visits in the next 30 days' : 'No cleanings in the next 30 days',
+            },
+        },
+
+
+        height: 'auto',
+
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,listUpcoming'
+        },
+
+        buttonText: { today: 'Today', month: 'Month', week: 'Week', list: 'List' },
+
+        events: {
+            url: "{% url 'schedule_events_api' %}",
+            extraParams: function () {
+                const filter = document.getElementById('serviceFilter');
+                return {
+                    type: CALENDAR_KIND,                 // 'cleaning' or 'services'
+                    service: filter ? filter.value : '',
+                };
+            },
+            failure: function () {
+                showCalendarError();
+            },
+        },
+
+        // Shows "Loading jobs..." while the phone fetches them
+        loading: function (isLoading) {
+            const note = document.getElementById('calendarLoading');
+            if (note) note.hidden = !isLoading;
+        },
+
+        // Every job is a box with its name; "+ more" when a day is full
+        eventDisplay: 'block',
+        dayMaxEvents: 3,       // up to 3 per day, then "+ more"
+
+        // A late-evening job stays on its own day
+        nextDayThreshold: '23:59:59',
+
+        eventTimeFormat: { hour: 'numeric', minute: '2-digit', meridiem: 'short' },
+
+        noEventsContent: CALENDAR_KIND === 'services' ? 'No service visits scheduled' : 'No cleanings scheduled',
+
+        editable: true,
+        eventStartEditable: true,
+        eventDurationEditable: false,
+
+        eventClick: function (info) {
+            info.jsEvent.preventDefault();
+            showScheduleModal(info.event);
+        },
+
+        eventDrop: function (info) {
+            rescheduleEvent(info.event, info);
+        },
+
+    });
+
+    calendar.render();
+
+    // Reload jobs when the "Show:" filter changes
+    const serviceFilter = document.getElementById('serviceFilter');
+    if (serviceFilter) {
+        serviceFilter.addEventListener('change', function () {
+            calendar.refetchEvents();
+        });
+    }
+
+});
+
+
+/* ---------- details popup ---------- */
+
+function setText(id, value) {
+    document.getElementById(id).textContent = value || '-';
+}
+
+function showScheduleModal(event) {
+
+    currentEvent = event;
+
+    const p = event.extendedProps;
+
+    setText('modalTitle', p.customer_name || event.title);
+
+    const when = event.start
+        ? event.start.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+          + (event.allDay ? '' : ' · ' + event.start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }))
+        : '';
+
+    setText('modalService', p.service || 'Cleaning');
+    setText('modalWhen', when);
+    setText('modalPhone', p.phone);
+    setText('modalLocation', p.location);
+    setText('modalAddress', p.address);
+    setText('modalAssigned', p.assigned_to || 'Not assigned');
+    setText('modalNotes', p.notes);
+
+    document.getElementById('modalStatus').value = p.status;
+    document.getElementById('editButton').href = p.edit_url;
+
+    const mapButton = document.getElementById('mapButton');
+    mapButton.hidden = !p.map_link;
+    mapButton.href = p.map_link || '#';
+
+    document.getElementById('deleteConfirm').classList.add('d-none');
+
+    document.getElementById('scheduleModal').classList.add('open');
+}
+
+function closeModal() {
+    document.getElementById('scheduleModal').classList.remove('open');
+    currentEvent = null;
+}
+
+document.getElementById('scheduleModal').addEventListener('click', function (e) {
+    if (e.target === this) closeModal();
+});
+
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+});
+
+
+/* ---------- change status ---------- */
+
+document.getElementById('modalStatus').addEventListener('change', function () {
+
+    if (!currentEvent) return;
+
+    const event = currentEvent;
+    const status = this.value;
+
+    fetch(`/service/schedule/${event.id}/status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: `status=${encodeURIComponent(status)}`,
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.error || 'Could not update status.');
+                return;
+            }
+            event.setProp('backgroundColor', STATUS_COLORS[status]);
+            event.setProp('borderColor', STATUS_COLORS[status]);
+            event.setExtendedProp('status', status);
+        })
+        .catch(() => alert('Could not update status. Check your internet connection.'));
+});
+
+
+/* ---------- delete (confirmed inside the popup) ---------- */
+
+document.getElementById('deleteButton').addEventListener('click', function () {
+    document.getElementById('deleteConfirm').classList.remove('d-none');
+});
+
+document.getElementById('deleteNo').addEventListener('click', function () {
+    document.getElementById('deleteConfirm').classList.add('d-none');
+});
+
+document.getElementById('deleteYes').addEventListener('click', function () {
+
+    if (!currentEvent) return;
+
+    const event = currentEvent;
+
+    fetch(`/service/schedule/${event.id}/delete/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    })
+        .then(() => {
+            event.remove();
+            closeModal();
+        })
+        .catch(() => alert('Could not delete schedule.'));
+});
+
+
+/* ---------- drag to reschedule ---------- */
+
+function localDate(d) {
+    // Uses the phone's own date. (toISOString() is UTC and can shift the day in India.)
+    return d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+}
+
+function rescheduleEvent(event, info) {
+
+    const date = localDate(event.start);
+
+    const time = event.allDay
+        ? ''
+        : String(event.start.getHours()).padStart(2, '0') + ':'
+          + String(event.start.getMinutes()).padStart(2, '0');
+
+    fetch(`/service/schedule/${event.id}/reschedule/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+        body: `date=${encodeURIComponent(date)}&time=${encodeURIComponent(time)}`,
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.error || 'Could not reschedule.');
+                info.revert();
+                return;
+            }
+            event.setExtendedProp('status', 'Rescheduled');
+            event.setProp('backgroundColor', STATUS_COLORS.Rescheduled);
+            event.setProp('borderColor', STATUS_COLORS.Rescheduled);
+        })
+        .catch(() => {
+            alert('Could not reschedule. Check your internet connection.');
+            info.revert();
+        });
+}
+
+
+/* ---------- CSRF ---------- */
+
+function getCookie(name) {
+    const match = document.cookie
+        .split(';')
+        .map(c => c.trim())
+        .find(c => c.startsWith(name + '='));
+    return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+}
+
+
+function showCalendarError() {
+    const box = document.getElementById('calendarError');
+    if (box) box.hidden = false;
+}
+</script>
+{% endblock %}

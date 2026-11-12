@@ -1,0 +1,7 @@
+{% extends "portal/base.html" %}
+{% block title %}Targets{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Sales targets</h1><small>Target, achieved and percent</small></div><a class="pill" href="{% url 'home' %}">Home</a></div>
+{% include "portal/_targets.html" %}
+{% if not periods %}<div class="card">No targets are set for this period yet. Add them in Admin &rarr; Sales targets.</div>{% endif %}
+</div>{% endblock %}

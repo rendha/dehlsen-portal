@@ -1,0 +1,519 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h1 class="mb-1">
+                Monthly Reports
+            </h1>
+
+            <p class="text-muted mb-0">
+                Income and profit for all jobs and services
+            </p>
+        </div>
+
+    </div>
+
+
+    <!-- ========================================= -->
+    <!-- ALL TIME SUMMARY -->
+    <!-- ========================================= -->
+
+    <h4 class="mb-3">
+        All-Time Summary
+    </h4>
+
+
+    <div class="row g-3 mb-5">
+
+
+        <!-- REVENUE -->
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted">
+                        Total Revenue
+                    </div>
+
+                    <h3 class="text-success mt-2">
+                        ₹{{ all_time_revenue|floatformat:2 }}
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- EXPENSES -->
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted">
+                        Total Expenses
+                    </div>
+
+                    <h3 class="text-danger mt-2">
+                        ₹{{ all_time_expenses|floatformat:2 }}
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- PROFIT -->
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted">
+                        Net Profit
+                    </div>
+
+                    <h3 class="text-primary mt-2">
+                        ₹{{ all_time_profit|floatformat:2 }}
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- OUTSTANDING -->
+
+        <div class="col-md-3">
+
+            <div class="card shadow-sm h-100">
+
+                <div class="card-body">
+
+                    <div class="text-muted">
+                        Outstanding
+                    </div>
+
+                    <h3 class="text-warning mt-2">
+                        ₹{{ all_time_outstanding|floatformat:2 }}
+                    </h3>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- ========================================= -->
+    <!-- ALL TIME COUNTS -->
+    <!-- ========================================= -->
+
+    <div class="row g-3 mb-5">
+
+
+        <div class="col-md-3">
+
+            <div class="card border-0 bg-light">
+
+                <div class="card-body text-center">
+
+                    <h2>
+                        {{ all_time_cleanings }}
+                    </h2>
+
+                    <div class="text-muted">
+                        Total Jobs
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card border-0 bg-light">
+
+                <div class="card-body text-center">
+
+                    <h2 class="text-success">
+                        {{ all_time_paid }}
+                    </h2>
+
+                    <div class="text-muted">
+                        Paid
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card border-0 bg-light">
+
+                <div class="card-body text-center">
+
+                    <h2 class="text-danger">
+                        {{ all_time_unpaid }}
+                    </h2>
+
+                    <div class="text-muted">
+                        Unpaid
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-3">
+
+            <div class="card border-0 bg-light">
+
+                <div class="card-body text-center">
+
+                    <h2 class="text-secondary">
+                        {{ all_time_free }}
+                    </h2>
+
+                    <div class="text-muted">
+                        Free Jobs
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+
+    <!-- ========================================= -->
+    <!-- 12-MONTH TREND -->
+    <!-- ========================================= -->
+
+    {% if reports|length > 1 %}
+        <div class="card shadow-sm mb-5">
+            <div class="card-body">
+                <h4 class="mb-3">Last 12 months</h4>
+                <div style="position: relative; height: 280px;">
+                    <canvas id="trendChart" aria-label="Revenue, expenses and profit for the last 12 months"></canvas>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ========================================= -->
+    <!-- BY SERVICE -->
+    <!-- ========================================= -->
+
+    <h4 class="mb-3">
+        By Service (All Time)
+    </h4>
+
+    {% if all_time_services %}
+
+        <div class="table-responsive mb-5">
+
+            <table class="table table-hover align-middle bg-white shadow-sm">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Service</th>
+                        <th class="text-end">Jobs</th>
+                        <th class="text-end">Revenue</th>
+                        <th class="text-end">Expenses</th>
+                        <th class="text-end">Profit</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for s in all_time_services %}
+                        <tr>
+                            <td>
+                                {% if s.is_cleaning %}
+                                    <span class="badge text-bg-secondary">Cleaning</span>
+                                {% else %}
+                                    <span class="badge text-bg-warning">{{ s.name }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ s.count }}</td>
+                            <td class="text-end text-success">₹{{ s.revenue|floatformat:2 }}</td>
+                            <td class="text-end text-danger">₹{{ s.expenses|floatformat:2 }}</td>
+                            <td class="text-end fw-bold {% if s.profit < 0 %}text-danger{% else %}text-primary{% endif %}">₹{{ s.profit|floatformat:2 }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+
+        </div>
+
+    {% endif %}
+
+
+    <!-- ========================================= -->
+    <!-- MONTHLY REPORTS -->
+    <!-- ========================================= -->
+
+    <h4 class="mb-3">
+        Monthly Reports
+    </h4>
+
+
+    {% if reports %}
+
+        <div class="row g-4">
+
+            {% for report in reports %}
+
+                <div class="col-md-6 col-lg-4">
+
+                    <div class="card shadow-sm h-100">
+
+                        <div class="card-body">
+
+
+                            <h4 class="mb-1">
+
+                                {{ report.month_name }}
+
+                            </h4>
+
+
+                            <div class="text-muted mb-3">
+
+                                {{ report.cleanings }}
+                                job{{ report.cleanings|pluralize }}
+
+                            </div>
+
+
+                            <div class="mb-2">
+
+                                <strong>
+                                    Revenue:
+                                </strong>
+
+                                <span class="text-success">
+                                    ₹{{ report.revenue|floatformat:2 }}
+                                </span>
+
+                            </div>
+
+
+                            <div class="mb-2">
+
+                                <strong>
+                                    Expenses:
+                                </strong>
+
+                                <span class="text-danger">
+                                    ₹{{ report.expenses|floatformat:2 }}
+                                </span>
+
+                            </div>
+
+
+                            <div class="mb-3">
+
+                                <strong>
+                                    Profit:
+                                </strong>
+
+                                <span class="text-primary">
+                                    ₹{{ report.profit|floatformat:2 }}
+                                </span>
+
+                            </div>
+
+
+                            {% if report.services|length > 1 or report.services.0 and not report.services.0.is_cleaning %}
+
+                                <div class="small border rounded p-2 mb-3 bg-light">
+                                    {% for s in report.services %}
+                                        <div class="d-flex justify-content-between">
+                                            <span>{{ s.name }} ({{ s.count }})</span>
+                                            <span class="text-success">₹{{ s.revenue|floatformat:0 }}</span>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                            {% endif %}
+
+                            <hr>
+
+
+                            <div class="d-flex justify-content-between mb-2">
+
+                                <span>
+                                    Paid
+                                </span>
+
+                                <strong>
+                                    {{ report.paid_count }}
+                                </strong>
+
+                            </div>
+
+
+                            <div class="d-flex justify-content-between mb-2">
+
+                                <span>
+                                    Unpaid
+                                </span>
+
+                                <strong>
+                                    {{ report.unpaid_count }}
+                                </strong>
+
+                            </div>
+
+
+                            <div class="d-flex justify-content-between mb-3">
+
+                                <span>
+                                    Free
+                                </span>
+
+                                <strong>
+                                    {{ report.free_count }}
+                                </strong>
+
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between small mb-1">
+                                    <span>Collected</span>
+                                    <strong>{{ report.collected_pct }}%</strong>
+                                </div>
+                                <div class="progress" style="height: 6px;" role="progressbar" aria-label="Collected" aria-valuenow="{{ report.collected_pct }}" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-bar bg-success" style="width: {{ report.collected_pct }}%"></div>
+                                </div>
+                            </div>
+
+
+                            {% if report.outstanding > 0 %}
+
+                                <div class="alert alert-warning py-2">
+
+                                    Outstanding:
+
+                                    <strong>
+                                        ₹{{ report.outstanding|floatformat:2 }}
+                                    </strong>
+
+                                </div>
+
+                            {% endif %}
+
+
+                            <a
+                                href="{% url 'monthly_report_detail' report.month %}"
+                                class="btn btn-primary w-100"
+                            >
+
+                                View Month Details →
+
+                            </a>
+
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+
+    {% else %}
+
+        <div class="alert alert-info">
+
+            No jobs recorded yet.
+
+        </div>
+
+    {% endif %}
+
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{{ trend|json_script:"trend-data" }}
+<script>
+(function () {
+    const el = document.getElementById('trendChart');
+    if (!el || typeof Chart === 'undefined') return;
+
+    const d = JSON.parse(document.getElementById('trend-data').textContent);
+    const css = getComputedStyle(document.documentElement);
+    const ink = css.getPropertyValue('--sc-muted').trim() || '#64748B';
+    const grid = css.getPropertyValue('--sc-border').trim() || '#E2E8F0';
+
+    new Chart(el, {
+        type: 'bar',
+        data: {
+            labels: d.labels,
+            datasets: [
+                { label: 'Revenue', data: d.revenue, backgroundColor: 'rgba(21, 128, 61, 0.75)', borderRadius: 4 },
+                { label: 'Expenses', data: d.expenses, backgroundColor: 'rgba(185, 28, 28, 0.65)', borderRadius: 4 },
+                { type: 'line', label: 'Profit', data: d.profit, borderColor: '#0369A1', backgroundColor: '#0369A1', tension: 0.3, pointRadius: 3 }
+            ]
+        },
+        options: {
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: ink } },
+                tooltip: { callbacks: { label: c => c.dataset.label + ': ₹' + Number(c.raw).toLocaleString('en-IN') } }
+            },
+            scales: {
+                x: { ticks: { color: ink }, grid: { display: false } },
+                y: { ticks: { color: ink, callback: v => '₹' + Number(v).toLocaleString('en-IN') }, grid: { color: grid }, beginAtZero: true }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Sign in · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.login{max-width:380px;margin:48px auto;background:var(--card);border-radius:18px;padding:28px;box-shadow:0 6px 24px rgba(30,50,80,.1);text-align:center}
+.logo{width:56px;height:56px;border-radius:14px;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:700;font-size:22px;margin:0 auto 10px}
+.err{background:#fde8e8;color:var(--red);border-radius:10px;padding:9px 12px;font-size:14px;margin-bottom:12px}
+</style>{% endblock %}
+{% block body %}<div class="app"><div class="login">
+<div class="logo">D</div><h2 style="margin:0 0 4px">Dehlsen Energy</h2><p style="color:var(--mut);margin:0 0 18px">Sign in once for everything</p>
+{% if form.errors %}<div class="err">Wrong username or password. Please try again.</div>{% endif %}
+<form method="post" action="{% url 'login' %}">{% csrf_token %}
+<label for="id_username">Username</label><input id="id_username" name="username" autocomplete="username" autocapitalize="none" autofocus required>
+<label for="id_password">Password</label><input id="id_password" name="password" type="password" autocomplete="current-password" required>
+<input type="hidden" name="next" value="{{ next }}">
+<button class="btn" type="submit">Sign in</button></form>
+</div></div>{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "portal/base.html" %}
+{% block title %}My tasks · Dehlsen Energy{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>My tasks</h1><small>{{ request.user.get_full_name|default:request.user.username }} · sorted by due date</small></div><a class="pill" href="{% url 'task' %}">&lsaquo; Task</a></div>
+<div class="card list">
+{% for r in mine %}<div class="it"><span class="dot" style="background:{% if r.overdue %}#d64545{% else %}#E8730C{% endif %}"></span>
+<div style="flex:1"><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>from {{ r.by }} · added {{ r.added }}</small>{% if r.details %}<small> · {{ r.details|truncatechars:70 }}</small>{% endif %}<br><span class="tag{% if r.overdue %} r{% endif %}">{{ r.due }} · {{ r.left }}</span></div>
+<form method="post" action="{% url 'task_done' r.id %}" style="margin:0">{% csrf_token %}<button class="btn g auto" style="padding:8px 12px" type="submit">Mark done</button></form></div>
+{% empty %}<p style="color:var(--mut);margin:0">Nothing waiting for you. 🎉</p>{% endfor %}</div>
+
+<div class="card"><h3 style="margin-top:0">Phone alerts</h3>
+{% if push_on %}<p style="color:var(--mut);margin-top:0" id="pstate">{% if has_phone %}Alerts are on for a phone you used before. You can turn them on for this phone too.{% else %}Get a buzz on this phone when a task is given to you, even when the app is closed.{% endif %}</p>
+<button class="btn auto" id="pbtn" type="button">Turn on alerts on this phone</button>
+<button class="btn w auto" id="ptest" type="button" style="display:none">Send a test alert</button>
+<p style="color:var(--mut);font-size:12px;margin-bottom:0">iPhone: first add this website to the Home Screen (Share, then Add to Home Screen) and open it from there.</p>
+{% else %}<p style="color:var(--mut);margin:0">Phone alerts are not switched on for this website yet (the owner sets two keys once). The red number and WhatsApp work already.</p>{% endif %}</div>
+
+{% if given %}<div class="card list"><h3 style="margin-top:0">Tasks I gave</h3>
+{% for r in given %}<div class="it {% if r.done %}dim{% endif %}"><span class="dot" style="background:{% if r.done %}#9aa5b4{% elif r.overdue %}#d64545{% else %}#E8730C{% endif %}"></span>
+<div><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>to {{ r.to }} · added {{ r.added }}</small><br><span class="tag{% if r.overdue %} r{% elif r.done %} g{% endif %}">{{ r.due }} · {{ r.left }}</span></div></div>{% endfor %}</div>{% endif %}
+{% if finished %}<div class="card list"><h3 style="margin-top:0">Done recently</h3>
+{% for r in finished %}<div class="it dim"><span class="dot" style="background:#9aa5b4"></span><div style="flex:1"><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>from {{ r.by }}</small></div>
+<form method="post" action="{% url 'task_done' r.id %}" style="margin:0">{% csrf_token %}<input type="hidden" name="undo" value="1"><button class="btn w auto" style="padding:6px 10px" type="submit">Reopen</button></form></div>{% endfor %}</div>{% endif %}
+</div>
+{% if push_on %}<script>
+(function () {
+  var KEY = "{{ vapid_key }}", btn = document.getElementById("pbtn"), test = document.getElementById("ptest"), state = document.getElementById("pstate");
+  var csrf = "{{ csrf_token }}";
+  function toBytes(b64) { var p = "=".repeat((4 - b64.length % 4) % 4), s = (b64 + p).replace(/-/g, "+").replace(/_/g, "/"), r = atob(s), o = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) o[i] = r.charCodeAt(i); return o; }
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) { btn.style.display = "none"; state.textContent = "This phone or browser cannot get alerts. On iPhone, add the website to the Home Screen first."; return; }
+  btn.onclick = function () {
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== "granted") { state.textContent = "Alerts were not allowed. Allow notifications for this website in the phone settings and try again."; return; }
+      return navigator.serviceWorker.ready.then(function (reg) {
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toBytes(KEY) });
+      }).then(function (sub) {
+        return fetch("{% url 'push_subscribe' %}", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrf }, body: JSON.stringify(sub.toJSON()) });
+      }).then(function (r) { if (r.ok) { state.textContent = "Alerts are on for this phone."; btn.style.display = "none"; test.style.display = "inline-block"; } else { state.textContent = "Could not save the alert. Try again."; } });
+    }).catch(function () { state.textContent = "Could not turn on alerts on this phone."; });
+  };
+  test.onclick = function () { fetch("{% url 'push_test' %}", { method: "POST", headers: { "X-CSRFToken": csrf } }).then(function (r) { return r.json(); }).then(function (d) { state.textContent = d.sent ? "Test alert sent." : "No alert could be sent."; }); };
+})();
+</script>{% endif %}{% endblock %}

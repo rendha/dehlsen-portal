@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ person_name }} - Dehlsen Energy</title>
+    {% include "quotations/_pwa_head.html" %}
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .header {
+            background: #3B73B9;
+            color: white;
+            padding: 22px;
+        }
+
+        .header h1 {
+            margin: 6px 0 0;
+            font-size: 24px;
+        }
+
+        .back {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        /* plain floats: the same in every browser */
+        .stats { margin: 0 -6px 16px; }
+        .stats::after, .numbers::after { content: ""; display: table; clear: both; }
+        .stat { float: left; width: 25%; padding: 0 6px 12px; }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .stat-number {
+            font-size: 22px;
+            font-weight: bold;
+            color: #3B73B9;
+            word-break: break-word;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+
+        .loss {
+            color: #b91c1c;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 6px;
+        }
+
+        .numbers {
+            margin: 12px 0 8px;
+        }
+
+        .numbers > div {
+            float: left;
+            width: 33.33%;
+            padding-right: 8px;
+        }
+
+        .numbers.two > div {
+            width: 50%;
+        }
+
+        .numbers b {
+            display: block;
+            font-size: 16px;
+        }
+
+        .numbers small {
+            color: #6b7280;
+        }
+
+        .links a {
+            margin-right: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            color: #3B73B9;
+            font-size: 14px;
+        }
+
+        .stats.five .stat { width: 20%; }
+
+        @media (max-width: 640px) {
+            .stat, .stats.five .stat {
+                width: 50%;
+            }
+        }
+
+        /* SEARCH */
+        .search-form { display: flex; gap: 8px; margin-bottom: 14px; }
+        .search-form input[type=search] { flex: 1; min-width: 0; padding: 13px 14px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 16px; background: white; }
+        .search-form input[type=search]:focus { outline: 2px solid #3B73B9; border-color: #3B73B9; }
+        .search-form button { background: #3B73B9; color: white; border: 0; border-radius: 10px; padding: 0 20px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .count { color: #6b7280; font-size: 13px; margin: -4px 0 12px; min-height: 16px; }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <a class="back" href="{% url 'quotation_dashboard' %}">&larr; Dashboard</a>
+    <h1>{{ person_name }}</h1>
+</div>
+
+<div class="container">
+
+    <div class="stats{% if show_rates %} five{% endif %}">
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.count }}</div>
+            <div class="stat-label">Total quotations</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.clients }}</div>
+            <div class="stat-label">Customers</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.kw_display }}</div>
+            <div class="stat-label">Total kW</div>
+        </div></div>
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number">{{ totals.value_display }}</div>
+            <div class="stat-label">Total value</div>
+        </div></div>
+        {% if show_rates %}
+        <div class="stat"><div class="stat-card">
+            <div class="stat-number {% if totals.profit_negative %}loss{% endif %}">{{ totals.profit_display }}</div>
+            <div class="stat-label">Total profit</div>
+        </div></div>
+        {% endif %}
+    </div>
+
+    <div class="count" style="margin:-6px 0 12px">Totals count one quotation per client ({{ totals.clients }} client{{ totals.clients|pluralize }}, {{ totals.count }} quotation{{ totals.count|pluralize }}).</div>
+
+    <h2>Quotations</h2>
+
+    <div class="search-form">
+        <input type="search" id="quotation-search" placeholder="Search his quotations: offer number, business, place, date" autocomplete="off" enterkeyhint="search">
+    </div>
+    <div class="count" id="quotation-count"></div>
+
+    {% for item in items %}
+
+        <div class="card" data-search="{{ item.search }}">
+
+            <h3>{{ item.offer_no }}{% if item.is_customer %} <span style="background:#dcfce7;color:#166534;border-radius:999px;padding:2px 10px;font-size:12px">&#10003; Customer</span>{% endif %}</h3>
+
+            <div>{{ item.business_name }}{% if item.location %} · {{ item.location }}{% endif %}</div>
+
+            <div class="numbers{% if not show_rates %} two{% endif %}">
+                <div><b>{{ item.kw_display }}</b><small>kW</small></div>
+                <div><b>{{ item.value_display }}</b><small>Value</small></div>
+                {% if show_rates %}<div><b class="{% if item.profit_negative %}loss{% endif %}">{{ item.profit_display }}</b><small>Profit</small></div>{% endif %}
+            </div>
+
+            <small>{{ item.category }} · {{ item.date }}</small>
+            {% if item.others %}<div><small><b>{% if item.chosen %}Counted: chosen by you{% else %}Counted: lowest of {{ item.others|length|add:1 }}{% endif %}</b></small></div>{% endif %}
+
+            <div class="links">
+                <a href="{% url 'quotation_detail' item.id %}">Open</a>
+                <a href="{% url 'quotation_pdf_view' item.id item.pdf_name %}">PDF</a>
+                <a href="{% url 'create_quotation' %}?from={{ item.id }}">+ Quote again</a>
+            </div>
+            <div class="noprint" style="margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb">
+                {% if item.customer_offer %}
+                <div style="margin-bottom:8px"><span style="background:#dcfce7;color:#166534;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:bold">&#10003; Customer: {{ item.customer_offer }}</span>
+                    <form method="post" action="{% url 'confirm_customer' item.customer_id %}" style="display:inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" style="background:none;border:0;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px">Undo</button></form>
+                </div>
+                {% endif %}
+                <form method="post" action="{% url 'confirm_customer_choice' %}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    {% if item.others %}
+                    <select name="quotation_id" style="padding:9px;border:1px solid #d1d5db;border-radius:8px;max-width:100%">
+                        <option value="{{ item.id }}" {% if item.id == item.preselect %}selected{% endif %}>{{ item.offer_no }} · {{ item.kw_display }} · {{ item.value_display }}</option>
+                        {% for other in item.others %}<option value="{{ other.id }}" {% if other.id == item.preselect %}selected{% endif %}>{{ other.offer_no }} · {{ other.kw_display }} · {{ other.value_display }}</option>{% endfor %}
+                    </select>
+                    {% else %}<input type="hidden" name="quotation_id" value="{{ item.id }}">{% endif %}
+                    <button type="submit" style="border:0;border-radius:8px;padding:10px 14px;font-weight:bold;cursor:pointer;background:#eef4fb;color:#3B73B9">Customer said OK{% if item.others %}: confirm the selected quotation{% endif %}</button>
+                    <span class="muted">Not OK? Use “+ Quote again” for a requote.</span>
+                </form>
+            </div>
+
+            {% if item.others %}
+            <details style="margin-top:10px">
+                <summary style="cursor:pointer;color:#3B73B9;font-weight:bold;font-size:14px">+{{ item.others|length }} other quotation{{ item.others|length|pluralize }} for this client</summary>
+                {% for other in item.others %}
+                <div style="border-top:1px solid #e5e7eb;margin-top:10px;padding-top:10px">
+                    <b>{{ other.offer_no }}</b> · {{ other.kw_display }} · {{ other.value_display }}{% if show_rates %} · profit {{ other.profit_display }}{% endif %}<br>
+                    <small>{{ other.category }} · {{ other.date }}</small>
+                    <div class="links">
+                        <a href="{% url 'quotation_detail' other.id %}">Open</a>
+                        <a href="{% url 'quotation_pdf_view' other.id other.pdf_name %}">PDF</a>
+                    </div>
+                    <form method="post" action="{% url 'set_counted' other.id %}" style="margin-top:6px">
+                        {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" style="background:#eef4fb;color:#3B73B9;border:0;border-radius:8px;padding:8px 14px;font-weight:bold;cursor:pointer">Count this one</button>
+                    </form>
+                </div>
+                {% endfor %}
+                {% if item.chosen %}
+                <form method="post" action="{% url 'set_counted' item.id %}" style="margin-top:10px">
+                    {% csrf_token %}<input type="hidden" name="action" value="clear"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" style="background:none;color:#6b7280;border:0;padding:0;text-decoration:underline;cursor:pointer">Back to counting the lowest</button>
+                </form>
+                {% endif %}
+            </details>
+            {% endif %}
+
+        </div>
+
+    {% endfor %}
+
+</div>
+
+<div class="container">
+    <div class="card" id="quotation-empty" style="display:none">No quotation matches.</div>
+</div>
+
+{% include "quotations/_live_filter.html" %}
+<script>liveFilter("quotation-search", ".card[data-search]", "quotation-count", "quotation-empty");</script>
+
+{% include "quotations/_pwa_register.html" %}
+
+</body>
+</html>
