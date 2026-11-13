@@ -89,7 +89,7 @@ class Command(BaseCommand):
             if user is not None:
                 Profile.objects.update_or_create(user=user, defaults={"director": True})
                 self.stdout.write("%s: marked as director" % user.username)
-        for name, password in RESET_PASSWORDS.items():
+        for name, password in ({} if options["no_create"] else RESET_PASSWORDS).items():     # --no-create never touches a password
             user = self.find_user(name)
             if user is None:
                 user = User(username=name.lower(), first_name=name)
