@@ -13,7 +13,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import dashboard, notify, sales
+from . import dashboard, notify, payments, sales
+from .models import Collection, Payment
 from .models import Lead, LeadEvent, SiteDetails, SitePhoto, PushSubscription, Task, TaskType
 
 CACHE_VERSION = "2"            # change when the icons or the offline page change, so phones fetch the new ones
@@ -490,17 +491,76 @@ def home(request):
     """The four buttons.  Everybody who signed in sees all four."""
     show_dash = _is_director(request.user) or _is_lead_head(request.user)
     rng = request.GET.get("r") if request.GET.get("r") in ("month", "quarter", "year") else "month"
-    return render(request, "portal/home.html", {"name": request.user.get_full_name() or request.user.get_username(),
+    periods = _periods(sales.for_user(request.user), director=_is_director(request.user))
+    try:
+        coll = payments.build(request.user, _is_director(request.user))
+    except Exception:           # the home page must open even if the payment tables are not ready
+        coll = None
+    return render(request, "portal/home.html", {"coll": coll, "name": request.user.get_full_name() or request.user.get_username(),
                                                 "dash": dashboard.build(rng) if show_dash else None, "rng": rng,
-                                                "periods": _periods(sales.for_user(request.user), director=_is_director(request.user))})
+                                                "periods": periods, "is_director": _is_director(request.user), "show_collections": coll is not None})
 
 
 def targets(request):
     """Everybody's target, achieved and percent: for the sales people and the directors only."""
-    periods = _periods(sales.for_user(request.user), director=_is_director(request.user))
-    if not periods:
+    previous = request.GET.get("q") == "prev"
+    periods = _periods(sales.for_user(request.user, previous=previous), director=_is_director(request.user))
+    if not periods and not previous:
         return redirect("home")
-    return render(request, "portal/targets.html", {"periods": periods})
+    return render(request, "portal/targets.html", {"periods": periods, "previous": previous})
+
+
+def collections(request):
+    """Payment collected / still to collect.  Everybody sees the whole company and every region first; a director then sees every person and every
+    pending customer, a sales person his own total and his own pending customers."""
+    director = _is_director(request.user)
+    view = request.GET.get("v") if request.GET.get("v") in ("person", "region", "both") else "both"
+    data = payments.build(request.user, director, request.GET.get("person", "") if director else "", request.GET.get("region", "") if director else "")
+    for p in data["projects"]:
+        p["can_edit"] = True            # the list is already limited to his own customers (a director may edit all)
+    return render(request, "portal/collections.html", {"d": data, "director": director, "view": view, "today": timezone.localdate().isoformat(),
+                                                       "stages": Payment.STAGES})
+
+
+@require_POST
+def collection_pay(request, pk):
+    """The sales person of the customer (or a director) records a payment received."""
+    from decimal import Decimal, InvalidOperation
+    from django.db.models import F
+    c = get_object_or_404(Collection, pk=pk)
+    if not payments.can_edit(request.user, c, _is_director(request.user)):
+        messages.error(request, "This customer belongs to another sales person.")
+        return redirect("collections")
+    try:
+        amount = Decimal(request.POST.get("amount", "").replace(",", "").strip())
+        date = datetime.date.fromisoformat(request.POST.get("date") or timezone.localdate().isoformat())
+    except (InvalidOperation, ValueError):
+        amount, date = None, None
+    if not amount or amount <= 0 or date > timezone.localdate():
+        messages.error(request, "Enter the amount, and a date that is not in the future.")
+    else:
+        stage = request.POST.get("stage") if request.POST.get("stage") in dict(Payment.STAGES) else "other"
+        Payment.objects.create(collection=c, amount=amount, date=date, stage=stage, note=request.POST.get("note", "")[:200], entered_by=request.user)
+        Collection.objects.filter(pk=c.pk).update(received=F("received") + amount)
+        messages.success(request, "Payment recorded for %s." % c.customer)
+    return redirect(request.POST.get("next") or "collections")
+
+
+@require_POST
+def collection_pay_delete(request, pk):
+    """Remove a wrong entry: the person who entered it (same day) or a director.  The total goes down by that amount."""
+    from django.db.models import F
+    pay = get_object_or_404(Payment, pk=pk)
+    director = _is_director(request.user)
+    if pay.from_sheet and not director:
+        messages.error(request, "Only a director can remove an entry that came from the sheet.")
+    elif not (director or (pay.entered_by_id == request.user.id and pay.created_at.date() == timezone.now().date())):
+        messages.error(request, "Only a director can remove this payment now.")
+    else:
+        Collection.objects.filter(pk=pay.collection_id).update(received=F("received") - pay.amount)
+        pay.delete()
+        messages.success(request, "Payment removed.")
+    return redirect(request.POST.get("next") or "collections")
 
 
 User = get_user_model()

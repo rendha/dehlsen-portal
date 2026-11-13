@@ -258,3 +258,52 @@ class SitePhoto(models.Model):
 
     class Meta:
         ordering = ["id"]
+
+
+class Collection(models.Model):
+    """One sold project and how much of its price has been collected.  Loaded from the payment sheet (import_collections), then edited in Admin."""
+    project_id = models.CharField(max_length=30, unique=True)
+    booking_date = models.DateField(null=True, blank=True)
+    customer = models.CharField(max_length=150)
+    region = models.CharField(max_length=60, blank=True)
+    sales_name = models.CharField(max_length=60, help_text="The sales person, as named in the sheet (Huda, Fouzan ...).")
+    kw = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    net_value = models.DecimalField(max_digits=14, decimal_places=2, default=0, help_text="Deal value minus discount (Rs).")
+    received = models.DecimalField(max_digits=14, decimal_places=2, default=0, help_text="Total collected so far (Rs).")
+    segment = models.CharField(max_length=20, blank=True)
+    system_type = models.CharField(max_length=20, blank=True)
+    almm = models.CharField("DCR / NDCR", max_length=10, blank=True)
+    panel = models.CharField(max_length=60, blank=True)
+    inverter = models.CharField(max_length=60, blank=True)
+    work_status = models.CharField(max_length=60, blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    quotation_id = models.IntegerField(null=True, blank=True, db_index=True, help_text="The confirmed quotation this came from (filled automatically).")
+
+    class Meta:
+        ordering = ["-booking_date", "project_id"]
+
+    @property
+    def balance(self):
+        return self.net_value - self.received
+
+    def __str__(self):
+        return "%s %s" % (self.project_id, self.customer)
+
+
+class Payment(models.Model):
+    """One payment received from a customer.  Added by the sales person of that customer (or a director); adds to Collection.received."""
+    STAGES = [("advance", "Advance"), ("material", "Material dispatch"), ("installation", "Installation"), ("handover", "Handover"), ("other", "Other")]
+    collection = models.ForeignKey(Collection, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    date = models.DateField(null=True, blank=True, help_text="Empty for old payments whose date the sheet did not have.")
+    stage = models.CharField(max_length=15, choices=STAGES, default="other")
+    note = models.CharField(max_length=200, blank=True)
+    from_sheet = models.BooleanField(default=False)
+    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return "%s %s" % (self.collection.project_id, self.amount)

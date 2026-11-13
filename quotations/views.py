@@ -227,6 +227,34 @@ def _lead_model():
         return None
 
 
+def _site_details_for(quotation):
+    """The site visit details of the lead this quotation belongs to (matched by the saved quotation id, else the phone), for the quotation page.
+    Shown only; nothing in the quotation is changed by them.  None when there is no lead or no details (and in the stand-alone quotation site)."""
+    Lead = _lead_model()
+    if Lead is None:
+        return None
+    try:
+        lead = Lead.objects.filter(quotation_id=quotation.id).first()
+        if lead is None:
+            digits = "".join(c for c in (getattr(quotation, "mobile", "") or getattr(quotation, "phone", "") or "") if c.isdigit())[-10:]
+            if len(digits) == 10:
+                lead = next((l for l in Lead.objects.exclude(phone="") if "".join(c for c in l.phone if c.isdigit())[-10:] == digits), None)
+        site = getattr(lead, "site", None) if lead else None
+        if site is None:
+            return None
+        rows = [(label, getattr(site, field)) for field, label in (
+            ("roof_length", "Roof length"), ("roof_width", "Roof width"), ("roof_layout", "Roof / plant layout"),
+            ("inverter_position", "Inverter position"), ("acdb_position", "ACDB position"), ("dcdb_position", "DCDB position"),
+            ("earth_rod_position", "Earth rod position"), ("cable_laying", "Cable laying"), ("meter_position", "Meter position"))
+            if getattr(site, field)]
+        photos = lead.photos.count()
+        if not rows and not photos:
+            return None
+        return {"rows": rows, "photos": photos, "lead_id": lead.id, "updated": site.updated_at}
+    except Exception:
+        return None
+
+
 def _open_lead_by_phone(Lead, phone):
     digits = "".join(c for c in (phone or "") if c.isdigit())[-10:]
     if len(digits) < 10:
@@ -505,6 +533,30 @@ def _missing_fields(request, quotation):
 
 
 @transaction.atomic
+def _alert_margin(request, quotation, previous_final):
+    """The price was typed in BELOW the calculated price: the margin is decreasing.  Tell the directors on their phones (once per new price)."""
+    try:
+        if Decimal(quotation.final_quotation_price or 0) == previous_final:
+            return
+        from . import low_margin as lm
+        r = lm.row_of(quotation)
+        if not r:
+            return
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q as _Q
+        from portal import notify
+        title = "Margin decreasing%s: %s" % (" - LOSS" if r["loss"] else "", quotation.offer_no)
+        body = "%s quoted %s. Calculated Rs %s, quoted Rs %s. Margin Rs %s (%s%%) -> Rs %s (%s%%)." % (
+            r["person"], r["client"], stats.indian(r["calculated_value"]), stats.indian(r["their_value"]),
+            stats.indian(r["was_amount"]), r["was_percent"].normalize(), stats.indian(r["now_amount"]), r["now_percent"].normalize())
+        url = reverse("low_margin")
+        for u in get_user_model().objects.filter(is_active=True).filter(_Q(is_superuser=True) | _Q(portal_profile__director=True)).distinct():
+            if u.id != request.user.id:
+                notify.send_push(u, title, body, url)
+    except Exception:            # an alert must never stop a quotation from being saved
+        pass
+
+
 def quotation_detail(request, quotation_id):
 
     quotation = get_object_or_404(Quotation, id=quotation_id)
@@ -666,6 +718,7 @@ def quotation_detail(request, quotation_id):
         # A blank box means "automatic".
         if "structure_wage" in request.POST:
             quotation.structure_work = decimal_or_zero(request.POST.get("structure_wage"))
+        previous_final = Decimal(quotation.final_quotation_price or 0)
         quotation.final_quotation_price = decimal_or_zero(request.POST.get("final_quotation_price"))
 
         # ---- customer details (editable on the detail page too) ----
@@ -686,6 +739,7 @@ def quotation_detail(request, quotation_id):
 
         # ---- ONE calculation ----
         calculate_quotation(quotation)
+        _alert_margin(request, quotation, previous_final)
 
         return redirect("quotation_detail", quotation_id=quotation.id)
 
@@ -715,6 +769,7 @@ def quotation_detail(request, quotation_id):
         "quotations/quotation_detail.html",
         {
             "quotation": quotation,
+            "site_details": _site_details_for(quotation),
             "panel_options": panel_options,
             "panel2_options": panel2_options,
             "is_both": is_both,
@@ -788,6 +843,13 @@ def _person_url():
         return reverse("person_dashboard")
     except NoReverseMatch:
         return ""
+
+
+def low_margin(request):
+    """Admin passkey only: the quotations given below their calculated price (who, calculated value, their value, margin lost, margin now)."""
+    from . import low_margin as lm
+    unlocked = rates_unlocked(request)
+    return render(request, "quotations/low_margin.html", {"rows": lm.rows() if unlocked else [], "show_rates": unlocked})
 
 
 def dashboard(request):

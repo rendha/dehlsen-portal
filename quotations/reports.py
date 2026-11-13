@@ -307,6 +307,11 @@ def monthly_report(request):
 
     earlier = list(Quotation.objects.filter(created_at__gte=datetime.combine(_add_months(first, -1), time.min, tzinfo=INDIA), created_at__lt=start))
     report = month_context(quotations, earlier, first, today)
+    try:
+        from portal import monthly              # the portal's own sections (sales, collections, regions, people, targets ...)
+        report["extra"] = monthly.build(first, today)
+    except Exception:
+        report["extra"] = None
     return render(request, "quotations/monthly_report.html", report)
 
 

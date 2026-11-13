@@ -1,6 +1,6 @@
-# Render Blueprint for the Dehlsen portal (one web service).
-# It does NOT create a database: DATABASE_URL is typed in once in the Render dashboard (sync: false), so the portal can use
-# an existing Postgres database. First test it against a COPY of your data, not the live database.
+# Render Blueprint for the Dehlsen portal: the web site + a daily reminder job.
+# It does NOT create a database: DATABASE_URL is typed in once in the Render dashboard (sync: false).
+# Phone alerts (push) work only when the three VAPID values are filled (py make_vapid_keys.py makes them); leave them empty to switch alerts off.
 services:
   - type: web
     name: dehlsen-portal
@@ -15,5 +15,30 @@ services:
         generateValue: true
       - key: ADMIN_PASSKEY
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false
       - key: WEB_CONCURRENCY
         value: "1"
+
+  - type: cron                     # the daily reminders: idle leads, quotation follow-ups, director summary
+    name: dehlsen-reminders
+    runtime: docker
+    plan: starter
+    region: singapore
+    schedule: "30 3 * * *"         # 03:30 UTC = 9:00 am India
+    dockerCommand: python manage.py send_reminders
+    envVars:
+      - key: DATABASE_URL
+        sync: false                # the same INTERNAL database URL as the web service
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false

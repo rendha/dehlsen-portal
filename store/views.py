@@ -427,6 +427,45 @@ def import_quotation(request):
 
 
 # ---------------------------------------------------------------------------------------------- the material sheet
+def _digits10(text):
+    """The last 10 digits of a phone number (so +91 98765 43210 and 9876543210 match)."""
+    return re.sub(r"\D", "", text or "")[-10:]
+
+
+def _hand_over_to_service(customer):
+    """A completed Project becomes a customer + site in the Service list (cleaning and service visits start after installation).
+    The customer is matched by phone (last 10 digits), so nobody is added twice; the site by its place.  Returns a short sentence for the message,
+    and never stops the completion if something is missing."""
+    try:
+        from cleaning.models import Customer as ServiceCustomer, Site
+        digits = _digits10(customer.phone)
+        service = None
+        if len(digits) == 10:
+            for other in ServiceCustomer.objects.exclude(phone=""):
+                if _digits10(other.phone) == digits:
+                    service = other
+                    break
+        made = service is None
+        if made:
+            service = ServiceCustomer.objects.create(name=customer.name, contact_person=customer.person, phone=customer.phone)
+        place = (customer.location or "").strip()
+        size = re.sub(r"(?i)\s*k\s*w\s*p?$", "", (customer.system_size or "").strip())
+        site = None
+        for existing in service.sites.all():
+            if (existing.location or existing.address or "").strip().lower() == place.lower():
+                site = existing
+                break
+        site_made = site is None
+        if site_made:
+            Site.objects.create(customer=service, location=place[:250], address=place[:500], solar_kw=size[:20])
+        elif size and not site.solar_kw:
+            site.solar_kw = size[:20]
+            site.save(update_fields=["solar_kw"])
+        return " Added to the Service customers%s." % (" (new customer)" if made else " (existing customer, %s)" % ("new site" if site_made else "site already there"))
+    except Exception as error:                                            # the Service list is a bonus: never block the completion
+        return " (Could not add to the Service customers: %s.)" % error
+
+
 def _rows(customer):
     stocks = list(Stock.objects.all())
     reserved = reserved_by_stock()
@@ -634,7 +673,7 @@ def customer_detail(request, pk):
             else:
                 customer.status = Customer.DONE
                 customer.save()
-                messages.success(request, "Marked completed.")
+                messages.success(request, "Marked completed." + _hand_over_to_service(customer))
         elif action == "reopen" and project:
             customer.status = Customer.SENT
             customer.save()

@@ -1,0 +1,9 @@
+<div class="card"><h3 style="margin:0 0 6px">{{ title }}</h3>
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
+<tr style="color:var(--mut);text-align:right;font-size:12px"><th style="text-align:left">Name</th><th>Sold</th><th>Collected</th><th>To collect</th><th>%</th></tr>
+{% for l in lines %}<tr style="border-top:1px solid var(--line);text-align:right"><td style="text-align:left;padding:8px 4px">{% if director %}<a href="?v={{ view }}&{{ kind }}={{ l.name|urlencode }}" style="color:inherit"><b>{{ l.name }}</b></a>{% else %}<b>{{ l.name }}</b>{% endif %} <small style="color:var(--mut)">{{ l.projects }} proj</small>
+<div style="background:#e8eef6;border-radius:999px;height:6px;margin-top:4px;width:120px"><div style="width:{{ l.bar }}%;height:100%;background:var(--green);border-radius:999px"></div></div></td>
+<td>{{ l.net_short }}</td><td style="color:var(--green)">{{ l.got_short }}</td><td><b style="color:var(--orange)">{{ l.left_short }}</b></td><td>{{ l.percent }}%</td></tr>
+{% if director and view != 'region' %}<tr><td colspan="5" style="text-align:left;padding:0 4px 8px;font-size:12px;color:var(--mut)">{% for x in l.sub_list %}{{ x.name }} {{ x.got_short }} / {{ x.left_short }} left{% if not forloop.last %} &middot; {% endif %}{% endfor %}</td></tr>{% endif %}
+{% endfor %}
+</table></div></div>

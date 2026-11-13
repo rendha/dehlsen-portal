@@ -80,6 +80,13 @@ def build(kind="month", today=None):
         rows.append({"n": stale, "title": "Leads with no follow-up for 7 days", "sub": "Leads · still open", "url": reverse("leads") + "?stale=1"})
         nolist = Customer.objects.exclude(status=Customer.DONE).filter(lines__isnull=True).distinct().count()
         rows.append({"n": nolist, "title": "Confirmed customers with no material list", "sub": "Project · the store cannot start packing", "url": "/project/"})
+        try:
+            from quotations import low_margin
+            cut = low_margin.rows(limit=200)
+            if cut:
+                rows.append({"n": len(cut), "title": "Quotations given below the calculated price", "sub": "Quotations · margin decreased (admin passkey page)", "url": reverse("low_margin")})
+        except Exception:
+            pass
         owing, balance = 0, Decimal(0)
         for c in Customer.objects.all():
             paid = c.payments.aggregate(t=Sum("amount"))["t"] or Decimal(0)

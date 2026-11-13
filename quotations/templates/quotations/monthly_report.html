@@ -73,6 +73,8 @@
         <div class="when">{{ first|date:"F Y" }}<small>{% if is_this_month %}Up to {{ printed|date:"d M Y" }} (month not finished){% else %}Full month{% endif %}</small></div>
     </div>
 
+    {% include "portal/_monthly_extra.html" %}
+
     <h2>1. Summary</h2>
     <div class="stats">
         <div class="stat"><div class="l">Quotations made</div><div class="v">{{ totals.count }}</div><div class="s">{{ per_day }} a day on average</div></div>

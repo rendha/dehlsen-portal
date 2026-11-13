@@ -23,10 +23,6 @@
 <div class="d2">
 {% if dash.attention %}<div class="card"><b>Needs attention today</b>
 {% for a in dash.attention %}<div class="at"><b class="n {% if not a.n %}z{% endif %}">{{ a.n }}</b><div class="t"><b>{{ a.title }}</b><small>{{ a.sub }}</small></div><a class="pill" style="background:#fff;color:var(--ink);border:1px solid var(--line)" href="{{ a.url }}">Open</a></div>{% endfor %}</div>{% endif %}
-{% if dash.target %}<div class="card"><div class="eyebrow" style="color:var(--mut)">Sales target · this quarter</div>
-<div style="font-size:30px;font-weight:700">₹{{ dash.target.got }} <span style="font-size:13px;font-weight:400;color:var(--mut)">of ₹{{ dash.target.target }}</span></div>
-<div class="bar"><i style="width:{{ dash.target.bar }}%"></i></div><small style="color:var(--mut)">{{ dash.target.percent }}% done · {{ dash.target.days_left }} days left (time passed {{ dash.target.time_percent }}%)</small>
-<div style="margin-top:10px">{% for p in dash.target.places %}<div class="kv"><span>{{ p.name }}{% if p.who %} · {{ p.who }}{% endif %}</span><b>{{ p.percent }}%</b></div><div class="bar"><i style="width:{{ p.bar }}%"></i></div>{% endfor %}</div></div>{% endif %}
 </div>
 
 <div class="d3">

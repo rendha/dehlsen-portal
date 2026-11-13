@@ -34,14 +34,19 @@ def people_of(t):
 
 
 def count(people, start, end):
-    """-> (value, customers) of the confirmed customers of these people inside the dates."""
+    """-> (value, customers) of these people inside the dates: the sold value (price after discount) of their projects in the
+    payment collection list (portal.Collection: loaded from the sheet, and added automatically when a quotation is confirmed), by booking date."""
+    from . import payments
+    from .models import Collection
     keys = set()
     for u in people:
         keys |= keys_of(u)
-    found = Quotation.objects.filter(is_customer=True, date__gte=start, date__lte=end)
-    rows = [r for r in stats.rows_of(found) if stats.name_key(r["customer_name"]) in keys]
-    s = stats.summarize_clients(rows)
-    return s["value"], s["clients"]
+    value, clients = Decimal(0), 0
+    for c in Collection.objects.filter(booking_date__gte=start, booking_date__lte=end):
+        if payments.is_mine(keys, c.sales_name):
+            value += Decimal(c.net_value)
+            clients += 1
+    return value, clients
 
 
 def is_year(t):
@@ -138,19 +143,28 @@ def build(today=None):
         target = sum((l["target"] for l in lines), Decimal(0))
         got = sum((l["got"] for l in lines), Decimal(0))
         company[kind] = {"target_short": short(target), "got_short": short(got), "percent": int((got / target * 100).to_integral_value()) if target else 0,
-                         "bar": min(int((got / target * 100)) if target else 0, 100)}
+                         "bar": min(int((got / target * 100)) if target else 0, 100),
+                         "target_text": indian(target), "got_text": indian(got), "left_short": short(max(target - got, Decimal(0))), "over_short": short(max(got - target, Decimal(0))), "over": got > target}
     return out, company
 
 
-def for_user(user, today=None):
-    """-> [{key, title, mine, board, company}] for the quarter and the year.  `mine` = the line of his place (or of himself)."""
+def for_user(user, today=None, previous=False):
+    """-> [{key, title, mine, board, company}] for the quarter and the year.  `mine` = the line of his place (or of himself).
+    previous=True -> only the quarter before the current one (as it ended)."""
+    if previous:
+        import datetime
+        today = today or timezone.localdate()
+        cur = [t for t in SalesTarget.objects.all() if not is_year(t) and t.start_date <= today <= t.end_date]
+        if not cur:
+            return []
+        today = min(t.start_date for t in cur) - datetime.timedelta(days=1)
     lines, company = build(today)
     profile = getattr(user, "portal_profile", None)
     my_keys = {("u", user.id)}
     if profile is not None and profile.place_id:
         my_keys.add(("p", profile.place_id))
     result = []
-    for key, title in (("quarter", "This quarter"), ("year", "This year")):
+    for key, title in ((("quarter", "Previous quarter"),) if previous else (("quarter", "This quarter"), ("year", "This year"))):
         if not lines[key]:
             continue
         mine = next((l for l in lines[key] if l["key"] in my_keys), None)

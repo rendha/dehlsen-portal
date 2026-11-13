@@ -1,8 +1,12 @@
 {% for p in periods %}
 <div class="card">
 <h3 style="margin:0 0 4px">{{ p.title }}</h3>
-<small style="color:var(--mut)">Company: <b>{{ p.company.got_short }}</b> of {{ p.company.target_short }} ({{ p.company.percent }}%)</small>
-<div style="background:#e8eef6;border-radius:999px;height:10px;overflow:hidden;margin:4px 0 12px"><div style="width:{{ p.company.bar }}%;height:100%;background:var(--blue)"></div></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-top:6px">
+<div><small style="color:var(--mut)">Overall target</small><b style="display:block;font-size:19px">{{ p.company.target_short }}</b></div>
+<div><small style="color:var(--mut)">Achieved</small><b style="display:block;font-size:19px;color:var(--green)">{{ p.company.got_short }}</b></div>
+<div><small style="color:var(--mut)">{% if p.company.over %}Above target{% else %}Still to go{% endif %}</small><b style="display:block;font-size:19px;color:var(--orange)">{% if p.company.over %}{{ p.company.over_short }}{% else %}{{ p.company.left_short }}{% endif %}</b></div></div>
+<div style="background:#e8eef6;border-radius:999px;height:12px;overflow:hidden;margin:8px 0 2px"><div style="width:{{ p.company.bar }}%;height:100%;background:var(--blue)"></div></div>
+<small style="color:var(--mut)">Whole company &middot; {{ p.company.percent }}% of the target</small><div style="height:10px"></div>
 {% if p.mine %}{% with m=p.mine %}
 <div style="border:2px solid var(--orange);border-radius:14px;padding:12px;margin-bottom:12px">
 <div style="font-weight:700;margin-bottom:8px">{{ m.name }} <small style="color:var(--mut);font-weight:400">&middot; {{ m.label }}</small></div>

@@ -1,0 +1,14 @@
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">Payment collection</h3><a href="{% url 'collections' %}" style="font-size:13px">open full page</a></div>
+<small style="color:var(--mut)">Whole company</small>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin:6px 0 8px">
+<div><small style="color:var(--mut)">Sold</small><b style="display:block;font-size:19px">{{ coll.total.net_short }}</b></div>
+<div><small style="color:var(--mut)">Collected</small><b style="display:block;font-size:19px;color:var(--green)">{{ coll.total.got_short }}</b></div>
+<div><small style="color:var(--mut)">Pending</small><b style="display:block;font-size:19px;color:var(--orange)">{{ coll.total.left_short }}</b></div></div>
+<div style="background:#e8eef6;border-radius:999px;height:12px;overflow:hidden"><div style="width:{{ coll.total.bar }}%;height:100%;background:var(--green)"></div></div>
+<small style="color:var(--mut)">{{ coll.total.percent }}% collected &middot; {{ coll.total.projects }} projects</small>
+<div style="font-weight:600;margin-top:12px">All regions</div>
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
+<tr style="color:var(--mut);text-align:right;font-size:12px"><th style="text-align:left">Region</th><th>Sold</th><th>Collected</th><th>Pending</th><th>%</th></tr>
+{% for l in coll.by_region %}<tr style="border-top:1px solid var(--line);text-align:right"><td style="text-align:left;padding:7px 4px"><b>{{ l.name }}</b></td><td>{{ l.net_short }}</td><td style="color:var(--green)">{{ l.got_short }}</td><td><b style="color:var(--orange)">{{ l.left_short }}</b></td><td>{{ l.percent }}%</td></tr>{% endfor %}
+</table></div></div>

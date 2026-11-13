@@ -2,6 +2,7 @@
 {% block title %}Targets{% endblock %}
 {% block body %}<div class="app">
 <div class="top"><div><h1>Sales targets</h1><small>Target, achieved and percent</small></div><a class="pill" href="{% url 'home' %}">Home</a></div>
+<div class="chips" style="margin-bottom:12px"><a class="chip {% if not previous %}on{% endif %}" href="?">This quarter</a><a class="chip {% if previous %}on{% endif %}" href="?q=prev">Previous quarter</a></div>
 {% include "portal/_targets.html" %}
-{% if not periods %}<div class="card">No targets are set for this period yet. Add them in Admin &rarr; Sales targets.</div>{% endif %}
+{% if not periods %}<div class="card">{% if previous %}No earlier quarter target was found.{% else %}No targets are set for this period yet.{% endif %} Add them in Admin &rarr; Sales targets.</div>{% endif %}
 </div>{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "portal/base.html" %}
+{% block title %}Payment collection{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Payment collection</h1><small>Collected and still to collect</small></div><a class="pill" href="{% url 'home' %}">Home</a></div>
+{% with t=d.total %}
+<div class="card">
+<div style="font-weight:700;margin-bottom:6px">Whole company</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-bottom:10px">
+<div><small style="color:var(--mut)">Sold</small><b style="display:block;font-size:19px">{{ t.net_short }}</b></div>
+<div><small style="color:var(--mut)">Collected</small><b style="display:block;font-size:19px;color:var(--green)">{{ t.got_short }}</b></div>
+<div><small style="color:var(--mut)">Still to collect</small><b style="display:block;font-size:19px;color:var(--orange)">{{ t.left_short }}</b></div></div>
+<div style="background:#e8eef6;border-radius:999px;height:14px;overflow:hidden"><div style="width:{{ t.bar }}%;height:100%;background:var(--green)"></div></div>
+<small style="color:var(--mut)">{{ t.percent }}% collected &middot; {{ t.projects }} projects &middot; {{ t.kw|floatformat:0 }} kW</small>
+</div>{% endwith %}
+{% include "portal/_collection_table.html" with title="All regions" lines=d.by_region kind="region" %}
+{% if director %}<div class="chips" style="margin-bottom:12px"><a class="chip {% if view != 'region' %}on{% endif %}" href="?v=both">Show people</a><a class="chip {% if view == 'region' %}on{% endif %}" href="?v=region">Regions only</a></div>
+{% if view != 'region' %}{% include "portal/_collection_table.html" with title="By person" lines=d.by_person kind="person" %}{% endif %}
+{% else %}{% with t=d.mine %}<div class="card"><div style="font-weight:700;margin-bottom:6px">My customers</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center"><div><small style="color:var(--mut)">Sold</small><b style="display:block;font-size:19px">{{ t.net_short }}</b></div>
+<div><small style="color:var(--mut)">Collected</small><b style="display:block;font-size:19px;color:var(--green)">{{ t.got_short }}</b></div>
+<div><small style="color:var(--mut)">Pending</small><b style="display:block;font-size:19px;color:var(--orange)">{{ t.left_short }}</b></div></div>
+<small style="color:var(--mut)">{{ t.percent }}% collected &middot; {{ t.projects }} projects</small></div>{% endwith %}{% endif %}
+{% if messages %}{% for m in messages %}<div class="note {% if m.tags == 'success' %}ok{% else %}bad{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
+<div class="card"><h3 style="margin:0 0 6px">{% if director %}Pending customers{% if d.person or d.region %}: {{ d.person }}{{ d.region }} <a href="?v={{ view }}" style="font-size:13px;font-weight:400">show all</a>{% endif %}{% else %}My pending customers{% endif %} <small style="color:var(--mut);font-weight:400">({{ d.pending_count }})</small></h3>
+{% for p in d.projects %}<div style="border-top:1px solid var(--line);padding:10px 0">
+<div style="display:flex;justify-content:space-between;gap:8px"><div><b>{{ p.customer }}</b><br><small style="color:var(--mut)">{{ p.id }} &middot; {{ p.person }} &middot; {{ p.region }}</small>{% if p.info %}<br><small style="color:var(--mut)">{{ p.info }}</small>{% endif %}</div>
+<div style="text-align:right"><small style="color:var(--mut)">Pending</small><br><b style="color:var(--orange)">{{ p.left_text }}</b><br><small style="color:var(--green)">Collected {{ p.got }}</small><br><small style="color:var(--mut)">of {{ p.net }}</small></div></div>
+{% for x in p.payments %}<div style="font-size:12px;color:var(--mut);display:flex;justify-content:space-between"><span>{{ x.date }} &middot; {{ x.stage }} &middot; {{ x.amount }}{% if x.by %} &middot; {{ x.by }}{% endif %}</span>
+<form method="post" action="{% url 'collection_pay_delete' x.id %}" onsubmit="return confirm('Remove this payment?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button style="border:0;background:none;color:var(--red);cursor:pointer;font-size:12px;padding:0">remove</button></form></div>{% endfor %}
+{% if p.can_edit %}<details style="margin-top:6px"><summary class="chip" style="display:inline-block">+ Add payment</summary>
+<form method="post" action="{% url 'collection_pay' p.pk %}" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+<label>Amount received (Rs)</label><input name="amount" inputmode="decimal" required>
+<label>Date</label><input type="date" name="date" value="{{ today }}" max="{{ today }}" required>
+<label>For</label><select name="stage">{% for k, n in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select>
+<label>Note (optional)</label><input name="note" maxlength="200">
+<button class="btn g" type="submit">Save payment</button></form></details>{% endif %}
+</div>
+{% empty %}<div style="padding:10px 0">Nothing left to collect.</div>{% endfor %}
+</div>
+{% if not d.by_person %}<div class="card">{% if director %}No collection data yet. Run <code>import_collections</code>.{% else %}No customers are linked to your name yet. Ask a director to tick &ldquo;Director&rdquo; on your profile, or to set your &ldquo;name in Quotation For&rdquo; in Admin &rarr; Users &rarr; your user.{% endif %}</div>{% endif %}
+</div>{% endblock %}

@@ -1,0 +1,46 @@
+{% if extra %}
+<h2>A. Sales and collections</h2>
+{% with h=extra.headline %}{% if h %}<div class="stats">
+<div class="stat"><div class="l">Projects sold</div><div class="v">{{ h.projects }}</div><div class="s">{{ h.projects_change }}</div></div>
+<div class="stat"><div class="l">kW sold</div><div class="v">{{ h.kw }}</div><div class="s">{{ h.kw_change }}</div></div>
+<div class="stat"><div class="l">Sold value</div><div class="v">&#8377;{{ h.net }}</div><div class="s">{{ h.net_change }}</div></div>
+<div class="stat"><div class="l">Collected this month</div><div class="v pos">&#8377;{{ h.got_month }}</div><div class="s">payments dated in this month</div></div>
+<div class="stat"><div class="l">Pending now</div><div class="v neg">&#8377;{{ h.pending_now }}</div><div class="s">projects booked up to this month</div></div>
+</div>
+{% if h.undated %}<p class="muted" style="font-size:12px;margin:8px 0 0">{{ h.undated }} old payments from the sheet have no date, so they are not in &ldquo;collected this month&rdquo;.</p>{% endif %}{% endif %}{% endwith %}
+{% if extra.collections.stages %}<p style="margin:10px 0 4px"><b>Received this month by stage:</b> {% for s in extra.collections.stages %}{{ s.name }} &#8377;{{ s.amount }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}</p>{% endif %}
+
+{% if extra.regions %}<h2>B. By region (projects sold this month)</h2><div class="tablebox"><table><thead><tr><th>Region</th><th class="r">Projects</th><th class="r">kW</th><th class="r">Sold</th><th class="r">Collected</th><th class="r">Pending</th><th class="r">%</th></tr></thead><tbody>
+{% for l in extra.regions %}<tr><td><b>{{ l.name }}</b></td><td class="r">{{ l.projects }}</td><td class="r">{{ l.kw }}</td><td class="r">&#8377;{{ l.net }}</td><td class="r pos">&#8377;{{ l.got }}</td><td class="r neg">&#8377;{{ l.left }}</td><td class="r">{{ l.percent }}%</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+
+{% if extra.people %}<h2>C. By person (projects sold this month)</h2><div class="tablebox"><table><thead><tr><th>Person</th><th class="r">Projects</th><th class="r">kW</th><th class="r">Sold</th><th class="r">Collected</th><th class="r">Pending</th><th class="r">%</th></tr></thead><tbody>
+{% for l in extra.people %}<tr><td><b>{{ l.name }}</b></td><td class="r">{{ l.projects }}</td><td class="r">{{ l.kw }}</td><td class="r">&#8377;{{ l.net }}</td><td class="r pos">&#8377;{{ l.got }}</td><td class="r neg">&#8377;{{ l.left }}</td><td class="r">{{ l.percent }}%</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+
+{% if extra.targets and extra.targets.lines %}<h2>D. Quarter targets (up to the end of this month)</h2>
+<p style="margin:0 0 8px">Company: <b>&#8377;{{ extra.targets.company.got_short }}</b> of &#8377;{{ extra.targets.company.target_short }} ({{ extra.targets.company.percent }}%)</p>
+<div class="tablebox"><table><thead><tr><th>Place / person</th><th class="r">Target</th><th class="r">Achieved</th><th class="r">%</th><th>Time</th></tr></thead><tbody>
+{% for l in extra.targets.lines %}<tr><td><b>{{ l.name }}</b></td><td class="r">&#8377;{{ l.target_short }}</td><td class="r">&#8377;{{ l.got_short }}</td><td class="r"><b>{{ l.percent }}%</b></td><td>{% if l.behind %}<span class="neg">behind ({{ l.time_percent }}% of time gone)</span>{% else %}<span class="pos">on track</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+
+{% if extra.funnel %}<h2>E. From lead to customer</h2><div class="stats">
+<div class="stat"><div class="l">New leads</div><div class="v">{{ extra.funnel.leads }}</div></div>
+<div class="stat"><div class="l">Clients quoted</div><div class="v">{{ extra.funnel.quoted }}</div><div class="s">{% if extra.funnel.q_pct is not None %}{{ extra.funnel.q_pct }}% of leads{% endif %}</div></div>
+<div class="stat"><div class="l">Projects sold</div><div class="v">{{ extra.funnel.won }}</div><div class="s">{% if extra.funnel.w_pct is not None %}{{ extra.funnel.w_pct }}% of clients quoted{% endif %}</div></div></div>{% endif %}
+
+{% if extra.service %}<h2>F. Service</h2><div class="stats">
+<div class="stat"><div class="l">Completed</div><div class="v">{{ extra.service.done }}</div></div>
+<div class="stat"><div class="l">Partly done</div><div class="v">{{ extra.service.part }}</div></div>
+<div class="stat"><div class="l">Booked ahead</div><div class="v">{{ extra.service.booked }}</div></div>
+{% if extra.service.free is not None %}<div class="stat"><div class="l">Free / paid</div><div class="v">{{ extra.service.free }} / {{ extra.service.paid }}</div></div>{% endif %}</div>{% endif %}
+
+{% if extra.collections.top %}<h2>G. Most money still to collect</h2><div class="tablebox"><table><thead><tr><th>Customer</th><th>Person</th><th>Region</th><th class="r">Collected</th><th class="r">Price</th><th class="r">Pending</th></tr></thead><tbody>
+{% for c in extra.collections.top %}<tr><td>{{ c.customer }}</td><td>{{ c.person }}</td><td>{{ c.region }}</td><td class="r">&#8377;{{ c.got }}</td><td class="r">&#8377;{{ c.net }}</td><td class="r neg"><b>&#8377;{{ c.left }}</b></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+
+{% if extra.margins %}<h2 style="color:#b02a1c;border-color:#e8a39b">H. Quotations given below the calculated price</h2><div class="tablebox"><table><thead><tr><th>Quotation</th><th>Quoted by</th><th class="r">Calculated</th><th class="r">Their value</th><th class="r">Margin was</th><th class="r">Margin now</th></tr></thead><tbody>
+{% for r in extra.margins %}<tr style="color:#b02a1c"><td><b>{{ r.offer_no }}</b><br>{{ r.client }}</td><td>{{ r.person }}</td><td class="r">&#8377;{{ r.calculated_value|floatformat:0 }}</td><td class="r"><b>&#8377;{{ r.their_value|floatformat:0 }}</b></td><td class="r">&#8377;{{ r.was_amount|floatformat:0 }} ({{ r.was_percent|floatformat:"-1" }}%)</td><td class="r"><b>&#8377;{{ r.now_amount|floatformat:0 }} ({{ r.now_percent|floatformat:"-1" }}%)</b>{% if r.loss %} LOSS{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<h2 style="margin-top:34px">Quotation report</h2>
+{% endif %}
