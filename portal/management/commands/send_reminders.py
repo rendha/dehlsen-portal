@@ -101,9 +101,19 @@ class Command(BaseCommand):
             push(person, "Daily summary", body, "/")
             sent["summary"] += 1
 
+        # 3b. lead due dates: site visit by / quotation by
+        try:
+            from portal import lead_dates
+            lead_dates.daily(dry, self.stdout.write)
+        except Exception as error:
+            self.stdout.write("   lead dates skipped: %s" % error)
+
         # 4. project follow-up: KSEB deadlines, bank loans, payment gaps, warranty (see portal/project_alerts.py)
         try:
             from portal import project_alerts
+            if not dry:
+                from portal.project_sync import ensure_projects
+                ensure_projects()                    # every confirmed customer has a project (master data fills itself)
             project_alerts.run(dry, self.stdout.write)
         except Exception as error:
             self.stdout.write("   project alerts skipped: %s" % error)

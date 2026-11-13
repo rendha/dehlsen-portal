@@ -1,5 +1,5 @@
 {% extends "portal/base.html" %}
-{% block title %}Add a lead · Dehlsen Energy{% endblock %}
+{% block title %}{% if editing %}Edit lead{% else %}Add a lead{% endif %} · Dehlsen Energy{% endblock %}
 {% block head %}<style>
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 12px}
 .seg.two{grid-template-columns:repeat(2,1fr)}
@@ -10,7 +10,7 @@
 .seg input:checked+label.plain{background:#eef3fa;border-color:var(--blue);color:var(--blue)}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Add a lead</h1><small>Who to call or visit, and how important</small></div><a class="pill" href="{% url 'leads' %}">&lsaquo; Back</a></div>
+<div class="top"><div><h1>{% if editing %}Edit lead{% else %}Add a lead{% endif %}</h1><small>Who to call or visit, and how important</small></div><a class="pill" href="{% url 'leads' %}">&lsaquo; Back</a></div>
 <div class="card" style="max-width:560px;margin:auto">
 {% if error %}<div class="note bad">{{ error }}</div>{% endif %}
 <form method="post" enctype="multipart/form-data" id="nf">{% csrf_token %}
@@ -56,14 +56,19 @@
 <select id="to" name="assigned_to" required><option value="">Choose a person…</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
 <label for="to2">Second person (optional)</label>
 <select id="to2" name="assigned_to2"><option value="">Nobody</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to2 == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
-<label for="bl">Electricity bill photo (optional)</label>
+<label for="svb">Site visit by (optional date)</label>
+<input id="svb" type="date" name="site_visit_by" value="{{ values.site_visit_by }}">
+<label for="qtb">Quotation by (optional date)</label>
+<input id="qtb" type="date" name="quotation_by" value="{{ values.quotation_by }}">
+{% if bills %}<label>Electricity bill photos saved</label><div style="display:flex;gap:8px;flex-wrap:wrap">{% for b in bills %}<div style="text-align:center;font-size:12px"><a href="{% url 'lead_photo' editing.id b %}" target="_blank"><img src="{% url 'lead_photo' editing.id b %}" style="height:90px;border-radius:8px;border:1px solid var(--line)"></a><br><label style="display:inline;font-weight:400"><input type="checkbox" name="delete_bill" value="{{ b }}" style="width:auto"> remove</label></div>{% endfor %}</div>{% endif %}
+<label for="bl">{% if editing %}Add electricity bill photo{% else %}Electricity bill photo (optional){% endif %}</label>
 <input id="bl" type="file" name="bill" accept="image/*" capture="environment">
 <label for="ml">Google Maps location (optional)</label>
 <input id="ml" name="map_link" value="{{ values.map_link }}" placeholder="Paste a Google Maps link, or tap the button below" autocomplete="off">
 <button type="button" class="btn o" style="margin:6px 0 4px;padding:8px 12px;font-size:13px" onclick="useMyLocation(this,'ml')">&#128205; Use my current location</button>
 <label for="nt">Note</label>
 <textarea id="nt" name="note" rows="3" placeholder="Roof size, bill amount, best time to call…">{{ values.note }}</textarea>
-<button class="btn o" type="submit">Save lead</button>
+<button class="btn o" type="submit">{% if editing %}Save changes{% else %}Save lead{% endif %}</button>
 </form></div></div>
 <script>
 (function () { var s = document.getElementById("nc"), t = document.getElementById("ot");

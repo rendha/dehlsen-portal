@@ -202,12 +202,25 @@ def _attach_stages(items):
             l.stage, l.stage_label = "quoted", "Quoted"
         else:
             l.stage, l.stage_label = "lead", "Lead"
+        try:
+            from . import lead_dates
+            l.dates = lead_dates.status(l, today)
+            if l.quote and l.quotation_by:            # the quotation was made: its due-date task is ticked
+                lead_dates.sync_tasks(l)
+        except Exception:
+            l.dates = []
     return items
 
 
 def _lead_log(lead, actor, kind, text, alert=True):
     """Adds a line to the lead's history and tells the person who entered the lead (unless he did it himself)."""
     LeadEvent.objects.create(lead=lead, by=actor, kind=kind, text=text[:400])
+    if kind in ("visit", "site"):                     # the site visit is done: its due-date task is ticked
+        try:
+            from . import lead_dates
+            lead_dates.sync_tasks(Lead.objects.prefetch_related("events").get(pk=lead.pk), actor)
+        except Exception:
+            pass
     if alert and lead.entered_by_id and lead.entered_by_id != getattr(actor, "id", None):
         try:
             notify.send_push(lead.entered_by, "Lead: %s" % lead.customer_name, "%s %s" % (_person(actor), text), reverse("leads"))
@@ -270,6 +283,14 @@ def lead_update(request, pk):
     elif note:
         _lead_log(obj, request.user, "note", "noted: " + note)
     changed = []
+    if request.POST.get("set_dates") == "1":            # the two due dates (empty = no date)
+        from . import lead_dates
+        for field, label in (("site_visit_by", "Site visit"), ("quotation_by", "Quotation")):
+            new = lead_dates.parse(request.POST.get(field))
+            if new != getattr(obj, field):
+                setattr(obj, field, new)
+                changed.append(field)
+                _lead_log(obj, request.user, "dates", ("set %s by %s" % (label, new.strftime("%d %b %Y"))) if new else ("removed the %s date" % label.lower()), alert=False)
     if nxt_text and nxt_text != obj.next_step:
         obj.next_step = "" if nxt == "later" else nxt_text
         changed.append("next_step")
@@ -286,6 +307,12 @@ def lead_update(request, pk):
                 pass
     if changed:
         obj.save(update_fields=changed)
+        if {"site_visit_by", "quotation_by", "assigned_to"} & set(changed):
+            try:
+                from . import lead_dates
+                lead_dates.sync_tasks(Lead.objects.prefetch_related("events").get(pk=obj.pk), request.user)
+            except Exception:
+                pass
     messages.success(request, "Updated: %s." % obj.customer_name)
     return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
 
@@ -324,6 +351,11 @@ def _make_won(request, obj):
     if obj.quotation_id != quotation.id:
         obj.quotation_id = quotation.id
         obj.save(update_fields=["quotation_id"])
+    try:                                             # the new customer appears in Project progress / master data by itself
+        from .project_sync import ensure_projects
+        ensure_projects(quotation_ids=[quotation.id])
+    except Exception:
+        pass
     _lead_log(obj, request.user, "won", "marked the lead WON - the customer said yes")
     messages.success(request, "Won! %s is now a customer - the project person can prepare the material list." % obj.customer_name)
 
@@ -459,7 +491,7 @@ def lead_new(request):
     people = [u for u in User.objects.filter(is_active=True).order_by("first_name", "username")]
     error = ""
     values = {"customer_name": "", "phone": "", "area": "", "need_choice": "call", "other_text": "", "priority": "medium", "note": "", "assigned_to": "", "assigned_to2": "",
-              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": "", "map_link": ""}
+              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": "", "map_link": "", "site_visit_by": "", "quotation_by": ""}
     if request.method == "POST":
         values = {k: request.POST.get(k, "").strip() for k in values}
         person = User.objects.filter(pk=values["assigned_to"], is_active=True).first() if values["assigned_to"].isdigit() else None
@@ -485,8 +517,15 @@ def lead_new(request):
             lead = Lead.objects.create(customer_type=ctype, dcr_choice=dcr, system_type=stype, system_other=sother, map_link=values["map_link"][:500], customer_name=values["customer_name"], phone=values["phone"], area=values["area"],
                                        need=need, need_other=values["other_text"] if need == "other" else "", priority=values["priority"], note=values["note"],
                                        entered_by=request.user, assigned_to=person, assigned_to2=person2)
+            from . import lead_dates
+            lead.site_visit_by, lead.quotation_by = lead_dates.parse(values["site_visit_by"]), lead_dates.parse(values["quotation_by"])
             lead.next_step = _auto_next(lead)
-            lead.save(update_fields=["next_step"])
+            lead.save(update_fields=["next_step", "site_visit_by", "quotation_by"])
+            if lead.site_visit_by or lead.quotation_by:
+                try:
+                    lead_dates.sync_tasks(lead, request.user)
+                except Exception:
+                    pass
             _save_bill(lead, request.FILES.getlist("bill"))
             for target in (person, person2):
               if target and target.id != request.user.id:
@@ -498,6 +537,70 @@ def lead_new(request):
             return redirect("leads")
     return render(request, "portal/lead_new.html", {
         "people": [{"id": u.id, "name": _person(u)} for u in people], "values": values, "error": error})
+
+
+def lead_edit(request, pk):
+    """Change a lead after it was created: details, people, dates, location and the electricity bill photo."""
+    obj = get_object_or_404(Lead, pk=pk)
+    if not _may_touch(request.user, obj):
+        messages.warning(request, "Only the person who entered this lead, the people it is given to, or the lead heads can edit it.")
+        return redirect("leads")
+    people = [u for u in User.objects.filter(is_active=True).order_by("first_name", "username")]
+    error = ""
+    need0 = obj.need if obj.need in ("call", "visit", "call,visit") else "other"
+    values = {"customer_name": obj.customer_name, "phone": obj.phone, "area": obj.area, "need_choice": need0, "other_text": obj.need_other,
+              "priority": obj.priority, "note": obj.note, "assigned_to": str(obj.assigned_to_id or ""), "assigned_to2": str(obj.assigned_to2_id or ""),
+              "customer_type": obj.customer_type, "dcr_choice": obj.dcr_choice, "system_type": obj.system_type, "system_other": obj.system_other,
+              "map_link": obj.map_link, "site_visit_by": obj.site_visit_by.isoformat() if obj.site_visit_by else "",
+              "quotation_by": obj.quotation_by.isoformat() if obj.quotation_by else ""}
+    if request.method == "POST":
+        values = {k: request.POST.get(k, "").strip() for k in values}
+        person = User.objects.filter(pk=values["assigned_to"], is_active=True).first() if values["assigned_to"].isdigit() else None
+        person2 = User.objects.filter(pk=values["assigned_to2"], is_active=True).first() if values["assigned_to2"].isdigit() else None
+        need = values["need_choice"] if values["need_choice"] in ("call", "visit", "call,visit", "other") else ""
+        if not values["customer_name"]:
+            error = "Type the customer's name."
+        elif need == "other" and not values["other_text"]:
+            error = "Type what has to be done."
+        elif values["priority"] not in ("hot", "medium", "cold"):
+            error = "Choose Cold, Medium or Hot."
+        elif not need:
+            error = "Choose what should be done."
+        elif not person:
+            error = "Choose who gets this lead."
+        elif person2 and person2.id == person.id:
+            error = "The two people must be different."
+        if not error:
+            from . import lead_dates
+            old = (obj.assigned_to_id, obj.assigned_to2_id)
+            ctype, dcr, stype, sother = _read_type(values)
+            obj.customer_type, obj.dcr_choice, obj.system_type, obj.system_other = ctype, dcr, stype, sother
+            obj.map_link, obj.customer_name, obj.phone, obj.area = values["map_link"][:500], values["customer_name"], values["phone"], values["area"]
+            obj.need, obj.need_other, obj.priority, obj.note = need, values["other_text"] if need == "other" else "", values["priority"], values["note"]
+            obj.assigned_to, obj.assigned_to2 = person, person2
+            obj.site_visit_by, obj.quotation_by = lead_dates.parse(values["site_visit_by"]), lead_dates.parse(values["quotation_by"])
+            obj.save()
+            for pid in request.POST.getlist("delete_bill"):
+                if pid.isdigit():
+                    SitePhoto.objects.filter(lead=obj, pk=int(pid), caption=BILL).delete()
+            added = _save_bill(obj, request.FILES.getlist("bill"))
+            try:
+                lead_dates.sync_tasks(obj, request.user)
+            except Exception:
+                pass
+            _lead_log(obj, request.user, "note", "Lead edited" + (" - electricity bill added" if added else ""), alert=False)
+            for target in (person, person2):
+                if target and target.id not in old and target.id != request.user.id:
+                    try:
+                        notify.send_push(target, "Lead given to you by %s" % _person(request.user), obj.customer_name, reverse("leads"))
+                    except Exception:
+                        pass
+            messages.success(request, "Lead saved." + (" Bill photo added." if added else ""))
+            return redirect("leads")
+    bills = list(SitePhoto.objects.filter(lead=obj, caption=BILL).values_list("id", flat=True))
+    return render(request, "portal/lead_new.html", {
+        "people": [{"id": u.id, "name": _person(u)} for u in people], "values": values, "error": error,
+        "editing": obj, "bills": bills})
 
 
 @require_POST
@@ -526,7 +629,8 @@ def home(request):
     if _is_director(request.user):         # the red notice on the first page: quotations given below the calculated price
         try:
             from quotations import low_margin
-            found = low_margin.rows(limit=50)
+            since = timezone.localdate() - datetime.timedelta(days=7)          # only NEW ones: the older ones stay in the full list
+            found = [r for r in low_margin.rows(limit=300) if r["date"] and r["date"] >= since]
             if found:
                 margin_alert = {"count": len(found), "latest": found[:3]}
         except Exception:
@@ -719,8 +823,13 @@ def task_detail(request, pk):
     obj = get_object_or_404(Task.objects.select_related("task_type", "created_by", "assigned_to"), pk=pk)
     link = request.build_absolute_uri(reverse("task_mine"))
     can_finish = request.user.is_superuser or request.user.id in (obj.assigned_to_id, obj.created_by_id)
+    try:
+        from . import lead_dates
+        task_lead = lead_dates.lead_of_task(obj)[0]
+    except Exception:
+        task_lead = None
     return render(request, "portal/task_detail.html", {
-        "t": obj, "row": _task_row(obj, request.user), "new": request.GET.get("new") == "1", "can_finish": can_finish,
+        "task_lead": task_lead, "t": obj, "row": _task_row(obj, request.user), "new": request.GET.get("new") == "1", "can_finish": can_finish,
         "wa_link": notify.whatsapp_link(obj, link), "has_number": bool(notify.whatsapp_number(obj.assigned_to)),
         "message": notify.message_text(obj, link),
     })
@@ -740,6 +849,41 @@ def task_mine(request):
 
 
 @require_POST
+def task_reschedule(request, pk):
+    """Change the date (and time) of a task.  A task that came from a lead's "Site visit by" / "Quotation by" date moves the lead's date too."""
+    obj = get_object_or_404(Task, pk=pk)
+    back = _safe_next(request, reverse("task_detail", args=[obj.pk]))
+    if not (request.user.is_superuser or request.user.id in (obj.assigned_to_id, obj.created_by_id)):
+        return redirect(back)
+    try:
+        due_date = datetime.date.fromisoformat((request.POST.get("due_date") or "").strip())
+    except ValueError:
+        messages.warning(request, "Choose a date.")
+        return redirect(back)
+    raw_time = (request.POST.get("due_time") or "").strip()
+    try:
+        due_time = datetime.time.fromisoformat(raw_time) if raw_time else None
+    except ValueError:
+        due_time = None
+    obj.due_date, obj.due_time = due_date, due_time
+    obj.save(update_fields=["due_date", "due_time"])
+    try:
+        from . import lead_dates
+        lead, kind = lead_dates.lead_of_task(obj)
+        if lead is not None:
+            field = "site_visit_by" if kind == "site" else "quotation_by"
+            if getattr(lead, field) != due_date:
+                setattr(lead, field, due_date)
+                lead.save(update_fields=[field])
+                _lead_log(lead, request.user, "dates", "moved the %s date to %s (from the task)" % ("site visit" if kind == "site" else "quotation", due_date.strftime("%d %b %Y")), alert=False)
+                lead_dates.sync_tasks(Lead.objects.prefetch_related("events").get(pk=lead.pk), request.user)
+    except Exception:
+        pass
+    messages.success(request, "Date changed to %s." % due_date.strftime("%d %b %Y"))
+    return redirect(back)
+
+
+@require_POST
 def task_done(request, pk):
     obj = get_object_or_404(Task, pk=pk)
     if not (request.user.is_superuser or request.user.id in (obj.assigned_to_id, obj.created_by_id)):
@@ -748,6 +892,13 @@ def task_done(request, pk):
         obj.done, obj.done_at = False, None
     else:
         obj.done, obj.done_at = True, timezone.now()
+        try:                                              # a lead's Site visit task ticked here = the site visit is done on the lead too
+            from . import lead_dates
+            lead, kind = lead_dates.lead_of_task(obj)
+            if lead is not None and kind == "site" and not lead_dates.site_done(lead):
+                _lead_log(lead, request.user, "visit", "did the site visit (task marked done)")
+        except Exception:
+            pass
         if obj.created_by_id and obj.created_by_id != request.user.id:
             notify.send_push(obj.created_by, "Task done", "%s finished: %s" % (notify.name_of(request.user), obj.task_type.name), reverse("task"))
     obj.save(update_fields=["done", "done_at"])

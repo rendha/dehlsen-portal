@@ -26,6 +26,7 @@
 .trk .n.completed i{border-color:#1f7a43;background:#2e9e5b;color:#fff}
 .trk .n span{display:block;margin-top:4px}.trk .n small{display:block;margin:0;font-size:10px;color:var(--mut)}
 .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs a{text-decoration:none}
+.ldate{display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border-radius:8px;background:#eef2f7;color:#445}.ldate.soon{background:#fff0dd;color:#b35a08;font-weight:700}.ldate.late{background:#fdecea;color:#b02a1c;font-weight:700}.ldate.done{background:#e3f5ea;color:#1f7a43}
 </style>{% endblock %}
 {% block body %}<div class="app">
 <div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
@@ -68,6 +69,7 @@
 <b style="display:block;margin-top:4px">{{ l.customer_name }}</b>
 <small>{% if l.phone %}<a href="tel:{{ l.phone }}">{{ l.phone }}</a>{% endif %}{% if l.phone and l.area %} · {% endif %}{{ l.area }}</small>
 {% if l.note %}<small>{{ l.note }}</small>{% endif %}
+{% for d in l.dates %}<small class="ldate {{ d.state }}">&#128197; {% if d.state == "done" %}&#10003; {% endif %}{{ d.text }}</small>{% endfor %}
 <small style="margin-top:4px"><span class="st {{ l.stage }}">{{ l.stage_label }}</span>{% if l.quote %} <a href="/sales/quotation/{{ l.quote.id }}/">{{ l.quote.offer_no|default:"quotation" }}</a>{% endif %}</small>
 {% if l.next_step and not l.lost and l.stage != "confirmed" %}<small>Next: <b>{{ l.next_step }}</b> &middot; {% if l.assigned_to %}{{ l.assigned_to.first_name|default:l.assigned_to.username }}{% endif %}</small>{% endif %}
 <small>By {{ l.entered_by.first_name|default:l.entered_by.username }} → {% if l.assigned_to %}{{ l.assigned_to.first_name|default:l.assigned_to.username }}{% else %}nobody{% endif %}{% if l.assigned_to2 %} + {{ l.assigned_to2.first_name|default:l.assigned_to2.username }}{% endif %} · {{ l.created_at|date:"j M" }}</small>
@@ -86,10 +88,14 @@
 <label>Note</label><input name="note" placeholder="What the customer said">
 <label>What comes next?</label><select name="next"><option value="">No change</option><option value="visit">Site visit</option><option value="call">Call</option><option value="quotation">Quotation</option><option value="other">Other (type)</option><option value="later">Decide later</option></select>
 <input name="next_other" placeholder="Type the next step (only for Other)">
+<input type="hidden" name="set_dates" value="1">
+<label>Site visit by (date; clear it to remove)</label><input type="date" name="site_visit_by" value="{{ l.site_visit_by|date:'Y-m-d' }}">
+<label>Quotation by (date; clear it to remove)</label><input type="date" name="quotation_by" value="{{ l.quotation_by|date:'Y-m-d' }}">
 <label>Who does it?</label><select name="person"><option value="">Same person</option>{% for p in people_options %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
 <button class="mini" type="submit" style="width:100%">Save update</button></form></details>{% endif %}
 </div>
 <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center;font-weight:700" href="{% url 'lead_edit' l.id %}">&#9998; Edit lead / add bill</a>
 {% if not l.lost and l.stage != "confirmed" %}{% if not l.has_call %}<form method="post" action="{% url 'lead_quick' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as called?');">{% csrf_token %}<input type="hidden" name="what" value="call"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Called</button></form>{% endif %}
 {% if not l.has_visit %}<form method="post" action="{% url 'lead_quick' l.id %}">{% csrf_token %}<input type="hidden" name="what" value="visit"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Site visit</button></form>{% endif %}{% endif %}
 <a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="{% url 'lead_site' l.id %}">Site details{% if l.site %} &#10004;{% endif %}</a>

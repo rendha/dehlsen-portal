@@ -1,6 +1,7 @@
 """Project progress: where every customer's installation stands (stage ticks), what payment that makes due, and who may update it.
 Fidha and Riswan tick the stages; directors see everything; a sales person sees the projects of his own customers."""
 import datetime
+import re
 from decimal import Decimal
 from difflib import SequenceMatcher
 
@@ -249,8 +250,9 @@ def _owner(w):
 
 def find_store_customer(w, by_quotation, skeys, stats):
     """The store customer (material list) of this project: by the quotation both came from, else by the same name."""
-    if w.collection_id and w.collection.quotation_id and w.collection.quotation_id in by_quotation:
-        return by_quotation[w.collection.quotation_id]
+    qid = (w.collection.quotation_id if w.collection_id else None) or w.quotation_id
+    if qid and qid in by_quotation:
+        return by_quotation[qid]
     best, hit = 0.0, None
     for name in {w.name, w.collection.customer if w.collection_id else ""}:
         k = stats.name_key(name)
@@ -266,7 +268,7 @@ def find_store_customer(w, by_quotation, skeys, stats):
 def quote_info(w, cust, qmap):
     """Quotation value from the quotation app (through the payment record's quotation), else the store's copy of it; and the deal value."""
     c = w.collection if w.collection_id else None
-    q = qmap.get(c.quotation_id) if c and c.quotation_id else None
+    q = qmap.get((c.quotation_id if c else None) or w.quotation_id)
     value, offer = None, ""
     if q is not None:
         value, offer = q["final_quotation_price"], q["offer_no"]
@@ -275,7 +277,23 @@ def quote_info(w, cust, qmap):
     return {"quotation": value, "offer": offer, "deal": c.net_value if c else None}
 
 
-def progress(request):
+def _auto_projects():
+    """A customer confirmed in the quotation app and not yet in the project list is added now (cheap check first)."""
+    try:
+        from quotations.models import Quotation
+        from .project_sync import IGNORED_OFFERS, ensure_projects
+        known = set(ProjectWork.objects.exclude(quotation_id=None).values_list("quotation_id", flat=True))
+        known |= set(Collection.objects.exclude(quotation_id=None).filter(works__isnull=False).values_list("quotation_id", flat=True))
+        missing = list(Quotation.objects.filter(is_customer=True).exclude(id__in=known).exclude(offer_no__in=IGNORED_OFFERS).values_list("id", flat=True))
+        if missing:
+            ensure_projects(quotation_ids=missing)
+    except Exception:
+        pass
+
+
+def _rows_for(request):
+    """One row per customer the person may see, with the money, the stage and the deadlines worked out.  -> rows"""
+    _auto_projects()
     user = request.user
     editor, director = can_edit(user), _director(user)
     works = list(ProjectWork.objects.select_related("collection"))
@@ -288,7 +306,8 @@ def progress(request):
     skeys = [(stats.name_key(c.name), c) for c in store_customers]
     by_quotation = {c.quotation_id: c for c in store_customers if c.quotation_id}
     from quotations.models import Quotation
-    qids = [w.collection.quotation_id for w in works if w.collection_id and w.collection.quotation_id]
+    qids = [(w.collection.quotation_id if w.collection_id else None) or w.quotation_id for w in works]
+    qids = [i for i in qids if i]
     qmap = {q["id"]: q for q in Quotation.objects.filter(id__in=qids).values("id", "offer_no", "final_quotation_price")}
     today = timezone.localdate()
     rows = []
@@ -307,6 +326,13 @@ def progress(request):
                      "overdue": bool(d and d["overdue"] > 0), "ex": ex, "risk": bool(ex and ex["gap"] > 0 and not w.commissioned),
                      "now_key": stage_now(w)[0], "now": stage_now(w)[1], "next": stage_now(w)[2], "owner": _owner(w), "name": w.collection.customer if (w.collection_id and w.collection.customer) else w.name, "qv": qv, "bank": bank_wait, "bank_late": bank_late, "clocks": kseb_clocks(w, today), "warranty": warranty_end(w),
                      "kseb_done": kseb_steps(w)[1], "kseb_next": kseb_steps(w)[2]})
+    return rows
+
+
+def progress(request):
+    user = request.user
+    editor, director = can_edit(user), _director(user)
+    rows = _rows_for(request)
     tab = request.GET.get("tab") if request.GET.get("tab") in dict(TABS) else "live"
     q = (request.GET.get("q") or "").strip().lower()
     counts = {"risk": sum(1 for r in rows if r["risk"]), "bank": sum(1 for r in rows if r["bank"]),
@@ -440,6 +466,15 @@ def project_detail(request, pk):
         w.registration_paid = bool(kseb.get("reg_paid")) or P.get("registration_paid") == "on"
         if kseb.get("meter_fix") and not w.meter_fix:
             w.meter_fix = True
+        for f in ("name", "phone", "location", "map_link", "kw", "panel_make", "inverter_make", "sales_person", "engineer"):
+            if f in P:
+                setattr(w, f, (P.get(f) or "").strip()[:150])
+        if "site_address" in P:
+            w.site_address = (P.get("site_address") or "").strip()
+        if "booking_date" in P:
+            w.booking_date = _pd((P.get("booking_date") or "").strip())
+        if w.name:
+            w.name_key = re.sub(r"[^a-z0-9]", "", w.name.lower())
         for f in ("kseb_consumer_no", "arn", "scheme", "inverter_serial", "energy_meter_serial", "net_meter_serial", "electrical_contractor",
                   "structure_contractor", "invoice_no"):
             setattr(w, f, (P.get(f) or "").strip()[:60])
@@ -464,3 +499,38 @@ def project_detail(request, pk):
         "w": w, "editor": editor, "steps": steps, "n_done": n_done, "next": nxt, "clocks": kseb_clocks(w, today), "warranties": warranty_list(w),
         "problems": serial_problems(w, counter), "serial_n": len(panel_serial_list(w)),
         "elec_bal": w.electrical_amount - w.electrical_paid, "struct_bal": w.structure_amount - w.structure_paid})
+
+
+MASTER_COLUMNS = [
+    ("Project ID", lambda w, r: w.project_id), ("Customer", lambda w, r: r["name"]), ("Phone", lambda w, r: w.phone), ("KSEB consumer no.", lambda w, r: w.kseb_consumer_no),
+    ("Site address", lambda w, r: w.site_address), ("Place", lambda w, r: w.location), ("Map link", lambda w, r: w.map_link), ("Scheme", lambda w, r: w.scheme),
+    ("Sales person", lambda w, r: r["owner"]), ("Site engineer", lambda w, r: w.engineer), ("kW", lambda w, r: w.kw), ("Panel", lambda w, r: w.panel_make),
+    ("Inverter", lambda w, r: w.inverter_make), ("Booking date", lambda w, r: w.booking_date), ("Quotation value", lambda w, r: r["qv"]["quotation"]),
+    ("Deal value", lambda w, r: r["qv"]["deal"]), ("Received", lambda w, r: r["due"]["received"] if r["due"] else None), ("Balance", lambda w, r: r["due"]["balance"] if r["due"] else None),
+    ("Work now at", lambda w, r: r["now"]), ("Stages done (of 10)", lambda w, r: w.done_count), ("KSEB steps done (of 12)", lambda w, r: r["kseb_done"]),
+    ("Feasibility date", lambda w, r: w.feasibility_date), ("Commissioning date", lambda w, r: w.commission_date), ("Handover date", lambda w, r: w.handover_date),
+    ("Invoice no.", lambda w, r: w.invoice_no), ("Payment by", lambda w, r: "Bank loan" if w.is_loan else "Own money"), ("Inverter serial", lambda w, r: w.inverter_serial),
+    ("Net meter serial", lambda w, r: w.net_meter_serial), ("Workmanship warranty until", lambda w, r: r["warranty"]),
+]
+
+
+def master(request):
+    """The master data: one row per customer with the details, dates and money, searchable, and a CSV download (opens in Excel)."""
+    import csv
+    from django.http import HttpResponse
+    rows = _rows_for(request)
+    q = (request.GET.get("q") or "").strip().lower()
+    if q:
+        rows = [r for r in rows if q in " ".join(str(c(r["w"], r) or "") for _n, c in MASTER_COLUMNS).lower()]
+    table = [[c(r["w"], r) for _n, c in MASTER_COLUMNS] for r in rows]
+    if request.GET.get("csv"):
+        resp = HttpResponse(content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = 'attachment; filename="dehlsen_customers_%s.csv"' % timezone.localdate().isoformat()
+        resp.write("\ufeff")
+        wr = csv.writer(resp)
+        wr.writerow([n for n, _c in MASTER_COLUMNS])
+        for row in table:
+            wr.writerow(["" if v is None else v for v in row])
+        return resp
+    return render(request, "portal/master.html", {"cols": [n for n, _c in MASTER_COLUMNS], "table": list(zip([r["w"].pk for r in rows], table))[:400],
+                                                   "total": len(table), "q": q})

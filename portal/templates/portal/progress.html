@@ -16,6 +16,7 @@ details summary{cursor:pointer;color:var(--blue);font-size:12px;margin-top:6px}.
 {% block body %}<div class="app">
 <div class="top"><div><h1>Project progress</h1><small>Where every customer's work stands</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
 {% for m in messages %}<div class="note bad" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
+<p style="margin:4px 0"><a href="{% url 'progress_master' %}" style="font-weight:700;color:var(--blue)">Master data: all customers with details, dates and money (download for Excel) &rsaquo;</a></p>
 <div class="tabs">{% for k, label, n in tabs %}<a class="{% if k == tab %}on{% endif %}" href="?tab={{ k }}{% if q %}&q={{ q }}{% endif %}{% if stage %}&stage={{ stage }}{% endif %}">{{ label }}<b>{{ n }}</b></a>{% endfor %}</div>
 <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="tab" value="{{ tab }}"><input name="q" value="{{ q }}" placeholder="Search customer, place, phone, sales person or stage" style="max-width:380px;margin:0">
 <select name="stage" onchange="this.form.submit()" style="max-width:240px;margin:0"><option value="">Any stage (where the work is now)</option><option value="none" {% if stage == "none" %}selected{% endif %}>Not started</option>{% for key, label in stages %}<option value="{{ key }}" {% if stage == key %}selected{% endif %}>Reached: {{ label }}</option>{% endfor %}</select>{% if stage or q %}<a href="?tab={{ tab }}" style="font-size:13px">Clear</a>{% endif %}</form>

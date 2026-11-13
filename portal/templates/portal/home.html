@@ -16,9 +16,9 @@
 <div class="top"><div><h1>Dehlsen Energy</h1><small>{{ name }}</small></div>
 <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="pill" type="submit">Log out</button></form></div>
 <div class="hello"><h2>Hello, {{ name }}</h2><p>What do you want to open?</p></div>
-{% if margin_alert %}<a class="malert" href="{% url 'low_margin' %}"><b>&#9888; Margin decreasing: {{ margin_alert.count }} quotation{{ margin_alert.count|pluralize }} given below the calculated price</b>
+{% if margin_alert %}<a class="malert" href="{% url 'low_margin' %}"><b>&#9888; Margin decreasing: {{ margin_alert.count }} new quotation{{ margin_alert.count|pluralize }} (last 7 days) given below the calculated price</b>
 {% for r in margin_alert.latest %}<small>{{ r.person }} &middot; {{ r.client }} &middot; quoted &#8377;{{ r.their_value|floatformat:0 }} instead of &#8377;{{ r.calculated_value|floatformat:0 }}{% if r.loss %} &middot; <b style="display:inline">LOSS</b>{% endif %}</small>{% endfor %}
-<small>Tap to see all (admin passkey page) &rsaquo;</small></a>{% endif %}
+<small>Tap to see the full list &rsaquo;</small></a>{% endif %}
 <div class="grid4">
 <a class="tile" href="/sales/"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Sales</h3><p>Quotations, reports, hybrid calculator</p></a>
 <a class="tile" href="{% url 'progress' %}"><div class="ic" style="background:var(--orange)">&#128203;</div><h3>Project</h3><p>Where every customer's work stands, KSEB, warranty</p></a>

@@ -175,6 +175,8 @@ class Lead(models.Model):
     system_type = models.CharField(max_length=10, choices=SYSTEM_TYPES, blank=True)
     system_other = models.CharField("system type (other)", max_length=100, blank=True)
     map_link = models.CharField("Google Maps location", max_length=500, blank=True, help_text="A Google Maps link, or latitude,longitude, or an address (optional)")
+    site_visit_by = models.DateField("site visit by", null=True, blank=True, help_text="The date the site visit must be done by (optional)")
+    quotation_by = models.DateField("quotation by", null=True, blank=True, help_text="The date the quotation must be given by (optional)")
 
     class Meta:
         ordering = ["done", "-created_at"]
@@ -390,6 +392,7 @@ class ProjectWork(models.Model):
                   ("work_start", "5 Work start"), ("work_done", "6 Work completion"), ("netmeter_app", "7 Net meter application"), ("inspection", "8 Inspection"),
                   ("meter_fix", "9 Net meter fix"), ("programming", "10 Programming"), ("commissioning", "11 Commissioning certificate"), ("subsidy", "12 Subsidy credited")]
     sales_person = models.CharField(max_length=60, blank=True, help_text="Whose customer this is")
+    quotation_id = models.IntegerField(null=True, blank=True, db_index=True, help_text="The confirmed quotation of this customer (filled automatically)")
     engineer = models.CharField("site in-charge / engineer", max_length=60, blank=True)
     kseb = models.JSONField(default=dict, blank=True)
     kseb_consumer_no = models.CharField(max_length=30, blank=True)

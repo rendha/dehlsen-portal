@@ -11,6 +11,15 @@
 <div class="top"><div><h1>{{ w.name }}</h1><small>{% if w.kw %}{{ w.kw }} kW{% endif %}{% if w.project_id %} · {{ w.project_id }}{% endif %}{% if w.location %} · {{ w.location }}{% endif %}</small></div><a class="pill" href="{% url 'progress' %}#p{{ w.pk }}">&lsaquo; Progress</a></div>
 {% for m in messages %}<div class="note {% if m.tags == 'warning' %}bad{% endif %}" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
 <form method="post">{% csrf_token %}
+<div class="sec"><h2>Customer details</h2>
+{% if editor %}<label>Customer name</label><input name="name" value="{{ w.name }}">
+<div class="g2"><div><label>Phone</label><input name="phone" value="{{ w.phone }}"></div><div><label>Place</label><input name="location" value="{{ w.location }}"></div></div>
+<label>Site address</label><textarea name="site_address" rows="2">{{ w.site_address }}</textarea>
+<label>Google Maps link</label><input name="map_link" value="{{ w.map_link }}">
+<div class="g2"><div><label>kW</label><input name="kw" value="{{ w.kw }}"></div><div><label>Booking date</label><input type="date" name="booking_date" value="{{ w.booking_date|date:'Y-m-d' }}"></div></div>
+<div class="g2"><div><label>Panel</label><input name="panel_make" value="{{ w.panel_make }}"></div><div><label>Inverter</label><input name="inverter_make" value="{{ w.inverter_make }}"></div></div>
+<div class="g2"><div><label>Sales person (whose customer)</label><input name="sales_person" value="{{ w.sales_person }}"></div><div><label>Site engineer</label><input name="engineer" value="{{ w.engineer }}"></div></div>
+{% else %}<small>{{ w.phone|default:"-" }} &middot; {{ w.location|default:"-" }} &middot; {{ w.site_address|default:"-" }}<br>Sales: {{ w.sales_person|default:"-" }} &middot; Site engineer: {{ w.engineer|default:"-" }}</small>{% endif %}</div>
 <div class="sec"><h2>KSEB &amp; PM Surya Ghar &middot; {{ n_done }} of 12 steps</h2>
 {% if next %}<small>Next: <b>{{ next }}</b></small>{% endif %}
 {% for c in clocks %}{% if not c.done %}<div class="{% if c.late %}late{% elif c.soon %}soon{% endif %}" style="font-size:13px">{{ c.label }} by {{ c.date|date:"j M Y" }}{% if c.late %} &mdash; {{ c.left|cut:"-" }} days late{% elif c.soon %} &mdash; {{ c.left }} days left{% endif %}</div>{% endif %}{% endfor %}

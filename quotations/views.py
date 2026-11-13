@@ -1067,6 +1067,11 @@ def confirm_customer(request, quotation_id=None):
         same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
         Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False)     # one confirmed quotation per client
         Quotation.objects.filter(id=quotation.id).update(counted=True, is_customer=True)
+        try:                                         # the new customer appears in Project progress / master data by itself (portal only)
+            from portal.project_sync import ensure_projects
+            ensure_projects(quotation_ids=[quotation.id])
+        except Exception:
+            pass
     return redirect(_safe_next(request, reverse("quotation_detail", args=[quotation.id])))
 
 

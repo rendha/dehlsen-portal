@@ -1,0 +1,17 @@
+{% extends "portal/base.html" %}
+{% block title %}Master data · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.wrap{overflow:auto;background:#fff;border-radius:14px;box-shadow:0 2px 8px rgba(30,50,80,.07);max-height:75vh}
+table.m{border-collapse:collapse;font-size:12.5px;min-width:100%}table.m th{position:sticky;top:0;background:#1a56b0;color:#fff;text-align:left;padding:8px 10px;white-space:nowrap}
+table.m td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}table.m tr:hover td{background:#f4f8ff}
+table.m td:first-child,table.m th:first-child{position:sticky;left:0;background:#fff}table.m th:first-child{background:#1a56b0}
+</style>{% endblock %}
+{% block body %}<div class="app" style="max-width:none">
+<div class="top"><div><h1>Master data</h1><small>Every customer with details, dates and money &middot; {{ total }} customers</small></div><a class="pill" href="{% url 'progress' %}">&lsaquo; Project progress</a></div>
+<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0"><input name="q" value="{{ q }}" placeholder="Search anything: name, phone, consumer no., place, sales person ..." style="max-width:420px;margin:0"><button class="btn o" type="submit">Search</button>
+<a class="btn" href="?csv=1{% if q %}&q={{ q }}{% endif %}" style="text-decoration:none">&#11015; Download for Excel</a></form>
+<div class="wrap"><table class="m"><thead><tr>{% for c in cols %}<th>{{ c }}</th>{% endfor %}<th>Open</th></tr></thead><tbody>
+{% for pk, row in table %}<tr>{% for v in row %}<td>{% if v is None or v == "" %}&ndash;{% else %}{{ v }}{% endif %}</td>{% endfor %}<td><a href="{% url 'progress_detail' pk %}">details</a></td></tr>{% empty %}<tr><td colspan="40">No customers.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if total > 400 %}<p style="color:var(--mut)">Showing the first 400. Search to narrow, or download the file for all {{ total }}.</p>{% endif %}
+</div>{% endblock %}
