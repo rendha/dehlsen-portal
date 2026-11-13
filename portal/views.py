@@ -161,7 +161,7 @@ def _attach_track(items):
         if l.done and not l.lost:
             steps.append({"label": "Completed", "date": None, "by": "", "state": "completed", "action": "", "url": ""})
         l.track = steps
-        l.has_call, l.has_visit = seen["call"] > 0, seen["visit"] > 0
+        l.has_call, l.has_visit = seen["call"] > 0, seen["visit"] > 0 or any(e.kind == "site" for e in l.events.all())
     return items
 
 
@@ -233,7 +233,7 @@ def _auto_next(lead):
     if lead.quotation_id or lead.lost:
         return ""
     wanted = [k for k in (lead.need or "").replace("both", "call,visit").split(",") if k in ("call", "visit")]
-    done = {e.kind for e in lead.events.all()}
+    done = {("visit" if e.kind == "site" else e.kind) for e in lead.events.all()}      # a saved site form counts as the site visit
     for k in wanted:
         if k not in done:
             return "Call" if k == "call" else "Site visit"
@@ -247,6 +247,9 @@ def lead_quick(request, pk):
     if not _may_touch(request.user, obj):
         return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
     what = request.POST.get("what")
+    if what == "visit":
+        messages.info(request, "Fill in the site details (roof size or a photo) and save - the site visit is marked done only then.")
+        return redirect(reverse("lead_site", args=[obj.pk]))
     if what in ("call", "visit"):
         again = any(e.kind == what for e in obj.events.all())
         _lead_log(obj, request.user, what, ("called again" if again else "called") if what == "call" else ("did the site visit again" if again else "did the site visit"))
@@ -408,15 +411,18 @@ def lead_site(request, pk):
         bills = _save_bill(obj, request.FILES.getlist("bill"))
         if bills:
             _lead_log(obj, request.user, "site", "added the electricity bill photo")
-        _lead_log(obj, request.user, "site", "saved the site details" + (" (%d photo%s added)" % (added, "" if added == 1 else "s") if added else ""))
+        _lead_log(obj, request.user, "site" if _site_ready(obj) else "note", "saved the site details" + (" (%d photo%s added)" % (added, "" if added == 1 else "s") if added else ""))
         if then == "won":
             if _site_ready(obj):
                 _make_won(request, obj)
             else:
                 messages.warning(request, "Add the roof size or a photo, then the lead can be marked Won.")
                 return redirect(reverse("lead_site", args=[obj.pk]) + "?then=won")
+        elif _site_ready(obj):
+            messages.success(request, "Site details saved for %s. The site visit is marked done." % obj.customer_name)
         else:
-            messages.success(request, "Site details saved for %s." % obj.customer_name)
+            messages.warning(request, "Saved, but the site visit is not marked done yet: add the roof size or at least one site photo.")
+            return redirect(reverse("lead_site", args=[obj.pk]))
         return redirect("leads")
     fields = [{"name": k, "label": label, "hint": hint, "kind": kind, "value": getattr(site, k, "") if site else ""} for k, label, hint, kind in SITE_TEXT]
     photos = list(SitePhoto.objects.filter(lead=obj).exclude(caption=BILL).values_list("id", flat=True))
@@ -629,8 +635,9 @@ def home(request):
     if _is_director(request.user):         # the red notice on the first page: quotations given below the calculated price
         try:
             from quotations import low_margin
-            since = timezone.localdate() - datetime.timedelta(days=7)          # only NEW ones: the older ones stay in the full list
-            found = [r for r in low_margin.rows(limit=300) if r["date"] and r["date"] >= since]
+            since = timezone.localdate()          # only TODAY's quotations that this person has not opened yet
+            seen = set(request.session.get("margin_seen") or [])
+            found = [r for r in low_margin.rows(limit=300) if r["date"] and r["date"] >= since and r["id"] not in seen]
             if found:
                 margin_alert = {"count": len(found), "latest": found[:3]}
         except Exception:
@@ -891,6 +898,14 @@ def task_done(request, pk):
     if request.POST.get("undo"):
         obj.done, obj.done_at = False, None
     else:
+        try:                                              # a lead's Site visit task can be ticked only after the site form is filled
+            from . import lead_dates
+            glead, gkind = lead_dates.lead_of_task(obj)
+            if glead is not None and gkind == "site" and not _site_ready(glead):
+                messages.warning(request, "Fill in the site details (roof size or a photo) for %s first - the task is ticked automatically when you save them." % glead.customer_name)
+                return redirect(reverse("lead_site", args=[glead.pk]))
+        except Exception:
+            pass
         obj.done, obj.done_at = True, timezone.now()
         try:                                              # a lead's Site visit task ticked here = the site visit is done on the lead too
             from . import lead_dates

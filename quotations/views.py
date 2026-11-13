@@ -857,6 +857,11 @@ def low_margin(request):
     """Admin passkey only: the quotations given below their calculated price (who, calculated value, their value, margin lost, margin now)."""
     from . import low_margin as lm
     unlocked = rates_unlocked(request) or _is_director_user(request)          # directors open it without the passkey
+    if unlocked:                                       # opening the list clears the red notice on the first page
+        try:
+            request.session["margin_seen"] = [r["id"] for r in lm.rows(limit=300)]
+        except Exception:
+            pass
     return render(request, "quotations/low_margin.html", {"rows": lm.rows() if unlocked else [], "show_rates": unlocked})
 
 
