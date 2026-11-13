@@ -1,0 +1,43 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ w.name }} · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.sec{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 8px rgba(30,50,80,.07)}.sec h2{margin:0 0 6px;font-size:15px}
+.st{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}.st:last-child{border:0}.st span{flex:1}.st input{width:150px;margin:0}
+.dot{width:18px;height:18px;border-radius:50%;background:#e8edf3;color:#fff;font-size:11px;display:grid;place-items:center}.dot.on{background:#2e9e5b}
+.late{color:#b02a1c;font-weight:700}.soon{color:#b35a08;font-weight:700}.warn{background:#fdecea;color:#b02a1c;border-radius:8px;padding:6px 9px;font-size:12px;margin:6px 0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sec label{font-size:12px;margin-top:6px;display:block}.sec input,.sec textarea{margin:3px 0;width:100%}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>{{ w.name }}</h1><small>{% if w.kw %}{{ w.kw }} kW{% endif %}{% if w.project_id %} · {{ w.project_id }}{% endif %}{% if w.location %} · {{ w.location }}{% endif %}</small></div><a class="pill" href="{% url 'progress' %}#p{{ w.pk }}">&lsaquo; Progress</a></div>
+{% for m in messages %}<div class="note {% if m.tags == 'warning' %}bad{% endif %}" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
+<form method="post">{% csrf_token %}
+<div class="sec"><h2>KSEB &amp; PM Surya Ghar &middot; {{ n_done }} of 12 steps</h2>
+{% if next %}<small>Next: <b>{{ next }}</b></small>{% endif %}
+{% for c in clocks %}{% if not c.done %}<div class="{% if c.late %}late{% elif c.soon %}soon{% endif %}" style="font-size:13px">{{ c.label }} by {{ c.date|date:"j M Y" }}{% if c.late %} &mdash; {{ c.left|cut:"-" }} days late{% elif c.soon %} &mdash; {{ c.left }} days left{% endif %}</div>{% endif %}{% endfor %}
+{% for s in steps %}<div class="st"><div class="dot {% if s.done %}on{% endif %}">{% if s.done %}&#10003;{% endif %}</div><span>{{ s.label }}</span>{% if editor %}<input type="date" name="d_{{ s.key }}" value="{{ s.date|date:'Y-m-d' }}">{% else %}<b>{{ s.date|date:"j M Y"|default:"-" }}</b>{% endif %}</div>{% endfor %}
+{% if editor %}<div class="g2"><div><label>KSEB consumer no.</label><input name="kseb_consumer_no" value="{{ w.kseb_consumer_no }}"></div><div><label>PM Surya Ghar ARN</label><input name="arn" value="{{ w.arn }}"></div></div><label>Scheme</label><input name="scheme" value="{{ w.scheme }}">{% endif %}</div>
+
+<div class="sec"><h2>Equipment serial numbers</h2>
+{% for pr in problems %}<div class="warn">{{ pr }}</div>{% endfor %}
+{% if editor %}<label>Number of panels</label><input name="panel_count" value="{{ w.panel_count|default_if_none:'' }}">
+<label>Panel serial numbers (separate with commas) &mdash; {{ serial_n }} entered</label><textarea name="panel_serials" rows="3">{{ w.panel_serials }}</textarea>
+<div class="g2"><div><label>Inverter serial</label><input name="inverter_serial" value="{{ w.inverter_serial }}"></div><div><label>Energy meter serial</label><input name="energy_meter_serial" value="{{ w.energy_meter_serial }}"></div></div>
+<label>Net meter serial</label><input name="net_meter_serial" value="{{ w.net_meter_serial }}">
+{% else %}<small>Panels: {{ serial_n }}{% if w.panel_count %} of {{ w.panel_count }}{% endif %} · Inverter: {{ w.inverter_serial|default:"-" }} · Energy meter: {{ w.energy_meter_serial|default:"-" }} · Net meter: {{ w.net_meter_serial|default:"-" }}</small>{% endif %}</div>
+
+<div class="sec"><h2>Contractor labour</h2>
+{% if editor %}<div class="g2"><div><label>Electrical contractor</label><input name="electrical_contractor" value="{{ w.electrical_contractor }}"></div><div><label>Amount (&#8377;)</label><input name="electrical_amount" value="{{ w.electrical_amount|floatformat:0 }}"></div></div>
+<div class="g2"><div><label>Paid so far (&#8377;)</label><input name="electrical_paid" value="{{ w.electrical_paid|floatformat:0 }}"></div><div><label>Balance</label><b>&#8377;{{ elec_bal|floatformat:0 }}</b></div></div>
+<div class="g2"><div><label>Structure contractor</label><input name="structure_contractor" value="{{ w.structure_contractor }}"></div><div><label>Amount (&#8377;)</label><input name="structure_amount" value="{{ w.structure_amount|floatformat:0 }}"></div></div>
+<div class="g2"><div><label>Paid so far (&#8377;)</label><input name="structure_paid" value="{{ w.structure_paid|floatformat:0 }}"></div><div><label>Balance</label><b>&#8377;{{ struct_bal|floatformat:0 }}</b></div></div>
+{% else %}<small>Electrical {{ w.electrical_contractor|default:"-" }}: balance &#8377;{{ elec_bal|floatformat:0 }} · Structure {{ w.structure_contractor|default:"-" }}: balance &#8377;{{ struct_bal|floatformat:0 }}</small>{% endif %}</div>
+
+<div class="sec"><h2>Invoice, handover &amp; warranty</h2>
+{% for label, d in warranties %}<div style="font-size:13px">{{ label }} warranty until <b>{{ d|date:"j M Y" }}</b></div>{% endfor %}
+{% if editor %}<div class="g2"><div><label>Invoice no.</label><input name="invoice_no" value="{{ w.invoice_no }}"></div><div><label>Invoice date</label><input type="date" name="invoice_date" value="{{ w.invoice_date|date:'Y-m-d' }}"></div></div>
+<label>Handed over to customer on</label><input type="date" name="handover_date" value="{{ w.handover_date|date:'Y-m-d' }}">
+<div class="g2"><div><label>Panel warranty (years)</label><input name="panel_warranty_yrs" value="{{ w.panel_warranty_yrs|default_if_none:'' }}"></div><div><label>Inverter warranty (years)</label><input name="inverter_warranty_yrs" value="{{ w.inverter_warranty_yrs|default_if_none:'' }}"></div></div>
+<label>Workmanship warranty (years, empty = 5)</label><input name="workmanship_yrs" value="{{ w.workmanship_yrs|default_if_none:'' }}">
+<button class="btn o" type="submit" style="margin-top:10px">Save</button>
+{% else %}<small>Invoice {{ w.invoice_no|default:"-" }} · Handed over {{ w.handover_date|date:"j M Y"|default:"not yet" }}</small>{% endif %}</div>
+</form></div>{% endblock %}

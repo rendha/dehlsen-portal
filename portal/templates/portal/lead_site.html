@@ -10,6 +10,9 @@
 <div class="card" style="max-width:560px;margin:auto">
 {% if then == "won" %}<div class="note">Saving these details will mark the lead <b>Won</b>. Enter at least the roof size or add a photo.</div>{% endif %}
 <form method="post" enctype="multipart/form-data" id="sf">{% csrf_token %}<input type="hidden" name="then" value="{{ then }}">
+<label for="ml">Google Maps location (optional)</label>
+<input id="ml" name="map_link" value="{{ lead.map_link }}" placeholder="Paste a Google Maps link, or tap the button below" autocomplete="off">
+<button type="button" class="btn o" style="margin:6px 0 4px;padding:8px 12px;font-size:13px" onclick="useMyLocation(this,'ml')">&#128205; Use my current location</button>
 {% for f in fields %}<label for="{{ f.name }}">{{ f.label }}</label>
 {% if f.kind == "area" %}<textarea id="{{ f.name }}" name="{{ f.name }}" rows="3" placeholder="{{ f.hint }}">{{ f.value }}</textarea>
 {% else %}<input id="{{ f.name }}" name="{{ f.name }}" value="{{ f.value }}" placeholder="{{ f.hint }}">{% endif %}
@@ -50,4 +53,12 @@
     })).then(function () { form.dataset.ready = "1"; form.submit(); });
   });
 })();
+</script><script>
+function useMyLocation(btn, id){
+  var f=document.getElementById(id);
+  if(!navigator.geolocation){alert("This phone cannot give its location.");return}
+  btn.disabled=true;var old=btn.textContent;btn.textContent="Getting location...";
+  navigator.geolocation.getCurrentPosition(function(p){f.value=p.coords.latitude.toFixed(6)+","+p.coords.longitude.toFixed(6);btn.disabled=false;btn.textContent=old},
+   function(){btn.disabled=false;btn.textContent=old;alert("Could not get the location. Allow location for this site, or paste a Google Maps link.")},{enableHighAccuracy:true,timeout:15000});
+}
 </script>{% endblock %}

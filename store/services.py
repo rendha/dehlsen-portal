@@ -53,3 +53,12 @@ def to_decimal(value, default=None):
     except (InvalidOperation, ValueError):
         return default
     return number if number.is_finite() else default
+
+import re as _re
+
+_SOLAR_5 = _re.compile(r"\b(bifacial|topcon|mono ?perc|perc|solar (panel|module))\b|\b\d{3}\s*wp?\b|\binverter\b|\b\d+(\.\d+)?\s*kw\b", _re.I)
+
+
+def default_gst(name, make=""):
+    """GST % for an item: solar panels and solar inverters 5 %, everything else (cables, boxes, meters, earthing, BOS, structure) 18 %."""
+    return Decimal("5") if _SOLAR_5.search("%s %s" % (name or "", make or "")) else Decimal("18")

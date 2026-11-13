@@ -58,6 +58,9 @@
 <select id="to2" name="assigned_to2"><option value="">Nobody</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to2 == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
 <label for="bl">Electricity bill photo (optional)</label>
 <input id="bl" type="file" name="bill" accept="image/*" capture="environment">
+<label for="ml">Google Maps location (optional)</label>
+<input id="ml" name="map_link" value="{{ values.map_link }}" placeholder="Paste a Google Maps link, or tap the button below" autocomplete="off">
+<button type="button" class="btn o" style="margin:6px 0 4px;padding:8px 12px;font-size:13px" onclick="useMyLocation(this,'ml')">&#128205; Use my current location</button>
 <label for="nt">Note</label>
 <textarea id="nt" name="note" rows="3" placeholder="Roof size, bill amount, best time to call…">{{ values.note }}</textarea>
 <button class="btn o" type="submit">Save lead</button>
@@ -96,4 +99,12 @@
     })).then(function () { form.dataset.ready = "1"; form.submit(); });
   });
 })();
+</script><script>
+function useMyLocation(btn, id){
+  var f=document.getElementById(id);
+  if(!navigator.geolocation){alert("This phone cannot give its location.");return}
+  btn.disabled=true;var old=btn.textContent;btn.textContent="Getting location...";
+  navigator.geolocation.getCurrentPosition(function(p){f.value=p.coords.latitude.toFixed(6)+","+p.coords.longitude.toFixed(6);btn.disabled=false;btn.textContent=old},
+   function(){btn.disabled=false;btn.textContent=old;alert("Could not get the location. Allow location for this site, or paste a Google Maps link.")},{enableHighAccuracy:true,timeout:15000});
+}
 </script>{% endblock %}

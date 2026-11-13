@@ -1,0 +1,65 @@
+{% extends "portal/base.html" %}
+{% block title %}Project progress · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}.tabs a{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;text-decoration:none;color:var(--ink);font-size:13px}.tabs a.on{background:var(--blue);color:#fff;border-color:var(--blue)}.tabs b{font-weight:700;margin-left:4px}
+.pj{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 8px rgba(30,50,80,.07);border-left:6px solid #E8730C}
+.pj.fin{border-left-color:#2e9e5b}.pj.over{border-left-color:#d64545}
+.pj h3{margin:0;font-size:16px}.pj small{display:block;color:var(--mut)}
+.bar{height:8px;background:#e8edf3;border-radius:6px;margin:8px 0}.bar i{display:block;height:100%;border-radius:6px;background:#E8730C}.pj.fin .bar i{background:#2e9e5b}
+.exp{border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13px;display:flex;gap:14px;flex-wrap:wrap;background:#e3f5ea}.exp.amber{background:#fff0dd}.exp.red{background:#fdecea;color:#b02a1c}.exp b{display:block}.clk{font-size:12px;margin-top:6px}.clk .late{color:#b02a1c;font-weight:700}.clk .soon{color:#b35a08;font-weight:700}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.chip{border:1px solid var(--line);background:#f4f6f9;color:#7a8594;border-radius:999px;padding:4px 9px;font-size:12px;font-family:inherit;cursor:default}
+.chip.on{background:#e3f5ea;border-color:#2e9e5b;color:#1f7a43;font-weight:600}button.chip{cursor:pointer}
+.money{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:6px}.money b{display:block}.red{color:#b02a1c}
+.tag{display:inline-block;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;background:#fff0dd;color:#b35a08;margin-right:4px}.tag.g{background:#d5f0df;color:#1f7a43}.tag.r{background:#fdecea;color:#b02a1c}
+details summary{cursor:pointer;color:var(--blue);font-size:12px;margin-top:6px}.edit label{font-size:12px;margin-top:6px}.edit input,.edit select{margin:3px 0}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Project progress</h1><small>Where every customer's work stands</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+{% for m in messages %}<div class="note bad" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
+<div class="tabs">{% for k, label, n in tabs %}<a class="{% if k == tab %}on{% endif %}" href="?tab={{ k }}{% if q %}&q={{ q }}{% endif %}{% if stage %}&stage={{ stage }}{% endif %}">{{ label }}<b>{{ n }}</b></a>{% endfor %}</div>
+<form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="tab" value="{{ tab }}"><input name="q" value="{{ q }}" placeholder="Search customer, place, phone, sales person or stage" style="max-width:380px;margin:0">
+<select name="stage" onchange="this.form.submit()" style="max-width:240px;margin:0"><option value="">Any stage (where the work is now)</option><option value="none" {% if stage == "none" %}selected{% endif %}>Not started</option>{% for key, label in stages %}<option value="{{ key }}" {% if stage == key %}selected{% endif %}>Reached: {{ label }}</option>{% endfor %}</select>{% if stage or q %}<a href="?tab={{ tab }}" style="font-size:13px">Clear</a>{% endif %}</form>
+{% if not editor %}<small style="color:var(--mut)">You can view the progress. Only Fidha, Riswan and the directors can tick stages.</small>{% endif %}
+{% if director and risk_total > 0 %}<div class="note bad" style="margin:8px 0">Material at site is worth <b>&#8377;{{ risk_total|floatformat:0 }}</b> more than the money received on live projects. <a href="?tab=risk">See which</a></div>{% endif %}
+{% for r in rows %}{% with w=r.w d=r.due %}
+<div class="pj {% if r.finished %}fin{% endif %} {% if r.overdue %}over{% endif %}" id="p{{ w.pk }}">
+<h3>{{ r.name }}</h3>{% if r.name != w.name %}<small>also written as: {{ w.name }}</small>{% endif %}
+<small>{% if w.kw %}{{ w.kw }} kW{% endif %}{% if w.location %} · {{ w.location }}{% endif %}{% if w.phone %} · <a href="tel:{{ w.phone }}">{{ w.phone }}</a>{% endif %}{% if w.project_id %} · {{ w.project_id }}{% endif %}</small>
+{% if r.owner or w.engineer %}<small><b>{% if r.owner %}Sales: {{ r.owner }}{% endif %}</b>{% if w.engineer %}{% if r.owner %} · {% endif %}Site: {{ w.engineer }}{% endif %}</small>{% endif %}
+<div style="margin-top:4px">{% if r.finished %}<span class="tag g">&#10004; Commissioned{% if w.commission_date %} {{ w.commission_date|date:"j M Y" }}{% endif %}</span>{% else %}<span class="tag">In progress</span>{% endif %}{% if r.docs %}<span class="tag">Waiting for documents</span>{% endif %}{% if w.handover %}<span class="tag g">Documents handed over</span>{% endif %}{% if w.feasibility == "issue" %}<span class="tag r">Feasibility issue</span>{% endif %}{% if r.overdue %}<span class="tag r">Payment overdue</span>{% endif %}{% if w.is_loan %}<span class="tag">Bank loan</span>{% if not w.bank1_received_on %}<span class="tag r">Waiting for bank 1st payment</span>{% endif %}{% if r.finished and not w.bank2_received_on %}<span class="tag {% if r.bank_late %}r{% endif %}">Waiting for bank final payment{% if r.bank_late %} (late){% endif %}</span>{% endif %}{% endif %}{% if w.wifi == False %}<span class="tag">No Wi-Fi</span>{% endif %}</div>
+<div class="bar"><i style="width:{{ w.progress }}%"></i></div><small>{{ w.progress }}% · {{ w.done_count }} of 10 stages · <b>Now: {{ r.now }}</b>{% if r.next %} · Next: {{ r.next }}{% endif %}</small>
+<div class="chips">{% for key, label, on in w.ticks %}{% if editor %}<form method="post" action="{% url 'progress_update' w.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="stage" value="{{ key }}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="chip {% if on %}on{% endif %}" type="submit">{% if on %}&#10003; {% endif %}{{ label }}</button></form>{% else %}<span class="chip {% if on %}on{% endif %}">{% if on %}&#10003; {% endif %}{{ label }}</span>{% endif %}{% endfor %}</div>
+{% if w.work_status %}<small>Status: <b>{{ w.work_status }}</b></small>{% endif %}
+{% if w.feasibility_note %}<small>Feasibility: {{ w.feasibility_note }}</small>{% endif %}
+{% if r.qv.quotation or r.qv.deal %}<div class="money" style="margin-top:8px">{% if r.qv.quotation %}<div>Quotation value{% if r.qv.offer %} ({{ r.qv.offer }}){% endif %}<b>&#8377;{{ r.qv.quotation|floatformat:0 }}</b></div>{% endif %}{% if r.qv.deal %}<div>Deal value (after discount)<b>&#8377;{{ r.qv.deal|floatformat:0 }}</b></div>{% endif %}{% if not r.qv.quotation %}<div style="color:var(--mut)">No quotation linked</div>{% endif %}</div>{% endif %}
+{% if d %}<div class="money"><div>Due so far ({{ d.pct }}% of &#8377;{{ d.value|floatformat:0 }})<b>&#8377;{{ d.due|floatformat:0 }}</b></div><div>Received<b>&#8377;{{ d.received|floatformat:0 }}</b></div><div class="{% if d.overdue %}red{% endif %}">Overdue<b>&#8377;{{ d.overdue|floatformat:0 }}</b></div><div>Balance<b>&#8377;{{ d.balance|floatformat:0 }}</b></div></div>{% endif %}
+{% if r.ex %}<div class="exp {{ r.ex.level }}"><div>Material at site (with GST)<b>&#8377;{{ r.ex.site|floatformat:0 }}</b></div><div>Money received<b>&#8377;{{ r.ex.received|floatformat:0 }}</b></div><div>{% if r.ex.gap > 0 %}We are out of pocket by{% else %}Covered{% endif %}<b>{% if r.ex.gap > 0 %}&#8377;{{ r.ex.gap|floatformat:0 }}{% else %}&#10003;{% endif %}</b></div></div>{% endif %}
+{% if w.is_loan %}<div class="clk">Loan &#8377;{{ w.loan_amount|floatformat:0 }}: bank 1st &#8377;{{ w.bank1_amount|floatformat:0 }} {% if w.bank1_received_on %}received {{ w.bank1_received_on|date:"j M" }}{% else %}<span class="late">not yet</span>{% endif %} &middot; bank final &#8377;{{ w.bank2_amount|floatformat:0 }} {% if w.bank2_received_on %}received {{ w.bank2_received_on|date:"j M" }}{% else %}not yet{% endif %}</div>{% endif %}
+{% if r.clocks or r.warranty %}<div class="clk">{% for c in r.clocks %}{% if not c.done %}<div>{{ c.label }}: <span class="{% if c.late %}late{% elif c.soon %}soon{% endif %}">{{ c.date|date:"j M Y" }}{% if c.late %} &mdash; {{ c.left|cut:"-" }} days late{% elif c.soon %} &mdash; {{ c.left }} days left{% endif %}</span></div>{% endif %}{% endfor %}{% if r.warranty %}<div>Workmanship warranty until {{ r.warranty|date:"j M Y" }}</div>{% endif %}</div>{% endif %}
+<div class="clk">KSEB {{ r.kseb_done }} of 12 steps{% if r.kseb_next and not r.finished %} &middot; next: {{ r.kseb_next }}{% endif %} &middot; <a href="{% url 'progress_detail' w.pk %}">Open details: KSEB, serials, contractors, warranty &rsaquo;</a></div>
+{% if w.map_url %}<a class="mini" style="display:inline-block;margin-top:8px;text-decoration:none;color:#1a56b0;font-weight:700;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px" target="_blank" rel="noopener" href="{{ w.map_url }}">&#128205; Open location</a>{% endif %}
+{% if editor %}<details><summary>Update status, dates, feasibility</summary>
+<form class="edit" method="post" action="{% url 'progress_update' w.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+<label>Work status / what is holding it</label><input name="work_status" value="{{ w.work_status }}" placeholder="e.g. waiting for documentation">
+<label>Commissioning date</label><input type="date" name="commission_date" value="{{ w.commission_date|date:'Y-m-d' }}">
+<label>Wi-Fi</label><select name="wifi"><option value="">Not known</option><option value="yes" {% if w.wifi == True %}selected{% endif %}>Connected</option><option value="no" {% if w.wifi == False %}selected{% endif %}>Not connected</option></select>
+<label>Feasibility</label><select name="feasibility">{% for v, l in feas_choices %}<option value="{{ v }}" {% if w.feasibility == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+<input name="feasibility_note" value="{{ w.feasibility_note }}" placeholder="Feasibility note (optional)">
+<label>KSEB feasibility date</label><input type="date" name="feasibility_date" value="{{ w.feasibility_date|date:'Y-m-d' }}">
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="registration_paid" style="width:auto;margin:0" {% if w.registration_paid %}checked{% endif %}>KSEB registration fee paid</label>
+<label>Documents handed over on</label><input type="date" name="handover_date" value="{{ w.handover_date|date:'Y-m-d' }}">
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="handover" style="width:auto;margin:0" {% if w.handover %}checked{% endif %}>Documents handed over</label>
+<button class="btn o" type="submit" style="margin-top:8px">Save</button></form></details>{% endif %}
+{% if director %}<details><summary>Payment mode and bank loan (director)</summary>
+<form class="edit" method="post" action="{% url 'progress_update' w.pk %}">{% csrf_token %}<input type="hidden" name="action" value="loan"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+<label>Customer pays by</label><select name="payment_mode"><option value="cash" {% if not w.is_loan %}selected{% endif %}>Own money / cash</option><option value="loan" {% if w.is_loan %}selected{% endif %}>Bank loan</option></select>
+<label>Loan amount (&#8377;)</label><input name="loan_amount" value="{{ w.loan_amount|floatformat:0 }}">
+<label>Bank first payment (&#8377;)</label><input name="bank1_amount" value="{{ w.bank1_amount|floatformat:0 }}">
+<label>Loan sanctioned on</label><input type="date" name="loan_sanctioned_on" value="{{ w.loan_sanctioned_on|date:'Y-m-d' }}">
+<label>Bank first payment received on</label><input type="date" name="bank1_received_on" value="{{ w.bank1_received_on|date:'Y-m-d' }}">
+<label>Bank final payment received on</label><input type="date" name="bank2_received_on" value="{{ w.bank2_received_on|date:'Y-m-d' }}">
+<small>Bank money counts as received from the date you fill here. Do not also add it in the payment sheet.</small>
+<button class="btn o" type="submit" style="margin-top:8px">Save loan details</button></form></details>{% endif %}
+</div>{% endwith %}{% empty %}<div class="card" style="margin-top:12px">No projects here.</div>{% endfor %}
+{% if more %}<p><a class="btn o" href="?tab={{ tab }}{% if q %}&q={{ q }}{% endif %}{% if stage %}&stage={{ stage }}{% endif %}&all=1">Show all {{ total_shown }}</a></p>{% endif %}
+</div>{% endblock %}

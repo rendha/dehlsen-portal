@@ -101,4 +101,11 @@ class Command(BaseCommand):
             push(person, "Daily summary", body, "/")
             sent["summary"] += 1
 
+        # 4. project follow-up: KSEB deadlines, bank loans, payment gaps, warranty (see portal/project_alerts.py)
+        try:
+            from portal import project_alerts
+            project_alerts.run(dry, self.stdout.write)
+        except Exception as error:
+            self.stdout.write("   project alerts skipped: %s" % error)
+
         self.stdout.write(self.style.SUCCESS("%sidle leads: %d, quotation follow-ups: %d, summaries: %d" % ("(dry run) " if dry else "", sent["idle"], sent["quote"], sent["summary"])))

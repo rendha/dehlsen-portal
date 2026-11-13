@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import views
+from . import project_work, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -23,6 +23,9 @@ urlpatterns = [
     path("leads/<int:pk>/won/", views.lead_won, name="lead_won"),
     path("leads/<int:pk>/lost/", views.lead_lost, name="lead_lost"),
     path("leads/<int:pk>/done/", views.lead_done, name="lead_done"),
+    path("progress/", project_work.progress, name="progress"),
+    path("progress/<int:pk>/update/", project_work.progress_update, name="progress_update"),
+    path("progress/<int:pk>/", project_work.project_detail, name="progress_detail"),
     path("task/", views.task, name="task"),
     path("task/events/", views.task_events, name="task_events"),
     path("task/new/", views.task_new, name="task_new"),

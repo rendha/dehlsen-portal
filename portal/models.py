@@ -174,9 +174,21 @@ class Lead(models.Model):
     dcr_choice = models.CharField(max_length=10, choices=DCR_CHOICES, blank=True, help_text="Only for residential leads")
     system_type = models.CharField(max_length=10, choices=SYSTEM_TYPES, blank=True)
     system_other = models.CharField("system type (other)", max_length=100, blank=True)
+    map_link = models.CharField("Google Maps location", max_length=500, blank=True, help_text="A Google Maps link, or latitude,longitude, or an address (optional)")
 
     class Meta:
         ordering = ["done", "-created_at"]
+
+    @property
+    def map_url(self):
+        """A safe address to open in Google Maps ('' when none was given).  A plain address or 'lat,lng' becomes a Maps search."""
+        t = (self.map_link or "").strip()
+        if not t:
+            return ""
+        if t.lower().startswith(("http://", "https://")):
+            return t
+        from urllib.parse import quote
+        return "https://www.google.com/maps/search/?api=1&query=" + quote(t)
 
     @property
     def system_label(self):
@@ -313,3 +325,139 @@ class Payment(models.Model):
 
     def __str__(self):
         return "%s %s" % (self.collection.project_id, self.amount)
+
+
+class ProjectWork(models.Model):
+    """Where one customer's installation work stands: the stage ticks, feasibility, commissioning and handover.  Ticked by the project people."""
+    STAGES = [("site_estimation", "Site estimation"), ("design", "Design"), ("bos", "BOS"), ("inverter_done", "Inverter"), ("panel_done", "Panel"),
+              ("electrical", "Electrical work"), ("structure", "Structure work"), ("inv_program", "Inverter programming"), ("testing", "Testing"), ("meter_fix", "Meter fix")]
+    FEASIBILITY = [("", "Not checked"), ("ok", "Feasible"), ("issue", "Feasibility issue")]
+
+    name = models.CharField(max_length=200)
+    name_key = models.CharField(max_length=200, db_index=True, blank=True)
+    project_id = models.CharField(max_length=30, blank=True)
+    collection = models.ForeignKey("portal.Collection", null=True, blank=True, on_delete=models.SET_NULL, related_name="works")
+    kw = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    location = models.CharField(max_length=150, blank=True)
+    site_address = models.TextField(blank=True)
+    map_link = models.CharField(max_length=500, blank=True)
+    system = models.CharField(max_length=40, blank=True)
+    panel_make = models.CharField(max_length=60, blank=True)
+    inverter_make = models.CharField(max_length=60, blank=True)
+    booking_date = models.DateField(null=True, blank=True)
+
+    site_estimation = models.BooleanField(default=False)
+    design = models.BooleanField(default=False)
+    bos = models.BooleanField("BOS", default=False)
+    inverter_done = models.BooleanField("inverter", default=False)
+    panel_done = models.BooleanField("panel", default=False)
+    electrical = models.BooleanField("electrical work", default=False)
+    structure = models.BooleanField("structure work", default=False)
+    inv_program = models.BooleanField("inverter programming", default=False)
+    testing = models.BooleanField(default=False)
+    meter_fix = models.BooleanField(default=False)
+
+    wifi = models.BooleanField("Wi-Fi connected", null=True, blank=True)
+    work_status = models.CharField(max_length=300, blank=True, help_text="What is holding it / where it is, e.g. waiting for documentation")
+    commission_date = models.DateField(null=True, blank=True)
+    handover = models.BooleanField("documents handed over", default=False)
+    handover_note = models.CharField(max_length=200, blank=True)
+    feasibility = models.CharField(max_length=10, choices=FEASIBILITY, blank=True, default="")
+    feasibility_note = models.CharField(max_length=300, blank=True)
+    estimator = models.CharField(max_length=60, blank=True)
+    structure_estimation = models.CharField(max_length=60, blank=True)
+    material_dispatched = models.BooleanField(null=True, blank=True)
+    remarks = models.CharField(max_length=300, blank=True)
+
+    # how the customer pays: cash, or a bank loan that the bank pays in two stages (the first only after sanction; work starts after it)
+    CASH, LOAN = "cash", "loan"
+    PAYMENT_MODES = [(CASH, "Own money / cash"), (LOAN, "Bank loan")]
+    payment_mode = models.CharField(max_length=5, choices=PAYMENT_MODES, default=CASH)
+    loan_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Total the bank gives, e.g. 200000")
+    bank1_amount = models.DecimalField("bank stage 1 amount", max_digits=12, decimal_places=2, default=140000, help_text="Paid after sanction, before work starts")
+    loan_sanctioned_on = models.DateField(null=True, blank=True)
+    bank1_received_on = models.DateField(null=True, blank=True)
+    bank2_received_on = models.DateField(null=True, blank=True)
+
+    # KSEB / PM Surya Ghar clocks and warranty
+    feasibility_date = models.DateField(null=True, blank=True)
+    registration_paid = models.BooleanField("KSEB registration fee paid", default=False)
+    handover_date = models.DateField(null=True, blank=True)
+
+    # the 12 KSEB / PM Surya Ghar steps (dates by step key; feasibility and commissioning use the fields above)
+    KSEB_STEPS = [("portal_app", "1 Portal application"), ("docs", "2 KSEB documents"), ("feasibility", "3 Feasibility"), ("reg_paid", "4 Registration fee paid"),
+                  ("work_start", "5 Work start"), ("work_done", "6 Work completion"), ("netmeter_app", "7 Net meter application"), ("inspection", "8 Inspection"),
+                  ("meter_fix", "9 Net meter fix"), ("programming", "10 Programming"), ("commissioning", "11 Commissioning certificate"), ("subsidy", "12 Subsidy credited")]
+    sales_person = models.CharField(max_length=60, blank=True, help_text="Whose customer this is")
+    engineer = models.CharField("site in-charge / engineer", max_length=60, blank=True)
+    kseb = models.JSONField(default=dict, blank=True)
+    kseb_consumer_no = models.CharField(max_length=30, blank=True)
+    arn = models.CharField("PM Surya Ghar application no.", max_length=40, blank=True)
+    scheme = models.CharField(max_length=40, blank=True)
+
+    # equipment serial numbers
+    panel_count = models.PositiveIntegerField(null=True, blank=True)
+    panel_serials = models.TextField(blank=True, help_text="All panel serial numbers, separated by commas")
+    inverter_serial = models.CharField(max_length=60, blank=True)
+    energy_meter_serial = models.CharField(max_length=60, blank=True)
+    net_meter_serial = models.CharField(max_length=60, blank=True)
+
+    # contractor labour
+    electrical_contractor = models.CharField(max_length=60, blank=True)
+    electrical_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    electrical_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    structure_contractor = models.CharField(max_length=60, blank=True)
+    structure_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    structure_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    # invoice and warranty
+    invoice_no = models.CharField(max_length=40, blank=True)
+    invoice_date = models.DateField(null=True, blank=True)
+    panel_warranty_yrs = models.PositiveSmallIntegerField(null=True, blank=True)
+    inverter_warranty_yrs = models.PositiveSmallIntegerField(null=True, blank=True)
+    workmanship_yrs = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Empty = 5 years")
+
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    updated_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def ticks(self):
+        return [(key, label, getattr(self, key)) for key, label in self.STAGES]
+
+    @property
+    def done_count(self):
+        return sum(1 for _k, _l, v in self.ticks if v)
+
+    @property
+    def progress(self):
+        return int(round(self.done_count * 100 / len(self.STAGES)))
+
+    @property
+    def is_loan(self):
+        return self.payment_mode == self.LOAN
+
+    @property
+    def bank2_amount(self):
+        return max(0, (self.loan_amount or 0) - (self.bank1_amount or 0))
+
+    @property
+    def commissioned(self):
+        return bool(self.commission_date) or (self.testing and self.meter_fix)
+
+    @property
+    def map_url(self):
+        t = (self.map_link or "").strip()
+        if not t:
+            return ""
+        if t.lower().startswith(("http://", "https://")):
+            return t
+        from urllib.parse import quote
+        return "https://www.google.com/maps/search/?api=1&query=" + quote(t)

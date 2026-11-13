@@ -12,9 +12,15 @@ class Stock(models.Model):
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     updated_at = models.DateTimeField(auto_now=True)
+    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Leave empty to use the standard rate: 5 for solar panels and inverters, 18 for everything else")
 
     class Meta:
         ordering = ["name", "make"]
+
+    @property
+    def gst(self):
+        from .services import default_gst
+        return self.gst_percent if self.gst_percent is not None else default_gst(self.name, self.make)
 
     @property
     def label(self):
@@ -32,10 +38,16 @@ class BosItem(models.Model):
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     rate = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     per_panel = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0"))      # > 0: quantity = this x number of panels (J bolt: 4)
+    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Leave empty to use the standard rate: 5 for solar panels and inverters, 18 for everything else")
     position = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["position", "id"]
+
+    @property
+    def gst(self):
+        from .services import default_gst
+        return self.gst_percent if self.gst_percent is not None else default_gst(self.name, self.make)
 
     def __str__(self):
         return "%s %s" % (self.name, self.make)
@@ -98,6 +110,7 @@ class Line(models.Model):
     # what this line has taken out of the warehouse stock (so a change can be undone exactly)
     applied_to = models.ForeignKey(Stock, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     applied_qty = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Leave empty to use the standard rate: 5 for solar panels and inverters, 18 for everything else")
 
     class Meta:
         ordering = ["position", "id"]
@@ -105,6 +118,19 @@ class Line(models.Model):
     @property
     def amount(self):
         return (self.quantity or Decimal("0")) * (self.rate or Decimal("0"))
+
+    @property
+    def gst(self):
+        from .services import default_gst
+        return self.gst_percent if self.gst_percent is not None else default_gst(self.name, self.make)
+
+    @property
+    def gst_amount(self):
+        return (self.amount * self.gst / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def amount_with_gst(self):
+        return self.amount + self.gst_amount
 
     def __str__(self):
         return self.name

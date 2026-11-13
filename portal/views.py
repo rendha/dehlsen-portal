@@ -113,6 +113,9 @@ def _attach_track(items):
     for l in items:
         steps = [{"label": "New", "date": timezone.localtime(l.created_at), "by": _person(l.entered_by).split(" ")[0], "state": "done", "action": "", "url": ""}]
         seen = {"call": 0, "visit": 0, "quoted": 0}
+        names = [_person(u).split(" ")[0] for u in (l.assigned_to, l.assigned_to2) if u]
+        if names:     # who the lead was given to: its own symbol, so "New" and "Assigned" are not the same tick
+            steps.append({"label": "Assigned", "date": timezone.localtime(l.created_at), "by": " + ".join(names), "state": "assigned", "action": "", "url": ""})
         for e in l.events.all():
             label = state = None
             action = url = ""
@@ -132,7 +135,7 @@ def _attach_track(items):
                 url = "/sales/quotation/%s/" % l.quote["id"] if getattr(l, "quote", None) else ""
                 action = "quote" if url else ""
             elif e.kind == "passed":
-                label = "Handed over"
+                label, state = "Handed over", "handed"
             elif e.kind == "won":
                 label, state = "Won", "done"
             elif e.kind == "lost":
@@ -155,6 +158,8 @@ def _attach_track(items):
             steps.append({"label": nxt, "date": None, "by": "", "state": "pending",
                           "action": "call" if nxt == "Call" else "visit" if nxt == "Site visit" else "",
                           "url": "/sales/new/?lead=%s" % l.pk if nxt == "Quotation" else ""})
+        if l.done and not l.lost:
+            steps.append({"label": "Completed", "date": None, "by": "", "state": "completed", "action": "", "url": ""})
         l.track = steps
         l.has_call, l.has_visit = seen["call"] > 0, seen["visit"] > 0
     return items
@@ -227,7 +232,7 @@ def lead_quick(request, pk):
     """One tap: 'I called' / 'I did the site visit'.  The history line and the next step are written automatically."""
     obj = get_object_or_404(Lead, pk=pk)
     if not _may_touch(request.user, obj):
-        return redirect("leads")
+        return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
     what = request.POST.get("what")
     if what in ("call", "visit"):
         again = any(e.kind == what for e in obj.events.all())
@@ -356,6 +361,9 @@ def lead_site(request, pk):
     then = request.GET.get("then") or request.POST.get("then") or ""
     if request.method == "POST":
         values = {k: request.POST.get(k, "").strip()[:2000] for k, *_ in SITE_TEXT}
+        if "map_link" in request.POST:
+            obj.map_link = request.POST.get("map_link", "").strip()[:500]
+            obj.save(update_fields=["map_link"])
         site, _ = SiteDetails.objects.update_or_create(lead=obj, defaults=dict(values, updated_by=request.user, updated_at=timezone.now()))
         for pid in request.POST.getlist("delete"):
             if pid.isdigit():
@@ -451,7 +459,7 @@ def lead_new(request):
     people = [u for u in User.objects.filter(is_active=True).order_by("first_name", "username")]
     error = ""
     values = {"customer_name": "", "phone": "", "area": "", "need_choice": "call", "other_text": "", "priority": "medium", "note": "", "assigned_to": "", "assigned_to2": "",
-              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": ""}
+              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": "", "map_link": ""}
     if request.method == "POST":
         values = {k: request.POST.get(k, "").strip() for k in values}
         person = User.objects.filter(pk=values["assigned_to"], is_active=True).first() if values["assigned_to"].isdigit() else None
@@ -474,7 +482,7 @@ def lead_new(request):
             error = "The two people must be different."
         if not error:
             ctype, dcr, stype, sother = _read_type(values)
-            lead = Lead.objects.create(customer_type=ctype, dcr_choice=dcr, system_type=stype, system_other=sother, customer_name=values["customer_name"], phone=values["phone"], area=values["area"],
+            lead = Lead.objects.create(customer_type=ctype, dcr_choice=dcr, system_type=stype, system_other=sother, map_link=values["map_link"][:500], customer_name=values["customer_name"], phone=values["phone"], area=values["area"],
                                        need=need, need_other=values["other_text"] if need == "other" else "", priority=values["priority"], note=values["note"],
                                        entered_by=request.user, assigned_to=person, assigned_to2=person2)
             lead.next_step = _auto_next(lead)
@@ -495,8 +503,9 @@ def lead_new(request):
 @require_POST
 def lead_done(request, pk):
     obj = get_object_or_404(Lead, pk=pk)
-    if not (_is_lead_head(request.user) or request.user.id in (obj.entered_by_id, obj.assigned_to_id, obj.assigned_to2_id)):
-        return redirect("leads")
+    if request.user.id not in (obj.assigned_to_id, obj.assigned_to2_id):      # only the assigned person marks a lead done / opens it again
+        messages.warning(request, "Only the person this lead is assigned to can mark it done or open it again.")
+        return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/leads/") else "leads")
     obj.done = not obj.done
     obj.save(update_fields=["done"])
     messages.success(request, "%s marked done. It is hidden from the open list - tap \"Include done\" to see it again." % obj.customer_name if obj.done
@@ -513,7 +522,16 @@ def home(request):
         coll = payments.build(request.user, _is_director(request.user))
     except Exception:           # the home page must open even if the payment tables are not ready
         coll = None
-    return render(request, "portal/home.html", {"coll": coll, "name": request.user.get_full_name() or request.user.get_username(),
+    margin_alert = None
+    if _is_director(request.user):         # the red notice on the first page: quotations given below the calculated price
+        try:
+            from quotations import low_margin
+            found = low_margin.rows(limit=50)
+            if found:
+                margin_alert = {"count": len(found), "latest": found[:3]}
+        except Exception:
+            margin_alert = None
+    return render(request, "portal/home.html", {"margin_alert": margin_alert, "coll": coll, "name": request.user.get_full_name() or request.user.get_username(),
                                                 "dash": dashboard.build(rng) if show_dash else None, "rng": rng,
                                                 "periods": periods, "is_director": _is_director(request.user), "show_collections": coll is not None})
 

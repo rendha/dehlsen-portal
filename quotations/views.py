@@ -856,8 +856,21 @@ def _person_url():
 def low_margin(request):
     """Admin passkey only: the quotations given below their calculated price (who, calculated value, their value, margin lost, margin now)."""
     from . import low_margin as lm
-    unlocked = rates_unlocked(request)
+    unlocked = rates_unlocked(request) or _is_director_user(request)          # directors open it without the passkey
     return render(request, "quotations/low_margin.html", {"rows": lm.rows() if unlocked else [], "show_rates": unlocked})
+
+
+def _is_director_user(request):
+    """A signed-in portal director (or superuser).  Always False in the stand-alone quotation website, which has no users."""
+    try:
+        u = request.user
+        if not getattr(u, "is_authenticated", False):
+            return False
+        if u.is_superuser:
+            return True
+        return bool(u.portal_profile.director)
+    except Exception:
+        return False
 
 
 def dashboard(request):

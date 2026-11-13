@@ -2,21 +2,27 @@
 {% block title %}Dehlsen Energy{% endblock %}
 {% block head %}<style>
 .grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-@media(min-width:760px){.grid4{grid-template-columns:repeat(5,1fr)}}
+@media(min-width:760px){.grid4{grid-template-columns:repeat(3,1fr)}}
 .tile{position:relative;display:block;color:inherit;text-decoration:none;background:var(--card);border-radius:18px;padding:22px 14px;text-align:center;box-shadow:0 4px 16px rgba(30,50,80,.08);border:2px solid transparent;transition:.15s}
 .tile:hover{transform:translateY(-3px);border-color:var(--blue)}
 .tile .ic{width:60px;height:60px;border-radius:16px;display:grid;place-items:center;font-size:28px;margin:0 auto 10px;color:#fff}
 .tile h3{margin:0 0 4px;font-size:18px}.tile p{margin:0;color:var(--mut);font-size:13px}
 .badge{position:absolute;top:10px;right:12px;background:var(--red);color:#fff;border-radius:999px;min-width:26px;height:26px;display:grid;place-items:center;font-size:13px;font-weight:700;padding:0 7px}
+.malert{display:block;background:#fdecea;border:1px solid #b02a1c;border-left:6px solid #b02a1c;border-radius:12px;padding:10px 14px;margin:0 0 14px;color:#8f1d12;text-decoration:none}
+.malert b{display:block;font-size:15px}.malert small{display:block;margin-top:3px;color:#8f1d12}
 .hello{margin:0 0 14px}.hello h2{margin:0}.hello p{margin:2px 0 0;color:var(--mut)}
 </style>{% endblock %}
 {% block body %}<div class="app">
 <div class="top"><div><h1>Dehlsen Energy</h1><small>{{ name }}</small></div>
 <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="pill" type="submit">Log out</button></form></div>
 <div class="hello"><h2>Hello, {{ name }}</h2><p>What do you want to open?</p></div>
+{% if margin_alert %}<a class="malert" href="{% url 'low_margin' %}"><b>&#9888; Margin decreasing: {{ margin_alert.count }} quotation{{ margin_alert.count|pluralize }} given below the calculated price</b>
+{% for r in margin_alert.latest %}<small>{{ r.person }} &middot; {{ r.client }} &middot; quoted &#8377;{{ r.their_value|floatformat:0 }} instead of &#8377;{{ r.calculated_value|floatformat:0 }}{% if r.loss %} &middot; <b style="display:inline">LOSS</b>{% endif %}</small>{% endfor %}
+<small>Tap to see all (admin passkey page) &rsaquo;</small></a>{% endif %}
 <div class="grid4">
 <a class="tile" href="/sales/"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Sales</h3><p>Quotations, reports, hybrid calculator</p></a>
-<a class="tile" href="/project/"><div class="ic" style="background:var(--orange)">&#9635;</div><h3>Project</h3><p>Material lists, store, payments</p></a>
+<a class="tile" href="{% url 'progress' %}"><div class="ic" style="background:var(--orange)">&#128203;</div><h3>Project</h3><p>Where every customer's work stands, KSEB, warranty</p></a>
+<a class="tile" href="/project/"><div class="ic" style="background:#0f9d9a">&#128230;</div><h3>Material</h3><p>Material lists, store, payments</p></a>
 <a class="tile" href="/service/"><div class="ic" style="background:var(--green)">&#10022;</div><h3>Service</h3><p>Cleaning, schedule, customers</p></a>
 <a class="tile" href="{% url 'leads' %}"><div class="ic" style="background:#d64545">&#9733;</div><h3>Leads</h3><p>Calls, site visits, priority</p></a>
 <a class="tile" href="{% url 'task' %}">{% if task_badge %}<span class="badge">{{ task_badge }}</span>{% endif %}<div class="ic" style="background:var(--purple)">&#10004;</div><h3>Task</h3><p>Give a task, calendar, my tasks</p></a>

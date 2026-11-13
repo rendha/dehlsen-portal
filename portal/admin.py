@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 
-from .models import Collection, Payment, Lead, SiteDetails, Place, Profile, PushSubscription, SalesTarget, Task, TaskPerson, TaskType
+from .models import Collection, Payment, Lead, SiteDetails, Place, Profile, ProjectWork, PushSubscription, SalesTarget, Task, TaskPerson, TaskType
 
 User = get_user_model()
 
@@ -92,3 +92,10 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ("collection", "amount", "date", "stage", "entered_by", "created_at")
     list_filter = ("stage", "entered_by")
     date_hierarchy = "date"
+
+
+@admin.register(ProjectWork)
+class ProjectWorkAdmin(admin.ModelAdmin):
+    list_display = ("name", "kw", "location", "work_status", "commission_date", "handover", "collection")
+    list_filter = ("handover", "feasibility")
+    search_fields = ("name", "phone", "project_id")

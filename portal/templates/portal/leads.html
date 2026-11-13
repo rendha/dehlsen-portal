@@ -9,7 +9,8 @@
 .sum a.n.hot{background:#fde8e8;color:#b02f2f}.sum a.n.medium{background:#fff3e0;color:#b35a08}.sum a.n.cold{background:#e8f1fb;color:#2a5a95}.sum a.n.tot{background:#eef3fa;color:var(--blue)}
 .sum a.n.zero{opacity:.35}
 .lead{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start}.lead:last-child{border:0}
-.lead .b{flex:1;min-width:0}.lead small{color:var(--mut);display:block}.lead.done{opacity:.5}
+.lead .b{flex:1;min-width:0}.lead small{color:var(--mut);display:block}.lead{border-left:5px solid #E8730C;background:#fffaf3;padding-left:10px;border-radius:10px;margin:6px 0}.lead.done{background:#eaf7ef;border-left-color:#2e9e5b}.lead.lost{background:#f3f3f3;border-left-color:#999;opacity:.8}
+.stt{display:inline-block;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-right:4px;background:#fff0dd;color:#b35a08}.stt.done{background:#d5f0df;color:#1f7a43}.stt.lost{background:#e4e4e4;color:#666}
 .lead form{margin:0}.mini{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
 .st{display:inline-block;font-size:11px;border-radius:999px;padding:2px 9px;background:#eef3fa;color:var(--blue);font-weight:600}.st.quoted{background:#e8f1fb}.st.waiting{background:#fff3e0;color:#b35a08}.st.confirmed{background:#e3f5ea;color:var(--green)}.st.lost{background:#eee;color:#666}
 .hist{border-left:2px solid var(--line);margin:6px 0 0 4px;padding-left:10px}.hist small{margin:3px 0}details>summary{cursor:pointer;color:var(--blue);font-size:12px;margin-top:6px}.upd{background:#f7f9fc;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px}.upd select,.upd input{margin:4px 0 6px;padding:7px 9px;font-size:13px}.upd label{font-size:12px}
@@ -20,6 +21,9 @@
 .trk .n i{position:relative;z-index:1;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #2e9e5b;color:#2e9e5b;font-style:normal;font-size:15px;font-weight:700}
 .trk .n.pending i{border-color:#b8c0cc;color:#8a94a3}
 .trk .n.lost i{border-color:#d64545;color:#d64545}
+.trk .n.assigned i{border-color:#E8730C;color:#E8730C;background:#fff3e0;font-size:13px}
+.trk .n.handed i{border-color:#3B73B9;color:#3B73B9;background:#e8f1fb}
+.trk .n.completed i{border-color:#1f7a43;background:#2e9e5b;color:#fff}
 .trk .n span{display:block;margin-top:4px}.trk .n small{display:block;margin:0;font-size:10px;color:var(--mut)}
 .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs a{text-decoration:none}
 </style>{% endblock %}
@@ -59,8 +63,8 @@
 <a class="chip {% if prio == 'cold' %}on{% endif %}" href="?by={{ by }}&p=cold{% if who %}&who={{ who }}{% endif %}{% if show_done %}&done=1{% endif %}">Cold</a>
 <a class="chip {% if show_done %}on{% endif %}" href="?by={{ by }}{% if who %}&who={{ who }}{% endif %}{% if prio %}&p={{ prio }}{% endif %}{% if not show_done %}&done=1{% endif %}">Include done</a>
 </div>
-{% for l in items %}<div class="lead {% if l.done %}done{% endif %}">
-<div class="b"><span class="p {{ l.priority }}">{{ l.get_priority_display }}</span> {% for n in l.need_list %}<span class="tag">{{ n }}</span>{% endfor %}{% for c in l.type_chips %}<span class="tag">{{ c }}</span>{% endfor %}
+{% for l in items %}<div class="lead {% if l.lost %}lost{% elif l.done %}done{% endif %}">
+<div class="b">{% if l.lost %}<span class="stt lost">Lost</span>{% elif l.done %}<span class="stt done">&#10004; Completed</span>{% else %}<span class="stt">Assigned{% if l.assigned_to %} &middot; {{ l.assigned_to.first_name|default:l.assigned_to.username }}{% endif %}</span>{% endif %}<span class="p {{ l.priority }}">{{ l.get_priority_display }}</span> {% for n in l.need_list %}<span class="tag">{{ n }}</span>{% endfor %}{% for c in l.type_chips %}<span class="tag">{{ c }}</span>{% endfor %}
 <b style="display:block;margin-top:4px">{{ l.customer_name }}</b>
 <small>{% if l.phone %}<a href="tel:{{ l.phone }}">{{ l.phone }}</a>{% endif %}{% if l.phone and l.area %} · {% endif %}{{ l.area }}</small>
 {% if l.note %}<small>{{ l.note }}</small>{% endif %}
@@ -89,12 +93,13 @@
 {% if not l.lost and l.stage != "confirmed" %}{% if not l.has_call %}<form method="post" action="{% url 'lead_quick' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as called?');">{% csrf_token %}<input type="hidden" name="what" value="call"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Called</button></form>{% endif %}
 {% if not l.has_visit %}<form method="post" action="{% url 'lead_quick' l.id %}">{% csrf_token %}<input type="hidden" name="what" value="visit"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Site visit</button></form>{% endif %}{% endif %}
 <a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="{% url 'lead_site' l.id %}">Site details{% if l.site %} &#10004;{% endif %}</a>
+{% if l.map_url %}<a class="mini" style="text-decoration:none;color:#1a56b0;text-align:center;font-weight:700" target="_blank" rel="noopener" href="{{ l.map_url }}">&#128205; Open location</a>{% endif %}
 <a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="{% url 'lead_site' l.id %}#bill">Electricity bill</a>
 {% if l.stage == "lead" and not l.done %}<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="/sales/new/?lead={{ l.id }}">Make quotation</a>{% endif %}
 {% if l.stage == "quoted" or l.stage == "waiting" %}{% if not l.done %}<a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="/sales/new/?lead={{ l.id }}">&#8635; Re-quote</a><form method="post" action="{% url 'lead_won' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as WON? The quotation becomes a customer.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%;background:#e3f5ea;border-color:#2e9e5b;color:#1f7a43;font-weight:700">Won</button></form>{% endif %}{% endif %}
 {% if l.lost %}<form method="post" action="{% url 'lead_lost' l.id %}">{% csrf_token %}<input type="hidden" name="undo" value="1"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">Reopen</button></form>
 {% elif not l.done and l.stage != "confirmed" %}<form method="post" action="{% url 'lead_lost' l.id %}" onsubmit="var r=prompt('Why was it lost? (price / went elsewhere / not interested)','');if(r===null){return false}this.reason.value=r;">{% csrf_token %}<input type="hidden" name="reason" value=""><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">Lost</button></form>{% endif %}
-{% if l.done and not l.lost %}<form method="post" action="{% url 'lead_done' l.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit">Reopen</button></form>{% endif %}</div>
+{% if not l.lost and request.user.id == l.assigned_to_id or not l.lost and request.user.id == l.assigned_to2_id %}<form method="post" action="{% url 'lead_done' l.id %}" onsubmit="return confirm('{% if l.done %}Open {{ l.customer_name|escapejs }} again?{% else %}Mark {{ l.customer_name|escapejs }} as done?{% endif %}');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%;{% if not l.done %}background:#e3f5ea;border-color:#2e9e5b;color:#1f7a43;font-weight:700{% endif %}">{% if l.done %}Reopen{% else %}&#10004; Mark as done{% endif %}</button></form>{% endif %}</div>
 </div>{% empty %}<p style="color:var(--mut)">No leads here.</p>{% endfor %}
 </div></div><dialog id="qd" style="border:0;border-radius:16px;padding:18px;max-width:340px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.25)">
 <h3 style="margin:0 0 4px" id="qd-name">Quotation</h3><p style="margin:0 0 12px;color:var(--mut);font-size:13px" id="qd-offer"></p>
