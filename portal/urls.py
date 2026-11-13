@@ -15,6 +15,7 @@ urlpatterns = [
     path("collections/payment/<int:pk>/delete/", views.collection_pay_delete, name="collection_pay_delete"),
     path("leads/", views.leads, name="leads"),
     path("leads/add/", views.lead_new, name="lead_new"),
+    path("leads/<int:pk>/unvisit/", views.lead_unvisit, name="lead_unvisit"),
     path("leads/<int:pk>/edit/", views.lead_edit, name="lead_edit"),
     path("leads/<int:pk>/site/", views.lead_site, name="lead_site"),
     path("leads/<int:pk>/photo/<int:photo_id>/", views.lead_photo, name="lead_photo"),

@@ -410,7 +410,7 @@ def lead_site(request, pk):
                 added += 1
         bills = _save_bill(obj, request.FILES.getlist("bill"))
         if bills:
-            _lead_log(obj, request.user, "site", "added the electricity bill photo")
+            _lead_log(obj, request.user, "note", "added the electricity bill photo")
         _lead_log(obj, request.user, "site" if _site_ready(obj) else "note", "saved the site details" + (" (%d photo%s added)" % (added, "" if added == 1 else "s") if added else ""))
         if then == "won":
             if _site_ready(obj):
@@ -543,6 +543,29 @@ def lead_new(request):
             return redirect("leads")
     return render(request, "portal/lead_new.html", {
         "people": [{"id": u.id, "name": _person(u)} for u in people], "values": values, "error": error})
+
+
+@require_POST
+def lead_unvisit(request, pk):
+    """Take back a site visit that was marked done by mistake: removes the visit lines from the history and opens the site-visit task again."""
+    obj = get_object_or_404(Lead, pk=pk)
+    if not _may_touch(request.user, obj):
+        return redirect("leads")
+    n = LeadEvent.objects.filter(lead=obj, kind__in=("visit", "site")).delete()[0]
+    from . import lead_dates
+    for t in Task.objects.filter(details__contains=lead_dates.tag(obj, "site"), done=True):
+        t.done, t.done_at = False, None
+        t.save(update_fields=["done", "done_at"])
+    obj = Lead.objects.prefetch_related("events").get(pk=obj.pk)
+    obj.next_step = _auto_next(obj)
+    obj.save(update_fields=["next_step"])
+    try:
+        lead_dates.sync_tasks(obj, request.user)
+    except Exception:
+        pass
+    LeadEvent.objects.create(lead=obj, by=request.user, kind="note", text="site visit mark removed by %s" % _person(request.user))
+    messages.success(request, "Site visit mark removed for %s." % obj.customer_name if n else "No site visit mark to remove.")
+    return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
 
 
 def lead_edit(request, pk):

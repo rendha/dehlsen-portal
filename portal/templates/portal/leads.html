@@ -96,6 +96,7 @@
 </div>
 <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
 <a class="mini" style="text-decoration:none;color:var(--ink);text-align:center;font-weight:700" href="{% url 'lead_edit' l.id %}">&#9998; Edit lead / add bill</a>
+{% if l.has_visit %}<form method="post" action="{% url 'lead_unvisit' l.id %}" onsubmit="return confirm('Remove the site visit mark for {{ l.customer_name|escapejs }}?');">{% csrf_token %}<input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#8630; Undo site visit</button></form>{% endif %}
 {% if not l.lost and l.stage != "confirmed" %}{% if not l.has_call %}<form method="post" action="{% url 'lead_quick' l.id %}" onsubmit="return confirm('Mark {{ l.customer_name|escapejs }} as called?');">{% csrf_token %}<input type="hidden" name="what" value="call"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Called</button></form>{% endif %}
 {% if not l.has_visit %}<form method="post" action="{% url 'lead_quick' l.id %}">{% csrf_token %}<input type="hidden" name="what" value="visit"><input type="hidden" name="next_url" value="{{ request.get_full_path }}"><button class="mini" type="submit" style="width:100%">&#10004; Site visit</button></form>{% endif %}{% endif %}
 <a class="mini" style="text-decoration:none;color:var(--ink);text-align:center" href="{% url 'lead_site' l.id %}">Site details{% if l.site %} &#10004;{% endif %}</a>
