@@ -164,7 +164,7 @@ def for_user(user, today=None, previous=False):
     if profile is not None and profile.place_id:
         my_keys.add(("p", profile.place_id))
     result = []
-    for key, title in ((("quarter", "Previous quarter"),) if previous else (("quarter", "This quarter"), ("year", "This year"))):
+    for key, title in ((("quarter", "Previous quarter"),) if previous else (("year", "Overall target: this year"), ("quarter", "This quarter"))):
         if not lines[key]:
             continue
         mine = next((l for l in lines[key] if l["key"] in my_keys), None)
