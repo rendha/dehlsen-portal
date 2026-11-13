@@ -14,6 +14,10 @@
 {% if f.kind == "area" %}<textarea id="{{ f.name }}" name="{{ f.name }}" rows="3" placeholder="{{ f.hint }}">{{ f.value }}</textarea>
 {% else %}<input id="{{ f.name }}" name="{{ f.name }}" value="{{ f.value }}" placeholder="{{ f.hint }}">{% endif %}
 {% endfor %}
+<label id="bill">Electricity bill photo</label>
+{% if bills %}<div class="ph">{% for pid in bills %}<div><a href="{% url 'lead_photo' lead.id pid %}" target="_blank"><img src="{% url 'lead_photo' lead.id pid %}" alt=""></a><label><input type="checkbox" name="delete" value="{{ pid }}">remove</label></div>{% endfor %}</div>{% endif %}
+<input type="file" name="bill" accept="image/*" capture="environment" multiple>
+<small style="color:var(--mut)">Take a photo of the customer's electricity bill (it is kept separate from the roof photos).</small>
 <label>Roof photos, layout sketch, inverter / meter place</label>
 {% if photos %}<div class="ph">{% for pid in photos %}<div><a href="{% url 'lead_photo' lead.id pid %}" target="_blank"><img src="{% url 'lead_photo' lead.id pid %}" alt=""></a><label><input type="checkbox" name="delete" value="{{ pid }}">remove</label></div>{% endfor %}</div>{% endif %}
 <input type="file" name="photos" id="photos" accept="image/*" multiple>
@@ -22,7 +26,7 @@
 </form></div></div>
 <script>
 (function () {
-  var form = document.getElementById("sf"), input = document.getElementById("photos");
+  var form = document.getElementById("sf"), inputs = Array.prototype.slice.call(form.querySelectorAll('input[type=file]'));
   function shrink(file) {
     return new Promise(function (resolve) {
       var img = new Image(), url = URL.createObjectURL(file);
@@ -37,12 +41,13 @@
     });
   }
   form.addEventListener("submit", function (e) {
-    if (form.dataset.ready || !input.files.length || !window.DataTransfer) { return; }
+    if (form.dataset.ready || !window.DataTransfer || !inputs.some(function (i) { return i.files.length; })) { return; }
     e.preventDefault();
-    Promise.all(Array.prototype.map.call(input.files, shrink)).then(function (files) {
-      var dt = new DataTransfer(); files.forEach(function (f) { dt.items.add(f); });
-      input.files = dt.files; form.dataset.ready = "1"; form.submit();
-    });
+    Promise.all(inputs.map(function (input) {
+      return Promise.all(Array.prototype.map.call(input.files, shrink)).then(function (files) {
+        var dt = new DataTransfer(); files.forEach(function (f) { dt.items.add(f); }); input.files = dt.files;
+      });
+    })).then(function () { form.dataset.ready = "1"; form.submit(); });
   });
 })();
 </script>{% endblock %}

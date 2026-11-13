@@ -285,10 +285,22 @@ def lead_update(request, pk):
     return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
 
 
+BILL = "Electricity bill"      # caption that marks an electricity-bill photo (kept in the same table as the site photos)
+
+
+def _save_bill(lead, files):
+    n = 0
+    for f in files:
+        if f.size <= 6 * 1024 * 1024 and (f.content_type or "").startswith("image/"):
+            SitePhoto.objects.create(lead=lead, data=f.read(), content_type=f.content_type, caption=BILL)
+            n += 1
+    return n
+
+
 def _site_ready(lead):
     """The site details count as done when the roof size or at least one photo is there."""
     site = SiteDetails.objects.filter(lead=lead).first()
-    return bool(site and (site.roof_length or site.roof_width) or SitePhoto.objects.filter(lead=lead).exists())
+    return bool(site and (site.roof_length or site.roof_width) or SitePhoto.objects.filter(lead=lead).exclude(caption=BILL).exists())
 
 
 def _make_won(request, obj):
@@ -353,6 +365,9 @@ def lead_site(request, pk):
             if f.size <= 6 * 1024 * 1024 and (f.content_type or "").startswith("image/"):
                 SitePhoto.objects.create(lead=obj, data=f.read(), content_type=f.content_type, caption=f.name[:120])
                 added += 1
+        bills = _save_bill(obj, request.FILES.getlist("bill"))
+        if bills:
+            _lead_log(obj, request.user, "site", "added the electricity bill photo")
         _lead_log(obj, request.user, "site", "saved the site details" + (" (%d photo%s added)" % (added, "" if added == 1 else "s") if added else ""))
         if then == "won":
             if _site_ready(obj):
@@ -364,8 +379,9 @@ def lead_site(request, pk):
             messages.success(request, "Site details saved for %s." % obj.customer_name)
         return redirect("leads")
     fields = [{"name": k, "label": label, "hint": hint, "kind": kind, "value": getattr(site, k, "") if site else ""} for k, label, hint, kind in SITE_TEXT]
-    photos = list(SitePhoto.objects.filter(lead=obj).values_list("id", flat=True))
-    return render(request, "portal/lead_site.html", {"lead": obj, "fields": fields, "photos": photos, "then": then})
+    photos = list(SitePhoto.objects.filter(lead=obj).exclude(caption=BILL).values_list("id", flat=True))
+    bills = list(SitePhoto.objects.filter(lead=obj, caption=BILL).values_list("id", flat=True))
+    return render(request, "portal/lead_site.html", {"lead": obj, "fields": fields, "photos": photos, "bills": bills, "then": then})
 
 
 def lead_photo(request, pk, photo_id):
@@ -463,6 +479,7 @@ def lead_new(request):
                                        entered_by=request.user, assigned_to=person, assigned_to2=person2)
             lead.next_step = _auto_next(lead)
             lead.save(update_fields=["next_step"])
+            _save_bill(lead, request.FILES.getlist("bill"))
             for target in (person, person2):
               if target and target.id != request.user.id:
                 try:
