@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@page { size: 595.56pt 842.04pt; margin: 24pt 25pt 24pt 25pt; background: #e6e6e5; }
+{% include "_base_css.html" %}
+h1 { text-align: center; color: #2e75b6; font-size: 16pt; font-weight: 700; margin: 0 0 8pt 0; }
+table.boq { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7.2pt; line-height: 1.3; color: #111; }
+table.boq th { background: #0070c0; color: #fff; font-weight: 300; font-size: 10pt; height: 28pt; border: 0.6pt solid #000; }
+table.boq td { border: 0.6pt solid #000; padding: 1.5pt 3pt; vertical-align: top; }
+table.boq tr { page-break-inside: avoid; }
+table.boq thead { display: table-header-group; }
+td.part { vertical-align: middle; }
+.lbl { color: #2e75b6; }
+td.c { text-align: center; } td.r { text-align: right; white-space: nowrap; }
+table.boq tr.pc td { background: #dbe9f6; font-size: 8.5pt; vertical-align: middle; }
+.words { text-align: right; font-size: 8pt; margin-top: 5pt; color: #222; } .note { font-size: 8pt; font-weight: 300; margin-top: 8pt; color: #222; }
+</style></head>
+<body>
+<h1>BOQ &amp; Price</h1>
+<table class="boq">
+  <thead><tr><th style="width:30pt">Sr</th><th style="width:80pt">Particular</th><th>Specification</th><th style="width:44pt">QTY</th><th style="width:62pt">MAKE</th><th style="width:52pt">Rate (&#8377;)</th><th style="width:60pt">Amount (&#8377;)</th></tr></thead>
+  <tbody>
+  {% for r in boq_rows %}<tr><td class="c">{{ r.sr }}</td><td class="part">{{ r.particular }}</td><td>{{ r.spec }}</td><td class="c">{{ r.qty }}</td><td>{{ r.make }}</td><td class="r">{{ r.rate }}</td><td class="r">{{ r.amount }}</td></tr>
+  {% endfor %}
+  {% if adjust %}<tr><td></td><td colspan="4">{{ adjust_label }}</td><td></td><td class="r">{{ adjust }}</td></tr>{% endif %}
+  <tr class="pc"><td></td><td colspan="4"><b>Project Cost (GST included)</b></td><td></td><td class="r"><b>{{ total_plain }}</b></td></tr>
+  </tbody>
+</table>
+<div class="words">{{ words }}</div>
+<div class="note" style="margin-top:12pt;"><b style="font-size:10pt; color:#2e75b6;">Scope of Work</b><br>{{ scope }}</div>
+{% if keep %}<div class="note"><b>Note:</b> {{ keep }}</div>{% endif %}
+{% if note %}<div class="note"><b>Note:</b> {{ note }}</div>{% endif %}
+</body></html>
