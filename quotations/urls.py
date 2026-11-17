@@ -31,4 +31,6 @@ urlpatterns = [
     path("upgrade/api/products/", addon_views.addon_products, name="addon_products"),
     path("upgrade/<int:pk>/", addon_views.addon_detail, name="addon_detail"),
     path("upgrade/<int:pk>/pdf", addon_views.addon_pdf, name="addon_pdf"),
+    path("upgrade/<int:pk>/pdf/<str:filename>", addon_views.addon_pdf, name="addon_pdf_named"),
+    path("upgrade/<int:pk>/view/<str:filename>", addon_views.addon_pdf_view, name="addon_pdf_view"),
 ]

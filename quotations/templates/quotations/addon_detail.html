@@ -7,4 +7,4 @@
 <p style="text-align:right;margin:12px 0 0">Taxable &#8377; {{ a.taxable_total }} &middot; GST 5% &#8377; {{ a.gst_low_amount }} &middot; GST 18% &#8377; {{ a.gst_high_amount }}</p>
 <p style="text-align:right;font-size:18px;font-weight:bold;color:#3B73B9;margin:6px 0 0">Total &#8377; {{ a.final_total }} <small style="font-weight:normal;color:#6b7280">(GST included)</small></p></div>
 {% if show_rates %}<div class="card"><form method="post">{% csrf_token %}<label>Change the quoted total (leave empty to use the calculated &#8377; {{ a.calculated_total }})</label><input name="final_override" inputmode="decimal" value="{% if a.final_override is not None %}{{ a.final_override }}{% endif %}"><p><button class="btn btn2">Save price</button></p></form></div>{% endif %}
-<p><a class="btn" href="{% url 'addon_pdf' a.pk %}" target="_blank">Open PDF</a></p></div></body></html>
+<p><a class="btn" href="{% url 'addon_pdf_view' a.pk pdf_name %}">Open PDF</a></p></div></body></html>

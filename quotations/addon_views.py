@@ -5,11 +5,12 @@ from django.contrib.auth.decorators import login_not_required  # noqa: F401  (ke
 from django.db.models import Q
 from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from . import pdf_layout as L
 from .addon_models import AddonItem, AddonQuotation, default_gst
-from .models import Product
+from .models import PanelOption, Product
 
 
 def _unlocked(request):
@@ -47,7 +48,22 @@ def addon_products(request):
         qs = qs.filter(Q(name__icontains=word) | Q(make__icontains=word) | Q(specification__icontains=word))
     show = _unlocked(request)
     out = []
-    for p in qs.order_by("category", "name")[:15]:
+    # solar panels live in Panel options (a rate per watt), not in Products: search them too, panels first
+    words = [w.lower() for w in q.split()]
+    for o in PanelOption.objects.filter(is_active=True).order_by("company", "panel_type", "wattage"):
+        watts = o.wattage.normalize()
+        watts = int(watts) if watts == watts.to_integral_value() else watts
+        name = " ".join(("%s %s %s W" % (o.company, o.panel_type, watts)).split())
+        if words and not all(w in (name + " panel pv module solar").lower() for w in words):
+            continue
+        d = {"id": "panel:%d" % o.id, "name": name, "make": o.company, "unit": "Nos", "category": "PV Module", "gst": "5",
+             "spec": "%s %s solar PV module, %s Wp" % (o.panel_type, "DCR" if o.dcr_status == "dcr" else "Non-DCR", watts)}
+        if show:
+            d["rate"] = str((o.rate_per_watt * o.wattage).quantize(Decimal("0.01")))
+        out.append(d)
+        if len(out) >= 10:
+            break
+    for p in qs.order_by("category", "name")[:max(15 - len(out), 5)]:
         d = {"id": p.id, "name": p.name, "make": p.make, "spec": p.specification, "unit": p.unit,
              "category": p.get_category_display(), "gst": str(default_gst(p.category))}
         if show:
@@ -85,12 +101,18 @@ def addon_new(request):
             if not desc:
                 continue
             get = lambda lst, d="": lst[i] if i < len(lst) else d
-            product = Product.objects.filter(pk=get(ids) or 0).first()
+            pid = get(ids)
+            product = Product.objects.filter(pk=pid).first() if pid.isdigit() else None
+            panel = PanelOption.objects.filter(pk=pid[6:]).first() if pid.startswith("panel:") and pid[6:].isdigit() else None
             qty = _dec(get(qtys), "1") or Decimal("1")
             if product:   # the rate always comes from the rate list, never from the browser
                 rate = product.rate
                 gst = _dec(get(gsts), "") if get(gsts) else default_gst(product.category)
                 make, spec, unit = get(makes) or product.make, get(specs) or product.specification, get(units) or product.unit
+            elif panel:   # a solar panel from Panel options: price = watts x rate per watt, always from the server
+                rate = (panel.rate_per_watt * panel.wattage).quantize(Decimal("0.01"))
+                gst = _dec(get(gsts), "5") if get(gsts) else Decimal("5")
+                make, spec, unit = get(makes) or panel.company, get(specs), get(units) or "Nos"
             else:         # typed item: the person types its rate
                 rate, gst = _dec(get(rates)), _dec(get(gsts), "18")
                 make, spec, unit = get(makes), get(specs), get(units) or "Nos"
@@ -111,7 +133,7 @@ def addon_detail(request, pk):
         if addon.margin_drop > 0 and addon.margin_drop != before:
             _alert(addon)
         return redirect("addon_detail", pk=addon.pk)
-    return render(request, "quotations/addon_detail.html", {"a": addon, "items": addon.items.all(), "show_rates": _unlocked(request)})
+    return render(request, "quotations/addon_detail.html", {"a": addon, "items": addon.items.all(), "show_rates": _unlocked(request), "pdf_name": _pdf_name(addon)})
 
 
 def _alert(addon):
@@ -127,11 +149,22 @@ def _alert(addon):
         pass
 
 
+def _pdf_name(addon):
+    return "%s_upgrade.pdf" % ("".join(c for c in addon.customer_name if c.isalnum())[:30] or "upgrade")
+
+
+def addon_pdf_view(request, pk, filename):
+    """The PDF inside our own page (Back and Share / Save buttons): a phone's Safari cannot open a bare PDF address reliably,
+    this is how the normal quotation PDF is shown too."""
+    _mine_or_404(request, pk)
+    return render(request, "quotations/pdf_view.html", {"pdf_url": reverse("addon_pdf_named", args=[pk, filename]), "pdf_name": filename})
+
+
 def addon_pdf(request, pk, filename=None):
     addon = _mine_or_404(request, pk)
     from .addon_pdf import build_addon_pdf
     resp = FileResponse(build_addon_pdf(addon), as_attachment=False,
-                        filename="%s_upgrade.pdf" % "".join(c for c in addon.customer_name if c.isalnum())[:30],
+                        filename=_pdf_name(addon),
                         content_type="application/pdf")
     resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
