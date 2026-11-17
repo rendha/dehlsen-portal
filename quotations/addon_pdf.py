@@ -34,8 +34,8 @@ def _rows(a):
 def build_addon_pdf(a):
     rows = _rows(a)
     overflow = len(rows) > BOX_ITEMS
-    low = "GST @ 5%: ₹ %s" % L.money_text(a.gst_low_amount)
-    high = "GST @ 18%: ₹ %s" % L.money_text(a.gst_high_amount)
+    low = "GST @ 5%%: ₹ %s" % L.money_text(a.gst_low_amount)
+    high = "GST @ 18%%: ₹ %s" % L.money_text(a.gst_high_amount)
     base = {"assets": ASSETS_URI}
     parts = [_part("cover.html", dict(base, cover_fields=_cover(a))), PdfReader(str(ASSETS_DIR / "page_welcome.pdf"))]
     if overflow:

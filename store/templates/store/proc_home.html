@@ -1,0 +1,54 @@
+{% extends "store/base.html" %}
+{% block title %}Procurement{% endblock %}
+{% block content %}
+<style>.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}.kpi{background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}.kpi b{display:block;font-size:22px}.kpi.red b{color:#b91c1c}.kpi.amb b{color:#b45309}</style>
+<h1>Procurement</h1>
+<p class="muted">What we buy, from whom, on credit or paid, what is due, and where each customer stands.</p>
+<div class="actions">{% if editor %}<a class="btn" href="{% url 'proc_add' %}">+ Add a purchase</a>{% endif %}<a class="btn light" href="{% url 'proc_customers' %}">Customer position</a></div>
+
+<div class="kpis">
+<div class="kpi"><span class="muted">We owe suppliers</span><b>&#8377;{{ owed_total|floatformat:"0g" }}</b></div>
+<div class="kpi red"><span class="muted">Overdue ({{ up.overdue|length }})</span><b>&#8377;{{ overdue_total|floatformat:"0g" }}</b></div>
+<div class="kpi amb"><span class="muted">Due in 7 days ({{ up.week|length }})</span><b>&#8377;{{ week_total|floatformat:"0g" }}</b></div>
+<div class="kpi"><span class="muted">Not yet delivered</span><b>{{ up.waiting|length }}</b></div>
+<div class="kpi"><span class="muted">Still to buy (customer lists)</span><b>&#8377;{{ to_buy_total|floatformat:"0g" }}</b></div>
+</div>
+
+<h2>Upcoming: bills to pay <small>credit taken from suppliers, nearest due date first</small></h2>
+<div class="tablebox"><table><thead><tr><th>Due</th><th>Supplier</th><th>Customer</th><th>What</th><th class="right">Bill</th><th class="right">Balance</th><th></th></tr></thead><tbody>
+{% for p in up.dues %}<tr>
+<td>{% if p.due_date %}{{ p.due_date|date:"j M Y" }}{% else %}-{% endif %}</td><td><a href="{% url 'proc_purchase' p.pk %}">{{ p.supplier.name }}</a></td>
+<td>{% if p.customer %}<a href="{% url 'proc_customer' p.customer_id %}">{{ p.customer.name }}</a>{% else %}<span class="muted">General stock</span>{% endif %}</td>
+<td>{{ p.description }}</td><td class="right">&#8377;{{ p.amount|floatformat:"0g" }}</td><td class="right"><b>&#8377;{{ p.balance|floatformat:"0g" }}</b></td>
+<td>{% if p.days is None %}<span class="badge">No due date</span>{% elif p.days < 0 %}<span class="badge bad">Overdue {{ p.days|cut:"-" }}d</span>{% elif p.days == 0 %}<span class="badge bad">Due today</span>{% elif p.days <= 7 %}<span class="badge warn">In {{ p.days }}d</span>{% else %}<span class="badge">In {{ p.days }}d</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">Nothing is owed to suppliers.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Upcoming: deliveries awaited <small>bought but not yet received</small></h2>
+<div class="tablebox"><table><thead><tr><th>Expected</th><th>Supplier</th><th>Customer</th><th>What</th><th></th></tr></thead><tbody>
+{% for p in up.waiting %}<tr><td>{% if p.expected_on %}{{ p.expected_on|date:"j M Y" }}{% else %}-{% endif %}</td><td><a href="{% url 'proc_purchase' p.pk %}">{{ p.supplier.name }}</a></td>
+<td>{% if p.customer %}{{ p.customer.name }}{% else %}<span class="muted">General stock</span>{% endif %}</td><td>{{ p.description }}</td>
+<td>{% if p.late %}<span class="badge bad">Late</span>{% elif not p.expected_on %}<span class="badge">No date</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">No delivery is awaited.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Upcoming: sites the crew visits in the next 7 days <small>is the material dispatched?</small></h2>
+<div class="tablebox"><table><thead><tr><th>Date</th><th>Site</th><th>Crew</th><th>Material dispatched</th></tr></thead><tbody>
+{% for r in up.crew %}<tr><td>{{ r.date|date:"D j M" }}</td><td>{% if r.customer %}<a href="{% url 'proc_customer' r.customer.pk %}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td>{{ r.team }} <span class="muted">({{ r.work }})</span></td>
+<td>{% if not r.customer %}<span class="badge">No material list</span>{% elif r.ok %}<span class="badge ok">All {{ r.n }} items done</span>{% else %}<span class="badge bad">{{ r.done }} of {{ r.n }} items done</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="muted">No crew visit to a customer is planned in the next 7 days.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Upcoming: material still to buy <small>items marked Purchase in customer lists that the store has not completed</small></h2>
+<div class="tablebox"><table><thead><tr><th>Customer</th><th class="right">Items</th><th class="right">Value (at cost)</th><th class="right">Bought so far</th></tr></thead><tbody>
+{% for r in up.to_buy %}<tr><td><a href="{% url 'proc_customer' r.c.pk %}">{{ r.c.name }}</a></td><td class="right">{{ r.n }}</td><td class="right">&#8377;{{ r.value|floatformat:"0g" }}</td><td class="right">&#8377;{{ r.ordered|floatformat:"0g" }}</td></tr>
+{% empty %}<tr><td colspan="4" class="muted">Nothing is waiting to be bought.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Owed per supplier</h2>
+<div class="tablebox"><table><thead><tr><th>Supplier</th><th class="right">Purchases</th><th class="right">Bought</th><th class="right">Owed</th><th>Next due</th></tr></thead><tbody>
+{% for r in suppliers %}<tr><td>{{ r.s.name }}</td><td class="right">{{ r.n }}</td><td class="right">&#8377;{{ r.total|floatformat:"0g" }}</td><td class="right"><b>&#8377;{{ r.owed|floatformat:"0g" }}</b></td><td>{% if r.next %}{{ r.next|date:"j M Y" }}{% else %}-{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">No purchase recorded yet.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Recent purchases</h2>
+<div class="tablebox"><table><thead><tr><th>Date</th><th>Supplier</th><th>Customer</th><th>What</th><th class="right">Bill</th><th>Paid / credit</th></tr></thead><tbody>
+{% for p in recent %}<tr><td>{{ p.ordered_on|date:"j M Y" }}</td><td><a href="{% url 'proc_purchase' p.pk %}">{{ p.supplier.name }}</a></td><td>{% if p.customer %}{{ p.customer.name }}{% else %}<span class="muted">General stock</span>{% endif %}</td><td>{{ p.description }}</td><td class="right">&#8377;{{ p.amount|floatformat:"0g" }}</td>
+<td>{% if p.balance <= 0 %}<span class="badge ok">Paid</span>{% elif p.credit %}<span class="badge warn">Credit</span>{% else %}<span class="badge warn">Part paid</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">No purchase recorded yet.{% if editor %} Use &ldquo;Add a purchase&rdquo;.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

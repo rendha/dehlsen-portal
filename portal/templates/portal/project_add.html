@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Add a project · Dehlsen Energy{% endblock %}
+{% block head %}<style>.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.card label{font-size:12px;margin-top:8px;display:block}.card input,.card select,.card textarea{width:100%;margin:3px 0}</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Add a project</h1><small>A new customer by hand &middot; everything can be completed later</small></div><a class="pill" href="{% url 'project_dashboard' %}">&lsaquo; Dashboard</a></div>
+<div class="card" style="max-width:640px;margin:auto">
+{% if error %}<div class="note bad">{{ error }}{% if clash %} <a href="{% url 'progress_detail' clash %}">Open it</a>{% endif %}</div>{% endif %}
+<form method="post">{% csrf_token %}
+<div class="g2"><div><label>Customer name *</label><input name="name" value="{{ v.name }}" required></div><div><label>Project ID</label><input name="project_id" value="{{ v.project_id }}"></div></div>
+<div class="g2"><div><label>Phone</label><input name="phone" type="tel" value="{{ v.phone }}"></div><div><label>Alternate phone</label><input name="alt_phone" value="{{ v.alt_phone }}"></div></div>
+<div class="g2"><div><label>Email</label><input name="email" value="{{ v.email }}"></div><div><label>Booking date</label><input type="date" name="booking_date" value="{{ v.booking_date }}"></div></div>
+<label>Site address</label><textarea name="site_address" rows="2">{{ v.site_address }}</textarea>
+<div class="g2"><div><label>Place</label><input name="location" value="{{ v.location }}"></div><div><label>Pincode</label><input name="pincode" value="{{ v.pincode }}"></div></div>
+<div class="g2"><div><label>District</label><input name="district" value="{{ v.district }}"></div><div><label>Region</label><select name="region"><option value="">-</option><option {% if v.region == "KOZHIKODE" %}selected{% endif %}>KOZHIKODE</option><option {% if v.region == "KANNUR" %}selected{% endif %}>KANNUR</option><option {% if v.region == "EKM" %}selected{% endif %}>EKM</option><option {% if v.region == "PALAKKAD" %}selected{% endif %}>PALAKKAD</option></select></div></div>
+<label>Google Maps link</label><input name="map_link" value="{{ v.map_link }}">
+<div class="g2"><div><label>Segment</label><select name="segment"><option value="">-</option><option {% if v.segment == "Residential" %}selected{% endif %}>Residential</option><option {% if v.segment == "Commercial" %}selected{% endif %}>Commercial</option></select></div><div><label>kW</label><input name="kw" value="{{ v.kw }}"></div></div>
+<div class="g2"><div><label>Panel</label><input name="panel_make" value="{{ v.panel_make }}"></div><div><label>Inverter</label><input name="inverter_make" value="{{ v.inverter_make }}"></div></div>
+<div class="g2"><div><label>System type</label><select name="system"><option value="">-</option><option {% if v.system == "ON-GRID" %}selected{% endif %}>ON-GRID</option><option {% if v.system == "HYBRID" %}selected{% endif %}>HYBRID</option><option {% if v.system == "OFF-GRID" %}selected{% endif %}>OFF-GRID</option></select></div><div><label>ALMM</label><select name="almm"><option value="">-</option><option {% if v.almm == "DCR" %}selected{% endif %}>DCR</option><option {% if v.almm == "NDCR" %}selected{% endif %}>NDCR</option></select></div></div>
+<div class="g2"><div><label>Scheme</label><select name="scheme"><option value="">-</option><option {% if v.scheme == "PM Surya Ghar (Subsidy)" %}selected{% endif %}>PM Surya Ghar (Subsidy)</option><option {% if v.scheme == "Net Metering - No Subsidy" %}selected{% endif %}>Net Metering - No Subsidy</option></select></div><div><label>KSEB consumer no.</label><input name="kseb_consumer_no" value="{{ v.kseb_consumer_no }}"></div></div>
+<div class="g2"><div><label>Sales person (whose customer)</label><input name="sales_person" value="{{ v.sales_person }}"></div><div><label>Site engineer</label><input name="engineer" value="{{ v.engineer }}"></div></div>
+<div class="g2"><div><label>Payment by</label><select name="payment_mode"><option value="cash" {% if v.payment_mode == "cash" %}selected{% endif %}>Own money / cash</option><option value="loan" {% if v.payment_mode == "loan" %}selected{% endif %}>Bank loan</option></select></div><div></div></div>
+<div class="g2"><div><label>Load change</label><select name="load_change"><option value="">Not needed</option><option value="Required" {% if v.load_change == "Required" %}selected{% endif %}>Required (pending)</option></select></div><div><label>Name change</label><select name="name_change"><option value="">Not needed</option><option value="Required" {% if v.name_change == "Required" %}selected{% endif %}>Required (pending)</option></select></div></div>
+{% if clash %}<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="again" value="1" style="width:auto"> Add it anyway (it is a different customer)</label>{% endif %}
+<button class="btn o" type="submit" style="margin-top:12px">Save project</button>
+</form></div></div>{% endblock %}

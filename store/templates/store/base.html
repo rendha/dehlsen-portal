@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Materials{% endblock %} - Dehlsen Energy</title>
+    <title>{% block title %}Procurement{% endblock %} - Dehlsen Energy</title>
     {% load static %}
     <link rel="manifest" href="{% url 'manifest' %}">
     <meta name="theme-color" content="#E8730C">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Materials">
+    <meta name="apple-mobile-web-app-title" content="Procurement">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="icon" type="image/png" sizes="192x192" href="{% static 'store/icon-192.png' %}">
     <link rel="apple-touch-icon" href="{% static 'store/apple-touch-icon.png' %}">
@@ -105,7 +105,7 @@
 </head>
 <body>
 <div class="top">
-    <span class="brand">Dehlsen Materials</span>
+    <span class="brand">Dehlsen Procurement</span>
     {% if user.is_authenticated %}
         {% if is_boss %}<a href="{% url 'boss' %}">Dashboard</a>{% endif %}
         {% if not no_work_role %}
@@ -115,6 +115,7 @@
         {% elif boss_view_only %}
         <a href="{% url 'stock' %}">Warehouse</a>
         {% endif %}
+        {% if can_proc %}<a href="{% url 'proc_home' %}">Procurement</a>{% endif %}
         {% if is_accounts %}<a href="{% url 'accounts' %}">Payments</a>{% endif %}
         <span class="muted" style="color:#dbe7f7">{{ user.get_username }}</span>
         <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}<button type="submit">Log out</button></form>

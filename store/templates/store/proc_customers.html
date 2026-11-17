@@ -1,0 +1,25 @@
+{% extends "store/base.html" %}
+{% block title %}Customer position{% endblock %}
+{% block content %}
+<style>.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.chips a{padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #d1d5db;color:inherit;text-decoration:none;font-size:13px}.chips a.on{background:#3B73B9;color:#fff;border-color:#3B73B9}.bar{height:6px;background:#e5e7eb;border-radius:4px;margin-top:3px}.bar i{display:block;height:6px;border-radius:4px;background:#15803d}.bar.b i{background:#3B73B9}</style>
+<h1>Customer position</h1>
+<p class="muted">For every customer: the quotation value, what the customer has paid, what material we dispatched (at cost, items the store marked Done), and what is left. Tap a customer for the full picture.</p>
+<div class="actions"><a class="btn light" href="{% url 'proc_home' %}">&lsaquo; Procurement</a>
+<form method="get" style="display:flex;gap:6px"><input name="q" value="{{ q }}" placeholder="Search customer"><input type="hidden" name="f" value="{{ f }}"><button class="btn" type="submit">&#128269; Search</button></form></div>
+<div class="chips"><a class="{% if not f %}on{% endif %}" href="?q={{ q }}">All</a><a class="{% if f == 'tied' %}on{% endif %}" href="?f=tied&q={{ q }}">Dispatched more than paid</a><a class="{% if f == 'due' %}on{% endif %}" href="?f=due&q={{ q }}">Customer balance to collect</a><a class="{% if f == 'tosend' %}on{% endif %}" href="?f=tosend&q={{ q }}">Material still to dispatch</a><a class="{% if f == 'owed' %}on{% endif %}" href="?f=owed&q={{ q }}">Supplier dues for the customer</a></div>
+<div class="tablebox"><table style="min-width:980px"><thead><tr><th>Customer</th><th class="right">Quotation</th><th class="right">Paid</th><th class="right">Balance</th><th class="right">Material (cost)</th><th class="right">Dispatched</th><th class="right">Paid &minus; dispatched</th><th class="right">Bought</th><th class="right">Owed to suppliers</th></tr></thead><tbody>
+{% for r in rows %}<tr>
+<td><a href="{% url 'proc_customer' r.c.pk %}"><b>{{ r.c.name }}</b></a><div class="muted">{{ r.c.offer_no }}{% if r.c.system_size %} &middot; {{ r.c.system_size }} kW{% endif %}</div></td>
+<td class="right">{% if r.quote %}&#8377;{{ r.quote|floatformat:"0g" }}{% else %}<span class="muted">-</span>{% endif %}</td>
+<td class="right">&#8377;{{ r.paid|floatformat:"0g" }}<div class="bar"><i style="width:{{ r.paid_pct }}%"></i></div></td>
+<td class="right">{% if r.balance is not None %}<b>&#8377;{{ r.balance|floatformat:"0g" }}</b>{% else %}-{% endif %}</td>
+<td class="right">&#8377;{{ r.material|floatformat:"0g" }}</td>
+<td class="right">&#8377;{{ r.sent|floatformat:"0g" }}<div class="bar b"><i style="width:{{ r.sent_pct }}%"></i></div><div class="muted">{{ r.n_done }}/{{ r.n_lines }} items</div></td>
+<td class="right"><span class="badge {% if r.diff < 0 %}bad{% else %}ok{% endif %}">{% if r.diff < 0 %}&minus;{% endif %}&#8377;{{ r.diff|floatformat:"0g"|cut:"-" }}</span></td>
+<td class="right">{% if r.bought %}&#8377;{{ r.bought|floatformat:"0g" }}{% else %}-{% endif %}</td>
+<td class="right">{% if r.owed %}<b>&#8377;{{ r.owed|floatformat:"0g" }}</b>{% else %}-{% endif %}</td></tr>
+{% empty %}<tr><td colspan="9" class="muted">No customer here.</td></tr>{% endfor %}
+{% if rows %}<tr style="font-weight:bold;background:#f9fafb"><td>Total ({{ rows|length }})</td><td class="right">&#8377;{{ tot.quote|floatformat:"0g" }}</td><td class="right">&#8377;{{ tot.paid|floatformat:"0g" }}</td><td class="right">&#8377;{{ tot.balance|floatformat:"0g" }}</td><td class="right">&#8377;{{ tot.material|floatformat:"0g" }}</td><td class="right">&#8377;{{ tot.sent|floatformat:"0g" }}</td><td class="right">{% if tot.diff < 0 %}&minus;{% endif %}&#8377;{{ tot.diff|floatformat:"0g"|cut:"-" }}</td><td class="right">&#8377;{{ tot.bought|floatformat:"0g" }}</td><td class="right">&#8377;{{ tot.owed|floatformat:"0g" }}</td></tr>{% endif %}
+</tbody></table></div>
+<p class="muted">&ldquo;Paid &minus; dispatched&rdquo; is the money the customer has paid minus the material dispatched (at cost). Green: the customer has paid at least that much. Red with a minus: we have given more material than the customer has paid for.</p>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "portal/base.html" %}
+{% block title %}Project dashboard · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:8px 0}
+.k div{background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(30,50,80,.07)}.k b{display:block;font-size:22px}.k small{color:var(--mut);font-size:11px}
+.k div.bad b{color:#b02a1c}.k div.warn b{color:#b35a08}
+.pn{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 8px rgba(30,50,80,.07);overflow-x:auto}.pn h2{margin:0 0 6px;font-size:15px}
+.pn table{width:100%;border-collapse:collapse;font-size:13px}.pn td,.pn th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}.pn td.r,.pn th.r{text-align:right}
+.bar{height:8px;background:#e8edf3;border-radius:4px;min-width:60px}.bar i{display:block;height:8px;background:var(--blue);border-radius:4px}
+.nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 14px}
+.nav a{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:14px;text-decoration:none;color:var(--ink);box-shadow:0 2px 10px rgba(30,50,80,.09);border:2px solid transparent}
+.nav a:hover,.k a:hover{border-color:var(--blue)}.nav .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;color:#fff;flex:none}
+.nav b{display:block;font-size:15px}.nav small{color:var(--mut);font-size:12px}
+.k a{display:block;text-decoration:none;color:var(--ink);background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(30,50,80,.07);border:2px solid transparent}
+.k a b{display:block;font-size:22px}.k a small{color:var(--mut);font-size:11px}.k a.bad b{color:#b02a1c}.k a.warn b{color:#b35a08}
+h3.sh{margin:16px 2px 6px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Project dashboard</h1><small>{{ d.n }} projects &middot; as on {{ d.today|date:"j M Y" }}</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+<div class="nav">
+<a href="{% url 'progress' %}"><span class="ic" style="background:var(--orange)">&#9998;</span><span><b>Update stages</b><small>Project list &middot; tick work, search a customer</small></span></a>
+<a href="{% url 'crew' %}"><span class="ic" style="background:#c2570c">&#128119;</span><span><b>Crew plan</b><small>Who goes to which site &middot; calendar</small></span></a>
+{% if can_edit %}<a href="{% url 'project_add' %}"><span class="ic" style="background:#2e9e5b">&#43;</span><span><b>Add a project</b><small>New customer form &middot; edit anytime</small></span></a>{% endif %}
+<a href="{% url 'progress_master' %}"><span class="ic" style="background:var(--blue)">&#128101;</span><span><b>Customer master data</b><small>Every customer, all details, Excel</small></span></a>
+<a href="{% url 'progress' %}?tab=risk"><span class="ic" style="background:#b02a1c">&#9888;</span><span><b>Money at risk</b><small>Material at site, not yet paid</small></span></a>
+<a href="{% url 'progress' %}?tab=bank"><span class="ic" style="background:#2e9e5b">&#127974;</span><span><b>Bank loans</b><small>Stages waiting for the bank</small></span></a>
+</div>
+<h3 class="sh">Projects</h3>
+<div class="k">
+<a href="{% url 'progress' %}?tab=all"><b>{{ d.n }}</b><small>Total projects</small></a>
+<a href="{% url 'progress' %}?tab=all"><b>{{ d.kw_total|floatformat:0 }}</b><small>Total capacity (kW)</small></a>
+<a href="{% url 'project_commissioned' %}"><b>{{ d.commissioned }}</b><small>Commissioned &ndash; subsidy &amp; handover</small></a>
+<a href="{% url 'progress' %}?f=hold" class="{% if d.on_hold %}warn{% endif %}"><b>{{ d.on_hold }}</b><small>Projects on hold</small></a>
+</div>
+<h3 class="sh">Follow-up</h3>
+<div class="k">
+<a href="{% url 'progress' %}?f=loan"><b>{{ d.loan }}</b><small>Bank loan customers</small></a>
+<a href="{% url 'progress' %}?f=feas" class="{% if d.feas_applied %}warn{% endif %}"><b>{{ d.feas_applied }}</b><small>Feasibility applied &ndash; waiting for approval</small></a>
+<a href="{% url 'progress' %}?f=nameload" class="{% if d.nameload_pending %}warn{% endif %}"><b>{{ d.nameload_pending }}</b><small>Name change or load change pending ({{ d.name_pending }} name &middot; {{ d.load_pending }} load)</small></a>
+</div>
+<div class="two">
+<div class="pn"><h2>1. Projects by stage</h2><table><tr><th>Stage</th><th class="r">Projects</th><th class="r">kW</th><th>%</th></tr>
+{% for s, c, k, p in d.stages %}<tr><td>{{ s }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></div>
+<div class="pn"><h2>2. Bookings by month</h2><table><tr><th>Month</th><th class="r">Projects</th><th class="r">kW</th></tr>
+{% for m, c, k in d.months %}<tr><td>{{ m|date:"M Y" }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="two">
+<div class="pn"><h2>3. Region</h2><table>{% for a, c, k in d.regions %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
+<h2 style="margin-top:10px">Segment</h2><table>{% for a, c, k in d.segments %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
+<h2 style="margin-top:10px">ALMM</h2><table>{% for a, c, k in d.almm %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
+<h2 style="margin-top:10px">System type</h2><table>{% for a, c, k in d.systems %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table></div>
+<div class="pn"><h2>4. Sales in-charge</h2><table><tr><th>Name</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.sales %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="two">
+<div class="pn"><h2>5. Panel brands</h2><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.panels %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+<div class="pn"><h2>Inverter brands</h2><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.inverters %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="two">
+<div class="pn"><h2>6. Data completeness - what still has to be collected</h2><table><tr><th>Field</th><th class="r">Filled</th><th class="r">Missing</th><th>%</th></tr>
+{% for f, a, b, p in d.complete %}<tr><td>{{ f }}</td><td class="r">{{ a }}</td><td class="r">{{ b }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></div>
+<div class="pn"><h2>7. Time frame - average days</h2><table><tr><th>Interval</th><th class="r">Average</th><th class="r">Projects</th><th class="r">Target</th></tr>
+{% for name, av, target in d.frames %}<tr><td>{{ name }}</td><td class="r">{% if av.0 is not None %}{{ av.0|floatformat:1 }}{% else %}-{% endif %}</td><td class="r">{{ av.1 }}</td><td class="r">{{ target }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="pn" id="alerts"><h2>8. Alerts - who needs attention</h2><table><tr><th>Alert</th><th class="r">Projects</th><th>Customers (first 6)</th></tr>
+{% for name, count, who in d.alerts %}<tr><td>{{ name }}</td><td class="r">{{ count }}</td><td>{{ who|join:", " }}</td></tr>{% endfor %}</table></div>
+<div class="two">
+<div class="pn"><h2>Capacity</h2><table><tr><td>Total DC (kWp) &middot; data for {{ d.dc_have }} of {{ d.n }}</td><td class="r">{{ d.dc_total|floatformat:1 }}</td></tr><tr><td>DC installed (commissioned)</td><td class="r">{{ d.dc_done|floatformat:1 }}</td></tr><tr><td>Total AC / inverter (kW) &middot; data for {{ d.ac_have }} of {{ d.n }}</td><td class="r">{{ d.ac_total|floatformat:0 }}</td></tr><tr><td>AC installed (commissioned)</td><td class="r">{{ d.ac_done|floatformat:0 }}</td></tr><tr><td>Total project value</td><td class="r">&#8377;{{ d.value|floatformat:0 }}</td></tr></table></div>
+<div class="pn"><h2>9. Handover and warranty</h2><table>{% for name, c in d.handover %}<tr><td>{{ name }}</td><td class="r">{{ c }}</td></tr>{% endfor %}</table></div>
+<div class="pn"><h2>10. Contractor payouts (labour)</h2><table><tr><th></th><th class="r">Agreed</th><th class="r">Paid</th><th class="r">Balance</th></tr>
+{% for name, a, p, b in d.contractors %}<tr><td>{{ name }}</td><td class="r">&#8377;{{ a|floatformat:0 }}</td><td class="r">&#8377;{{ p|floatformat:0 }}</td><td class="r">&#8377;{{ b|floatformat:0 }}</td></tr>{% endfor %}</table>
+<h2 style="margin-top:10px">Balance by contractor</h2><table><tr><th>Contractor</th><th class="r">Agreed</th><th class="r">Paid</th><th class="r">Balance</th></tr>
+{% for name, a, p, b in d.per_contractor %}<tr><td>{{ name }}</td><td class="r">&#8377;{{ a|floatformat:0 }}</td><td class="r">&#8377;{{ p|floatformat:0 }}</td><td class="r">&#8377;{{ b|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+</div></div>{% endblock %}

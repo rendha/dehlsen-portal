@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import project_work, views
+from . import crew, project_work, views, project_dashboard
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -27,8 +27,16 @@ urlpatterns = [
     path("leads/<int:pk>/done/", views.lead_done, name="lead_done"),
     path("progress/", project_work.progress, name="progress"),
     path("progress/<int:pk>/update/", project_work.progress_update, name="progress_update"),
+    path("progress/add/", project_work.project_add, name="project_add"),
     path("progress/master/", project_work.master, name="progress_master"),
+    path("progress/dashboard/", project_dashboard.dashboard, name="project_dashboard"),
+    path("progress/commissioned/", project_dashboard.commissioned, name="project_commissioned"),
     path("progress/<int:pk>/", project_work.project_detail, name="progress_detail"),
+    path("crew/", crew.crew, name="crew"),
+    path("crew/add/", crew.crew_add, name="crew_add"),
+    path("crew/<int:pk>/status/", crew.crew_status, name="crew_status"),
+    path("crew/<int:pk>/delete/", crew.crew_delete, name="crew_delete"),
+    path("crew/<int:pk>/copy/", crew.crew_copy, name="crew_copy"),
     path("task/", views.task, name="task"),
     path("task/events/", views.task_events, name="task_events"),
     path("task/new/", views.task_new, name="task_new"),

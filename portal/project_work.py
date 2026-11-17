@@ -142,6 +142,46 @@ def kseb_steps(w):
     return rows, sum(1 for r in rows if r["done"]), nxt
 
 
+MATERIAL_TICKS = ("bos", "inverter_done", "panel_done")
+WORK_TICKS = ("site_estimation", "design", "structure", "electrical", "inv_program", "testing")
+
+
+def material_pct(w, cust):
+    """How much of the material is delivered.  From the store's list (value of the items the store marked Done) when the customer is in the store;
+    else from the three material ticks (BOS, inverter, panel)."""
+    if cust is not None:
+        lines = [l for l in cust.lines.all() if l.quantity > 0]
+        total = sum((l.amount for l in lines), 0)
+        if lines and total > 0:
+            done = [l for l in lines if l.store_status == "done"]
+            sent = sum((l.amount for l in done), 0)
+            return {"pct": int(round(float(sent) * 100 / float(total))), "text": "%d of %d items dispatched" % (len(done), len(lines))}
+    n = sum(1 for k in MATERIAL_TICKS if getattr(w, k))
+    return {"pct": int(round(n * 100 / len(MATERIAL_TICKS))), "text": "%d of 3 (BOS, inverter, panel)" % n}
+
+
+def work_pct(w):
+    """Site work only: estimation, design, structure, electrical, inverter programming, testing."""
+    n = sum(1 for k in WORK_TICKS if getattr(w, k))
+    return {"pct": int(round(n * 100 / len(WORK_TICKS))), "text": "%d of %d work stages" % (n, len(WORK_TICKS))}
+
+
+def paper_pct(w):
+    """KSEB and PM Surya Ghar paperwork: application, documents, feasibility, registration fee, inspection, net meter, certificate, subsidy.
+    The subsidy step is left out for a 'no subsidy' customer."""
+    steps = kseb_steps(w)[0]
+    if "no subsidy" in (w.scheme or "").lower():
+        steps = [s for s in steps if s["key"] != "subsidy"]
+    n = sum(1 for s in steps if s["done"])
+    return {"pct": int(round(n * 100 / len(steps))), "text": "%d of %d KSEB steps" % (n, len(steps))}
+
+
+def handover_pct(w):
+    from .project_dashboard import DOC_NAMES
+    n = sum(1 for d in DOC_NAMES if str((w.docs_given or {}).get(d, "")).strip().lower().startswith("y"))
+    return {"pct": int(round(n * 100 / len(DOC_NAMES))), "text": "%d of %d documents given" % (n, len(DOC_NAMES))}
+
+
 def kseb_clocks(w, today):
     """Deadlines that follow from the dates.  Each: label, date, done, days left, late, soon."""
     feas, work_done, comm = w.feasibility_date, kseb_date(w, "work_done"), w.commission_date
@@ -325,7 +365,8 @@ def _rows_for(request):
                      "pay": bool(d and (d["overdue"] > 0 or d["balance"] > 0)), "feas": w.feasibility == "issue",
                      "overdue": bool(d and d["overdue"] > 0), "ex": ex, "risk": bool(ex and ex["gap"] > 0 and not w.commissioned),
                      "now_key": stage_now(w)[0], "now": stage_now(w)[1], "next": stage_now(w)[2], "owner": _owner(w), "name": w.collection.customer if (w.collection_id and w.collection.customer) else w.name, "qv": qv, "bank": bank_wait, "bank_late": bank_late, "clocks": kseb_clocks(w, today), "warranty": warranty_end(w),
-                     "kseb_done": kseb_steps(w)[1], "kseb_next": kseb_steps(w)[2]})
+                     "kseb_done": kseb_steps(w)[1], "kseb_next": kseb_steps(w)[2],
+                     "mat": material_pct(w, cust), "work": work_pct(w), "paper": paper_pct(w), "hand": handover_pct(w)})
     return rows
 
 
@@ -333,18 +374,33 @@ def progress(request):
     user = request.user
     editor, director = can_edit(user), _director(user)
     rows = _rows_for(request)
-    tab = request.GET.get("tab") if request.GET.get("tab") in dict(TABS) else "live"
+    tab = request.GET.get("tab") if request.GET.get("tab") in dict(TABS) else "all"
     q = (request.GET.get("q") or "").strip().lower()
     counts = {"risk": sum(1 for r in rows if r["risk"]), "bank": sum(1 for r in rows if r["bank"]),
               "live": sum(1 for r in rows if not r["finished"]), "finished": sum(1 for r in rows if r["finished"]), "docs": sum(1 for r in rows if r["docs"]),
               "pay": sum(1 for r in rows if r["pay"]), "feas": sum(1 for r in rows if r["feas"]), "all": len(rows)}
     pick = {"risk": lambda r: r["risk"], "bank": lambda r: r["bank"], "live": lambda r: not r["finished"], "finished": lambda r: r["finished"], "docs": lambda r: r["docs"], "pay": lambda r: r["pay"],
             "feas": lambda r: r["feas"], "all": lambda r: True}[tab]
-    stage = request.GET.get("stage") if request.GET.get("stage") in set(STAGE_KEYS) | {"none"} else ""
+    stage = request.GET.get("stage") if request.GET.get("stage") in set(STAGE_KEYS) | {"none", "done"} else ""
 
     def _hay(r):
         return " ".join([r["w"].name, r["name"], r["w"].location or "", r["w"].phone or "", _owner(r["w"]), r["now"], _ALIASES.get(r["now_key"], "")]).lower()
-    shown = [r for r in rows if pick(r) and (not stage or r["now_key"] == stage) and (not q or q in _hay(r))]
+    from .project_dashboard import FILTERS, STAGES as STAGES15, stage_of
+    st_pick = request.GET.get("st") if request.GET.get("st") in STAGES15 else ""
+    st_counts = {}
+    for r in rows:
+        st_counts[stage_of(r["w"])] = st_counts.get(stage_of(r["w"]), 0) + 1
+    now_counts = {}
+    for r in rows:
+        if not r["finished"]:                                  # commissioned customers have every stage ticked: they are counted under "Commissioned", not under Meter fix
+            now_counts[r["now_key"]] = now_counts.get(r["now_key"], 0) + 1
+    work_chips = ([("", "Any", len(rows)), ("none", "Not started", now_counts.get("none", 0))] + [(k, l, now_counts.get(k, 0)) for k, l in ProjectWork.STAGES]
+                  + [("done", "Commissioned", sum(1 for r in rows if r["finished"]))])
+    stage_chips = [("", "All", len(rows))] + [(s, s, st_counts[s]) for s in STAGES15 if st_counts.get(s)]
+    ff = request.GET.get("f") if request.GET.get("f") in FILTERS else ""
+    if ff:
+        pick = lambda r: FILTERS[ff][1](r["w"])           # a dashboard card: look at ALL projects with this condition
+    shown = [r for r in rows if (pick(r) or q) and (not ff or FILTERS[ff][1](r["w"])) and (not st_pick or stage_of(r["w"]) == st_pick) and (not stage or (r["finished"] if stage == "done" else (not r["finished"] and r["now_key"] == stage))) and (not q or q in _hay(r))]
     risk_total = sum((r["ex"]["gap"] for r in rows if r["risk"]), Decimal(0))
     if tab == "risk":
         shown.sort(key=lambda r: -r["ex"]["gap"])
@@ -354,7 +410,7 @@ def progress(request):
         shown.sort(key=lambda r: (r["w"].commission_date or datetime.date.min), reverse=True)
     more = len(shown) > 120 and request.GET.get("all") != "1"
     return render(request, "portal/progress.html", {
-        "rows": shown[:120] if more else shown, "more": more, "total_shown": len(shown), "tabs": [(k, l, counts[k]) for k, l in TABS], "tab": tab, "q": q,
+        "rows": shown[:120] if more else shown, "f_label": FILTERS[ff][0] if ff else "", "f": ff, "st": st_pick, "stage_chips": stage_chips, "work_chips": work_chips, "tab_label": dict(TABS)[tab] if tab != "all" else "", "more": more, "total_shown": len(shown), "tabs": [(k, l, counts[k]) for k, l in TABS], "tab": tab, "q": q,
         "editor": editor, "director": director, "risk_total": risk_total, "red_limit": EXPOSURE_RED, "stages": ProjectWork.STAGES, "stage": stage, "feas_choices": ProjectWork.FEASIBILITY})
 
 
@@ -479,6 +535,19 @@ def project_detail(request, pk):
                   "structure_contractor", "invoice_no"):
             setattr(w, f, (P.get(f) or "").strip()[:60])
         w.panel_serials = (P.get("panel_serials") or "").strip()
+        for f in ("email", "alt_phone", "pincode", "district", "region", "segment", "almm", "load_change", "system", "inverter_model", "inverter_phase", "roof_type",
+                  "project_stage", "energy_meter_make", "net_meter_make", "kseb_ref", "subsidy_status", "handover_status", "handed_over_by"):
+            if f in P:
+                setattr(w, f, (P.get(f) or "").strip()[:100])
+        if "kseb_notes" in P:
+            w.kseb_notes = (P.get("kseb_notes") or "").strip()
+        for f in ("panel_wp", "dc_kwp", "ac_kw"):
+            if f in P:
+                raw = (P.get(f) or "").strip()
+                try:
+                    setattr(w, f, Decimal(raw) if raw else None)
+                except Exception:
+                    pass
         for f in ("electrical_amount", "electrical_paid", "structure_amount", "structure_paid"):
             setattr(w, f, _num(P.get(f)))
         for f in ("panel_count", "panel_warranty_yrs", "inverter_warranty_yrs", "workmanship_yrs"):
@@ -507,11 +576,31 @@ MASTER_COLUMNS = [
     ("Sales person", lambda w, r: r["owner"]), ("Site engineer", lambda w, r: w.engineer), ("kW", lambda w, r: w.kw), ("Panel", lambda w, r: w.panel_make),
     ("Inverter", lambda w, r: w.inverter_make), ("Booking date", lambda w, r: w.booking_date), ("Quotation value", lambda w, r: r["qv"]["quotation"]),
     ("Deal value", lambda w, r: r["qv"]["deal"]), ("Received", lambda w, r: r["due"]["received"] if r["due"] else None), ("Balance", lambda w, r: r["due"]["balance"] if r["due"] else None),
-    ("Work now at", lambda w, r: r["now"]), ("Stages done (of 10)", lambda w, r: w.done_count), ("KSEB steps done (of 12)", lambda w, r: r["kseb_done"]),
+    ("Work now at", lambda w, r: r["now"]), ("Stages done (of 10)", lambda w, r: w.done_count), ("Material delivered %", lambda w, r: r["mat"]["pct"]), ("Work progress %", lambda w, r: r["work"]["pct"]), ("KSEB / paperwork %", lambda w, r: r["paper"]["pct"]), ("Handover documents %", lambda w, r: r["hand"]["pct"]), ("KSEB steps done (of 12)", lambda w, r: r["kseb_done"]),
     ("Feasibility date", lambda w, r: w.feasibility_date), ("Commissioning date", lambda w, r: w.commission_date), ("Handover date", lambda w, r: w.handover_date),
     ("Invoice no.", lambda w, r: w.invoice_no), ("Payment by", lambda w, r: "Bank loan" if w.is_loan else "Own money"), ("Inverter serial", lambda w, r: w.inverter_serial),
     ("Net meter serial", lambda w, r: w.net_meter_serial), ("Workmanship warranty until", lambda w, r: r["warranty"]),
+    ("Email", lambda w, r: w.email), ("Alternate phone", lambda w, r: w.alt_phone), ("Pincode", lambda w, r: w.pincode), ("District", lambda w, r: w.district),
+    ("Region", lambda w, r: w.region), ("Segment", lambda w, r: w.segment), ("ALMM", lambda w, r: w.almm), ("System type", lambda w, r: w.system),
+    ("Load change required", lambda w, r: w.load_change), ("Panel wattage (Wp)", lambda w, r: w.panel_wp), ("No. of panels", lambda w, r: w.panel_count),
+    ("DC capacity (kWp)", lambda w, r: w.dc_kwp), ("AC capacity (kW)", lambda w, r: w.ac_kw), ("Inverter model", lambda w, r: w.inverter_model),
+    ("Inverter phase", lambda w, r: w.inverter_phase), ("Roof type", lambda w, r: w.roof_type), ("Energy meter make", lambda w, r: w.energy_meter_make),
+    ("Energy meter serial", lambda w, r: w.energy_meter_serial), ("Net meter make", lambda w, r: w.net_meter_make), ("Panel serials", lambda w, r: w.panel_serials),
+    ("Project stage", lambda w, r: w.project_stage), ("PM Surya Ghar ARN", lambda w, r: w.arn), ("KSEB ref. no.", lambda w, r: w.kseb_ref),
+    ("Portal application", lambda w, r: _kd(w, "portal_app")), ("Documents to KSEB", lambda w, r: _kd(w, "docs")), ("Registration fee paid", lambda w, r: _kd(w, "reg_paid")),
+    ("Work start", lambda w, r: _kd(w, "work_start")), ("Work completion", lambda w, r: _kd(w, "work_done")), ("Net meter application", lambda w, r: _kd(w, "netmeter_app")),
+    ("Inspection", lambda w, r: _kd(w, "inspection")), ("Net meter fix", lambda w, r: _kd(w, "meter_fix")), ("Programming", lambda w, r: _kd(w, "programming")),
+    ("Subsidy credited", lambda w, r: _kd(w, "subsidy")), ("Subsidy status", lambda w, r: w.subsidy_status),
+    ("Electrical contractor", lambda w, r: w.electrical_contractor), ("Electrical amount", lambda w, r: w.electrical_amount), ("Electrical paid", lambda w, r: w.electrical_paid),
+    ("Structure contractor", lambda w, r: w.structure_contractor), ("Structure amount", lambda w, r: w.structure_amount), ("Structure paid", lambda w, r: w.structure_paid),
+    ("Invoice date", lambda w, r: w.invoice_date), ("Invoice value", lambda w, r: w.invoice_value), ("Handover status", lambda w, r: w.handover_status),
+    ("Panel warranty (yrs)", lambda w, r: w.panel_warranty_yrs), ("Inverter warranty (yrs)", lambda w, r: w.inverter_warranty_yrs), ("Remarks", lambda w, r: w.remarks),
 ]
+
+
+def _kd(w, key):
+    from .project_dashboard import kdate
+    return kdate(w, key)
 
 
 def master(request):
@@ -534,3 +623,47 @@ def master(request):
         return resp
     return render(request, "portal/master.html", {"cols": [n for n, _c in MASTER_COLUMNS], "table": list(zip([r["w"].pk for r in rows], table))[:400],
                                                    "total": len(table), "q": q})
+
+
+def project_add(request):
+    """Add a customer / project by hand (Fidha, Riswan, directors and superusers).  Everything can be completed later on the project's page."""
+    if not can_edit(request.user):
+        messages.warning(request, "Only Fidha, Riswan, the directors and the superusers can add a project.")
+        return redirect("progress")
+    prefix = "DH26-27/"
+    nums = [int(m.group(1)) for m in (re.match(r"^DH26-27/(\d+)$", p or "") for p in ProjectWork.objects.values_list("project_id", flat=True)) if m]
+    suggested = "%s%03d" % (prefix, (max(nums) + 1) if nums else 1)
+    fields = ["name", "project_id", "phone", "alt_phone", "email", "location", "site_address", "pincode", "district", "region", "segment", "map_link", "kw",
+              "panel_make", "inverter_make", "system", "almm", "scheme", "sales_person", "engineer", "payment_mode", "booking_date", "kseb_consumer_no", "load_change", "name_change"]
+    values = {f: "" for f in fields}
+    values["project_id"], values["payment_mode"], values["booking_date"] = suggested, "cash", timezone.localdate().isoformat()
+    error = ""
+    if request.method == "POST":
+        values = {f: (request.POST.get(f) or "").strip() for f in fields}
+        digits = re.sub(r"\D", "", values["phone"])[-10:]
+        key = re.sub(r"[^a-z0-9]", "", re.sub(r"\(.*?\)", "", values["name"].lower()))
+        clash = None
+        if values["name"]:
+            for x in ProjectWork.objects.all():
+                if (digits and len(digits) == 10 and re.sub(r"\D", "", x.phone or "")[-10:] == digits) or (key and x.name_key == key) or (values["project_id"] and x.project_id == values["project_id"]):
+                    clash = x
+                    break
+        if not values["name"]:
+            error = "Type the customer's name."
+        elif clash and not request.POST.get("again"):
+            error = "%s (%s) is already in the projects: same name, phone or project ID. Open that project instead, or tick the box below to add this one anyway." % (clash.name, clash.project_id or "no ID")
+            values["_clash"] = clash.pk
+        else:
+            w = ProjectWork(name=values["name"][:200], name_key=key, project_id=values["project_id"][:30])
+            for f in ("phone", "alt_phone", "email", "location", "pincode", "district", "region", "segment", "kw", "panel_make", "inverter_make", "system", "almm", "scheme",
+                      "sales_person", "engineer", "kseb_consumer_no", "load_change", "name_change", "map_link"):
+                setattr(w, f, values[f][:150] if f != "map_link" else values[f][:500])
+            w.site_address = values["site_address"]
+            w.payment_mode = ProjectWork.LOAN if values["payment_mode"] == "loan" else ProjectWork.CASH
+            w.booking_date = _pd(values["booking_date"]) if values["booking_date"] else None
+            w.project_stage = "Booked"
+            w.updated_by, w.updated_at = request.user, timezone.now()
+            w.save()
+            messages.success(request, "%s added. Fill in the rest of the details here." % w.name)
+            return redirect("progress_detail", pk=w.pk)
+    return render(request, "portal/project_add.html", {"v": values, "error": error, "clash": values.get("_clash")})

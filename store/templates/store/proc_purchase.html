@@ -1,0 +1,35 @@
+{% extends "store/base.html" %}
+{% block title %}Purchase{% endblock %}
+{% block content %}
+<style>.f label{display:block;font-size:12px;margin-top:8px;color:#6b7280}.f input,.f select{width:100%;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}</style>
+<h1>{{ p.supplier.name }} <small class="muted">&#8377;{{ p.amount|floatformat:"0g" }}</small></h1>
+<p class="muted">{{ p.description }}{% if p.invoice_no %} &middot; Invoice {{ p.invoice_no }}{% endif %} &middot; {{ p.ordered_on|date:"j M Y" }} &middot; {% if p.customer %}for <a href="{% url 'proc_customer' p.customer_id %}">{{ p.customer.name }}</a>{% else %}general stock{% endif %}</p>
+<div class="actions"><a class="btn light" href="{% url 'proc_home' %}">&lsaquo; Procurement</a></div>
+<div class="grid">
+<div class="card"><div class="muted">Bill</div><b style="font-size:22px">&#8377;{{ p.amount|floatformat:"0g" }}</b> {% if p.credit %}<span class="badge warn">Credit</span>{% endif %}</div>
+<div class="card"><div class="muted">Paid</div><b style="font-size:22px">&#8377;{{ p.paid|floatformat:"0g" }}</b></div>
+<div class="card"><div class="muted">Balance to pay</div><b style="font-size:22px;color:{% if p.balance > 0 %}#b91c1c{% else %}#166534{% endif %}">&#8377;{{ p.balance|floatformat:"0g" }}</b>{% if p.balance > 0 and p.due_date %}<div class="muted">due {{ p.due_date|date:"j M Y" }}</div>{% endif %}</div>
+<div class="card"><div class="muted">Delivery</div>{% if p.received_on %}<span class="badge ok">Received {{ p.received_on|date:"j M" }}</span>{% else %}<span class="badge warn">Not received</span>{% if p.expected_on %}<div class="muted">expected {{ p.expected_on|date:"j M Y" }}</div>{% endif %}{% endif %}</div>
+</div>
+<h2>Payments to the supplier</h2>
+<div class="tablebox"><table><thead><tr><th>Date</th><th>Mode</th><th class="right">Amount</th><th>Note</th><th></th></tr></thead><tbody>
+{% for x in payments %}<tr><td>{{ x.paid_on|date:"j M Y" }}</td><td>{{ x.get_mode_display }}</td><td class="right">&#8377;{{ x.amount|floatformat:"0g" }}</td><td>{{ x.note }}</td>
+<td>{% if editor %}<form method="post" onsubmit="return confirm('Remove this payment?')">{% csrf_token %}<input type="hidden" name="action" value="del_pay"><input type="hidden" name="pay_id" value="{{ x.pk }}"><button class="btn light" style="padding:4px 10px">Remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="muted">Nothing paid yet.</td></tr>{% endfor %}</tbody></table></div>
+{% if editor %}
+<div class="card f" style="max-width:640px;margin-top:14px"><b>Record a payment</b>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="pay">
+<div class="g2"><div><label>Amount &#8377;</label><input name="amount" inputmode="decimal" value="{% if p.balance > 0 %}{{ p.balance|floatformat:2 }}{% endif %}" required></div><div><label>Date</label><input type="date" name="paid_on" value="{{ today|date:'Y-m-d' }}"></div></div>
+<div class="g2"><div><label>Paid by</label><select name="mode">{% for k, l in modes %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div><div><label>Note</label><input name="note"></div></div>
+<div class="actions"><button class="btn green" type="submit">Save payment</button></div></form></div>
+<div class="card f" style="max-width:640px"><b>Dates and details</b>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="dates">
+<label>Payment</label><select name="credit"><option value="0" {% if not p.credit %}selected{% endif %}>Paid at purchase</option><option value="1" {% if p.credit %}selected{% endif %}>On credit</option></select>
+<div class="g2"><div><label>Credit due date</label><input type="date" name="due_date" value="{{ p.due_date|date:'Y-m-d' }}"></div><div><label>Expected delivery</label><input type="date" name="expected_on" value="{{ p.expected_on|date:'Y-m-d' }}"></div></div>
+<div class="g2"><div><label>Received on</label><input type="date" name="received_on" value="{{ p.received_on|date:'Y-m-d' }}"></div><div><label>Invoice no.</label><input name="invoice_no" value="{{ p.invoice_no }}"></div></div>
+<label>Note</label><input name="note" value="{{ p.note }}">
+<div class="actions"><button class="btn" type="submit">Save</button></div></form>
+{% if not p.received_on %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="received"><button class="btn light">Mark received today</button></form>{% endif %}
+<form method="post" style="display:inline" onsubmit="return confirm('Delete this whole purchase and its payments?')">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn light" style="color:#b91c1c">Delete purchase</button></form></div>
+{% endif %}
+{% endblock %}

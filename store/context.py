@@ -7,5 +7,6 @@ def roles(request):
     accounts = user.is_superuser or "Accounts" in names
     boss = user.is_superuser or "Boss" in names
     work = user.is_superuser or "Project" in names or "Store" in names
-    return {"is_accounts": accounts, "is_boss": boss, "accounts_only": accounts and not work,
+    proc = boss or accounts or work
+    return {"can_proc": proc, "is_accounts": accounts, "is_boss": boss, "accounts_only": accounts and not work,
             "no_work_role": not work, "boss_view_only": boss and not work}

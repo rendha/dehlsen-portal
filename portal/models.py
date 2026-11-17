@@ -406,6 +406,44 @@ class ProjectWork(models.Model):
     energy_meter_serial = models.CharField(max_length=60, blank=True)
     net_meter_serial = models.CharField(max_length=60, blank=True)
 
+    # customer and system details from the Project Master workbook
+    email = models.CharField(max_length=100, blank=True)
+    alt_phone = models.CharField("alternate phone", max_length=40, blank=True)
+    pincode = models.CharField(max_length=10, blank=True)
+    district = models.CharField(max_length=40, blank=True)
+    region = models.CharField(max_length=30, blank=True)
+    segment = models.CharField(max_length=30, blank=True)
+    load_change = models.CharField("load change required", max_length=20, blank=True)
+    name_change = models.CharField("name change required", max_length=20, blank=True, help_text="Required / Done (empty = not needed)")
+    almm = models.CharField("ALMM (DCR / NDCR)", max_length=10, blank=True)
+    project_stage = models.CharField(max_length=40, blank=True, help_text="Stage from the Project Master (the ticks decide it once work is ticked)")
+    quote_value = models.DecimalField("quote value (from the master sheet)", max_digits=12, decimal_places=2, null=True, blank=True)
+    panel_wp = models.DecimalField("panel wattage (Wp)", max_digits=7, decimal_places=1, null=True, blank=True)
+    dc_kwp = models.DecimalField("DC capacity (kWp)", max_digits=8, decimal_places=2, null=True, blank=True)
+    ac_kw = models.DecimalField("AC / inverter capacity (kW)", max_digits=8, decimal_places=2, null=True, blank=True)
+    inverter_phase = models.CharField(max_length=10, blank=True)
+    inverter_model = models.CharField(max_length=60, blank=True)
+    roof_type = models.CharField(max_length=30, blank=True)
+    panel_at_site = models.BooleanField("panel material at site", null=True, blank=True)
+    inverter_at_site = models.BooleanField("inverter material at site", null=True, blank=True)
+    energy_meter_make = models.CharField(max_length=40, blank=True)
+    net_meter_make = models.CharField(max_length=40, blank=True)
+    kseb_ref = models.CharField("KSEB application / ref. no.", max_length=40, blank=True)
+    docs_status = models.CharField("KSEB documents status", max_length=30, blank=True)
+    reg_receipt = models.CharField("registration fee receipt no.", max_length=40, blank=True)
+    inspection_status = models.CharField(max_length=30, blank=True)
+    subsidy_status = models.CharField(max_length=30, blank=True)
+    bank_details = models.CharField("bank details submitted on portal", max_length=10, blank=True)
+    programming_notes = models.TextField(blank=True)
+    kseb_notes = models.TextField("blocker / notes", blank=True)
+    handover_status = models.CharField(max_length=20, blank=True)
+    handover_mode = models.CharField(max_length=20, blank=True)
+    handed_over_by = models.CharField(max_length=60, blank=True)
+    docs_given = models.JSONField("documents given to the customer", default=dict, blank=True)
+    invoice_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    warranty_start = models.DateField(null=True, blank=True)
+    panel_perf_yrs = models.PositiveSmallIntegerField("panel performance warranty (yrs)", null=True, blank=True)
+
     # contractor labour
     electrical_contractor = models.CharField(max_length=60, blank=True)
     electrical_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -464,3 +502,31 @@ class ProjectWork(models.Model):
             return t
         from urllib.parse import quote
         return "https://www.google.com/maps/search/?api=1&query=" + quote(t)
+
+
+class CrewAssignment(models.Model):
+    """Who goes to which site on which day (the list Riswan used to send on WhatsApp): an electrical or structure team, a site, a date."""
+    WORKS = [("Electrical", "Electrical"), ("Structure", "Structure"), ("Panel fixing", "Panel fixing"), ("Inverter", "Inverter"),
+             ("Earthing / civil", "Earthing / civil"), ("Testing", "Testing"), ("Site visit / survey", "Site visit / survey"),
+             ("Material delivery", "Material delivery"), ("Other", "Other")]
+    STATUS = [("planned", "Planned"), ("done", "Done"), ("cancelled", "Cancelled")]
+
+    date = models.DateField(db_index=True)
+    team = models.CharField(max_length=200, help_text="Contractor or worker names")
+    work = models.CharField(max_length=30, choices=WORKS, default="Electrical")
+    project = models.ForeignKey("portal.ProjectWork", null=True, blank=True, on_delete=models.SET_NULL, related_name="crew_visits")
+    site = models.CharField(max_length=200, blank=True, help_text="Site typed by hand when it is not a project")
+    note = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="planned")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["date", "work", "team", "id"]
+
+    def __str__(self):
+        return f"{self.date} {self.team} - {self.site_name}"
+
+    @property
+    def site_name(self):
+        return self.project.name if self.project_id else self.site

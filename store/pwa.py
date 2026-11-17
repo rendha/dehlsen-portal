@@ -12,9 +12,9 @@ CACHE_VERSION = "v2"          # change this text when the icons / offline page c
 
 def manifest(request):
     data = {
-        "name": "Dehlsen Materials",
-        "short_name": "Materials",
-        "description": "Materials, warehouse and purchase lists for Dehlsen Energy projects",
+        "name": "Dehlsen Procurement",
+        "short_name": "Procurement",
+        "description": "Procurement: materials, warehouse and purchase lists for Dehlsen Energy projects",
         "start_url": "/",
         "scope": "/",
         "display": "standalone",

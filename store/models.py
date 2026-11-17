@@ -178,3 +178,60 @@ class Payment(models.Model):
 
     def __str__(self):
         return "%s  %s  %s" % (self.customer, self.paid_on, self.amount)
+
+
+class Supplier(models.Model):
+    """Somebody we buy material from."""
+    name = models.CharField(max_length=150, unique=True)
+    phone = models.CharField(max_length=50, blank=True)
+    note = models.CharField(max_length=250, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Purchase(models.Model):
+    """One purchase from a supplier: for a customer (or for the general stock), paid at once or taken on credit with a due date."""
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name="purchases")
+    customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL, related_name="purchases")   # empty = for the general stock
+    description = models.CharField(max_length=300)
+    invoice_no = models.CharField(max_length=60, blank=True)
+    ordered_on = models.DateField(default=timezone.localdate)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)                       # the supplier's bill, with GST
+    credit = models.BooleanField(default=False)                                         # taken on credit (not paid at once)
+    due_date = models.DateField(null=True, blank=True)
+    expected_on = models.DateField(null=True, blank=True)                               # when the material is expected at the store / site
+    received_on = models.DateField(null=True, blank=True)                               # when it arrived
+    note = models.CharField(max_length=250, blank=True)
+    created_by = models.CharField(max_length=150, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-ordered_on", "-id"]
+
+    @property
+    def paid(self):
+        return sum((p.amount for p in self.payments.all()), Decimal("0"))
+
+    @property
+    def balance(self):
+        return (self.amount or Decimal("0")) - self.paid
+
+    def __str__(self):
+        return "%s - %s" % (self.supplier, self.description)
+
+
+class SupplierPayment(models.Model):
+    """Money we paid to a supplier against a purchase (part payments are allowed)."""
+    purchase = models.ForeignKey(Purchase, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_on = models.DateField(default=timezone.localdate)
+    mode = models.CharField(max_length=10, choices=Payment.MODES, default=Payment.BANK)
+    note = models.CharField(max_length=200, blank=True)
+    recorded_by = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        ordering = ["paid_on", "id"]

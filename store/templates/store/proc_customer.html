@@ -1,0 +1,34 @@
+{% extends "store/base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+<style>.bar{height:8px;background:#e5e7eb;border-radius:5px;margin-top:6px}.bar i{display:block;height:8px;border-radius:5px;background:#15803d}.bar.b i{background:#3B73B9}</style>
+<h1>{{ c.name }}</h1>
+<p class="muted">{{ c.offer_no }}{% if c.system_size %} &middot; {{ c.system_size }} kW{% endif %}{% if c.location %} &middot; {{ c.location }}{% endif %}{% if c.phone %} &middot; {{ c.phone }}{% endif %}</p>
+<div class="actions"><a class="btn light" href="{% url 'proc_customers' %}">&lsaquo; Customer position</a>{% if editor %}<a class="btn light" href="{% url 'proc_add' %}?customer={{ c.pk }}">+ Purchase for this customer</a>{% endif %}</div>
+<div class="grid">
+<div class="card"><div class="muted">Quotation value</div><b style="font-size:22px">{% if r.quote %}&#8377;{{ r.quote|floatformat:"0g" }}{% else %}not known{% endif %}</b></div>
+<div class="card"><div class="muted">Customer has paid</div><b style="font-size:22px">&#8377;{{ r.paid|floatformat:"0g" }}</b><div class="bar"><i style="width:{{ r.paid_pct }}%"></i></div><div class="muted">{{ r.paid_pct }}% of the quotation</div></div>
+<div class="card"><div class="muted">Balance to collect</div><b style="font-size:22px;color:#b91c1c">{% if r.balance is not None %}&#8377;{{ r.balance|floatformat:"0g" }}{% else %}-{% endif %}</b></div>
+<div class="card"><div class="muted">Material needed (cost)</div><b style="font-size:22px">&#8377;{{ r.material|floatformat:"0g" }}</b></div>
+<div class="card"><div class="muted">Material dispatched (cost)</div><b style="font-size:22px">&#8377;{{ r.sent|floatformat:"0g" }}</b><div class="bar b"><i style="width:{{ r.sent_pct }}%"></i></div><div class="muted">{{ r.n_done }} of {{ r.n_lines }} items</div></div>
+<div class="card"><div class="muted">Still to dispatch</div><b style="font-size:22px">&#8377;{{ r.to_send|floatformat:"0g" }}</b></div>
+<div class="card"><div class="muted">Paid &minus; dispatched (balance)</div><b style="font-size:22px;color:{% if r.diff < 0 %}#b91c1c{% else %}#166534{% endif %}">{% if r.diff < 0 %}&minus;{% endif %}&#8377;{{ r.diff|floatformat:"0g"|cut:"-" }}</b><div class="muted">{% if r.diff < 0 %}we have given material worth more than the customer has paid{% elif r.diff == 0 %}paid and dispatched are equal{% else %}customer has paid more than the material dispatched so far{% endif %}</div></div>
+<div class="card"><div class="muted">Bought from suppliers for this customer</div><b style="font-size:22px">&#8377;{{ r.bought|floatformat:"0g" }}</b><div class="muted">still owed to suppliers: &#8377;{{ r.owed|floatformat:"0g" }}</div></div>
+</div>
+
+<h2>Customer payments</h2>
+<div class="tablebox"><table style="min-width:520px"><thead><tr><th>Date</th><th>Mode</th><th class="right">Amount</th><th>Note</th></tr></thead><tbody>
+{% for x in payments %}<tr><td>{{ x.paid_on|date:"j M Y" }}</td><td>{{ x.get_mode_display }}</td><td class="right">&#8377;{{ x.amount|floatformat:"0g" }}</td><td>{{ x.note }}</td></tr>{% empty %}<tr><td colspan="4" class="muted">No payment received yet.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Dispatched material <small>store marked Done</small></h2>
+<div class="tablebox"><table style="min-width:620px"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Cost</th><th>From</th></tr></thead><tbody>
+{% for l in sent_lines %}<tr><td>{{ l.name }}{% if l.make %} <span class="muted">{{ l.make }}</span>{% endif %}</td><td class="right">{{ l.quantity|floatformat:"-2" }} {{ l.unit }}</td><td class="right">&#8377;{{ l.rate|floatformat:"0g" }}</td><td class="right">&#8377;{{ l.amount|floatformat:"0g" }}</td><td>{{ l.get_source_display }}</td></tr>{% empty %}<tr><td colspan="5" class="muted">Nothing dispatched yet.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Not yet dispatched</h2>
+<div class="tablebox"><table style="min-width:620px"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Cost</th><th>Plan</th><th>Store</th></tr></thead><tbody>
+{% for l in open_lines %}<tr><td>{{ l.name }}{% if l.make %} <span class="muted">{{ l.make }}</span>{% endif %}</td><td class="right">{{ l.quantity|floatformat:"-2" }} {{ l.unit }}</td><td class="right">&#8377;{{ l.amount|floatformat:"0g" }}</td><td>{{ l.get_source_display }}</td><td>{% if l.store_status == "short" %}<span class="badge bad">Not available</span>{% else %}<span class="badge">{{ l.get_store_status_display }}</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="muted">Everything has been dispatched.</td></tr>{% endfor %}</tbody></table></div>
+
+<h2>Purchases for this customer</h2>
+<div class="tablebox"><table><thead><tr><th>Date</th><th>Supplier</th><th>What</th><th class="right">Bill</th><th class="right">Balance</th><th>Credit due</th></tr></thead><tbody>
+{% for p in purchases %}<tr><td>{{ p.ordered_on|date:"j M Y" }}</td><td><a href="{% url 'proc_purchase' p.pk %}">{{ p.supplier.name }}</a></td><td>{{ p.description }}</td><td class="right">&#8377;{{ p.amount|floatformat:"0g" }}</td><td class="right">{% if p.balance > 0 %}<b>&#8377;{{ p.balance|floatformat:"0g" }}</b>{% else %}<span class="badge ok">Paid</span>{% endif %}</td><td>{% if p.balance > 0 and p.due_date %}{{ p.due_date|date:"j M Y" }}{% elif p.credit %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="muted">No purchase recorded for this customer.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

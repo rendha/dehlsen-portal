@@ -1,0 +1,25 @@
+{% extends "store/base.html" %}
+{% block title %}Add a purchase{% endblock %}
+{% block content %}
+<style>.f label{display:block;font-size:12px;margin-top:10px;color:#6b7280}.f input,.f select{width:100%;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}</style>
+<h1>Add a purchase</h1><p class="muted">A bill from a supplier: for a customer, or for the general stock.</p>
+<div class="card f" style="max-width:640px">
+{% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+<form method="post">{% csrf_token %}
+<label>Supplier</label>
+<select name="supplier" onchange="document.getElementById('so').style.display=this.value==='__new__'?'block':'none'" required><option value="">Choose a supplier...</option>{% for s in suppliers %}<option {% if v.supplier == s %}selected{% endif %}>{{ s }}</option>{% endfor %}<option value="__new__" {% if v.supplier == "__new__" %}selected{% endif %}>+ New supplier (type the name)</option></select>
+<input name="supplier_other" id="so" value="{{ v.supplier_other }}" placeholder="New supplier name" style="display:{% if v.supplier == '__new__' %}block{% else %}none{% endif %}">
+<label>For which customer (leave empty for general stock)</label>
+<input name="customer" list="custs" value="{{ v.customer }}" placeholder="Start typing the customer name" autocomplete="off">
+<datalist id="custs">{% for l in labels %}<option value="{{ l }}">{% endfor %}</datalist>
+<label>What was bought</label><input name="description" value="{{ v.description }}" required placeholder="e.g. 10 x Adani 590W panels">
+<div class="g2"><div><label>Bill amount (with GST) &#8377;</label><input name="amount" value="{{ v.amount }}" inputmode="decimal" required></div><div><label>Invoice no.</label><input name="invoice_no" value="{{ v.invoice_no }}"></div></div>
+<div class="g2"><div><label>Date of purchase</label><input type="date" name="ordered_on" value="{{ v.ordered_on }}"></div><div><label>Expected at site / store</label><input type="date" name="expected_on" value="{{ v.expected_on }}"></div></div>
+<label>Payment</label>
+<select name="pay" onchange="document.getElementById('cr').style.display=this.value==='credit'?'block':'none';document.getElementById('pm').style.display=this.value==='credit'?'none':'block'"><option value="paid" {% if v.pay != "credit" %}selected{% endif %}>Paid now in full</option><option value="credit" {% if v.pay == "credit" %}selected{% endif %}>Taken on credit (pay later)</option></select>
+<div id="cr" style="display:{% if v.pay == 'credit' %}block{% else %}none{% endif %}"><label>Credit due date</label><input type="date" name="due_date" value="{{ v.due_date }}"></div>
+<div id="pm" style="display:{% if v.pay == 'credit' %}none{% else %}block{% endif %}"><label>Paid by</label><select name="mode">{% for k, l in modes %}<option value="{{ k }}" {% if v.mode == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+<label>Already received? (date, optional)</label><input type="date" name="received_on" value="{{ v.received_on }}">
+<label>Note</label><input name="note" value="{{ v.note }}">
+<div class="actions"><button class="btn" type="submit">Save purchase</button><a class="btn light" href="{% url 'proc_home' %}">Cancel</a></div>
+</form></div>{% endblock %}

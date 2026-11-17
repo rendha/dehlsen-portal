@@ -1,0 +1,85 @@
+{% extends "portal/base.html" %}
+{% block title %}Crew plan · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.cal{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}
+.cal th{font-size:11px;color:var(--muted,#667);font-weight:600;padding:2px 0}
+.cal td{padding:0}
+.cal a{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50px;border-radius:10px;background:#fff;border:1px solid #e3e6ec;color:inherit;text-decoration:none;font-size:14px}
+.cal .off a{opacity:.35}
+.cal .tod a{border-color:var(--orange,#e8761a);font-weight:700}
+.cal .sel a{background:var(--orange,#e8761a);color:#fff;border-color:var(--orange,#e8761a)}
+.cal .n{font-size:11px;background:#1d6fd8;color:#fff;border-radius:9px;padding:0 6px;margin-top:2px;min-width:18px;text-align:center}
+.cal .sel .n{background:#fff;color:var(--orange,#e8761a)}
+.cal .z{height:15px}
+.mh{display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px}
+.mh b{font-size:17px}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.item{border:1px solid #e3e6ec;border-radius:12px;padding:10px;margin:8px 0;background:#fff}
+.item.done{background:#eef8f1}.item.cancelled{opacity:.55;text-decoration:line-through}
+.item h4{margin:0 0 2px;font-size:15px}
+.tag{display:inline-block;font-size:11px;border-radius:8px;padding:1px 8px;background:#fdebd9;color:#a14a06;margin-right:4px}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.acts form{margin:0}.acts button,.acts a{font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #d5d9e2;background:#f6f7fa;color:inherit;text-decoration:none;cursor:pointer}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.f label{font-size:12px;margin-top:8px;display:block}.f input,.f select{width:100%;margin:3px 0}
+.wa{width:100%;min-height:130px;font-family:inherit;font-size:13px;border-radius:10px;border:1px solid #d5d9e2;padding:8px}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Crew plan</h1><small>Who goes to which site &middot; tap a date to see the list</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+{% if messages %}{% for m in messages %}<div class="note {% if m.tags == 'error' %}bad{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
+
+<div class="card" style="max-width:640px;margin:8px auto">
+<div class="mh"><a class="pill" href="?ym={{ prev }}">&lsaquo;</a><b>{{ month|date:"F Y" }} <small style="font-weight:400">&middot; {{ month_total }} visit{{ month_total|pluralize }}</small></b><a class="pill" href="?ym={{ next }}">&rsaquo;</a></div>
+<table class="cal"><tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>
+{% for wk in weeks %}<tr>{% for c in wk %}<td class="{% if not c.in %}off{% endif %} {% if c.today %}tod{% endif %} {% if c.sel %}sel{% endif %}"><a href="?d={{ c.date|date:'Y-m-d' }}">{{ c.date.day }}{% if c.n %}<span class="n">{{ c.n }}</span>{% else %}<span class="z"></span>{% endif %}</a></td>{% endfor %}</tr>{% endfor %}
+</table>
+<div class="quick"><a class="pill" href="?d={{ today|date:'Y-m-d' }}">Today</a><a class="pill" href="?d={{ tomorrow|date:'Y-m-d' }}">Tomorrow</a></div>
+</div>
+
+<div class="card" style="max-width:640px;margin:8px auto">
+{% if sel %}
+<h3 style="margin:0 0 4px">{{ sel|date:"l, j F Y" }}</h3>
+<small>{{ items|length }} entr{{ items|length|pluralize:"y,ies" }}</small>
+{% for a in items %}
+<div class="item {{ a.status }}">
+<h4>{{ a.team }}</h4>
+<span class="tag">{{ a.work }}</span>
+{% if a.project %}<a href="{% url 'progress_detail' a.project_id %}"><b>{{ a.site_name }}</b></a>{% if a.project.location %} &middot; {{ a.project.location }}{% endif %}{% if a.project.kw %} &middot; {{ a.project.kw }} kW{% endif %}{% else %}<b>{{ a.site_name }}</b>{% endif %}
+{% if a.note %}<div><small>{{ a.note }}</small></div>{% endif %}
+<div class="acts">
+{% if a.project.map_url %}<a href="{{ a.project.map_url }}" target="_blank" rel="noopener">&#128205; Map</a>{% endif %}
+{% if a.project.phone %}<a href="tel:{{ a.project.phone }}">&#128222; Call</a>{% endif %}
+{% if editor %}
+<form method="post" action="{% url 'crew_status' a.pk %}">{% csrf_token %}{% if a.status == "done" %}<input type="hidden" name="status" value="planned"><button>&#8630; Not done</button>{% else %}<input type="hidden" name="status" value="done"><button>&#10003; Done</button>{% endif %}</form>
+{% if a.status != "cancelled" %}<form method="post" action="{% url 'crew_status' a.pk %}">{% csrf_token %}<input type="hidden" name="status" value="cancelled"><button>Cancel</button></form>{% else %}<form method="post" action="{% url 'crew_status' a.pk %}">{% csrf_token %}<input type="hidden" name="status" value="planned"><button>Restore</button></form>{% endif %}
+<form method="post" action="{% url 'crew_copy' a.pk %}">{% csrf_token %}<button>&#10162; Repeat next day</button></form>
+<form method="post" action="{% url 'crew_delete' a.pk %}" onsubmit="return confirm('Remove this entry?')">{% csrf_token %}<button>Delete</button></form>
+{% endif %}
+</div></div>
+{% empty %}<div class="note" style="margin-top:8px">Nobody is planned for this day.</div>{% endfor %}
+
+{% if wa %}<h4 style="margin:14px 0 6px">Send on WhatsApp</h4>
+<textarea class="wa" id="wa" readonly>{{ wa }}</textarea>
+<div class="acts"><a href="{{ wa_url }}" target="_blank" rel="noopener" style="background:#25d366;color:#fff;border-color:#25d366">Open in WhatsApp</a><button type="button" onclick="var t=document.getElementById('wa');t.select();navigator.clipboard?navigator.clipboard.writeText(t.value):document.execCommand('copy');this.textContent='Copied'">Copy list</button></div>{% endif %}
+
+{% if editor %}
+<h4 style="margin:16px 0 0">Add to {{ sel|date:"j M" }}</h4>
+<form method="post" action="{% url 'crew_add' %}" class="f">{% csrf_token %}
+<input type="hidden" name="date" value="{{ sel|date:'Y-m-d' }}">
+<label>Who is going</label>
+<select name="team" id="team" onchange="crewPick(this)" required><option value="">Choose a contractor...</option>
+{% for grp, names in contractors %}<optgroup label="{{ grp }} contractors">{% for n in names %}<option value="{{ n }}" data-work="{{ grp }}">{{ n }}</option>{% endfor %}</optgroup>{% endfor %}
+<option value="__other__">Other (type the name)</option></select>
+<input name="team_other" id="team_other" list="teams" placeholder="Type the name(s), e.g. Ravi, Anil" autocomplete="off" style="display:none">
+<datalist id="teams">{% for t in teams %}<option value="{{ t }}">{% endfor %}</datalist>
+<label>Work</label><select name="work" id="work">{% for w in works %}<option>{{ w }}</option>{% endfor %}</select>
+<label>Site (pick a customer, or type any place)</label><input name="site" list="sites" required placeholder="Customer name" autocomplete="off">
+<datalist id="sites">{% for n, loc in sites %}<option value="{{ n }}">{{ loc }}</option>{% endfor %}</datalist>
+<label>Note (optional)</label><input name="note" placeholder="e.g. carry 10 panels, start 8 am">
+<button class="btn o" type="submit" style="margin-top:12px">Add to the list</button>
+</form>
+{% endif %}
+{% else %}<div class="note">Tap a date above to see who is going where.</div>{% endif %}
+</div></div>
+<script>function crewPick(s){var o=document.getElementById('team_other'),other=s.value==='__other__';o.style.display=other?'block':'none';o.required=other;if(other)o.focus();
+var w=s.options[s.selectedIndex].getAttribute('data-work');if(w){var sel=document.getElementById('work');for(var i=0;i<sel.options.length;i++)if(sel.options[i].value===w)sel.selectedIndex=i;}}</script>{% endblock %}

@@ -747,12 +747,55 @@ def apply_stock_rate(stock, rate):
         .exclude(customer__status=Customer.DONE).update(rate=rate)
 
 
+# Which Sales-app categories replace which group of the fallback file (store/catalog.json).  A file group is used ONLY when the Sales app
+# has nothing in the matching categories, so an item is never listed twice with two different rates.
+_FILE_GROUPS = {
+    "Solar panels": ("@panels",),
+    "Inverters": ("inverter",),
+    "Boxes": ("acdb", "dcdb", "meter_box"),
+    "Cables": ("dc_cable", "ac_wire", "ug_cable", "cable"),
+    "Earthing": ("earthing", "electrical"),
+    "Meters": ("energy_meter", "net_meter"),
+}
+
+
+def _sales_catalog():
+    """THE RATE LIST: the Sales app's Products and Panel options (Admin).  Rates are changed there, and only there.
+    A panel's price is its watts x the rate per watt; GST is 5 % for panels and inverters, 18 % for the rest."""
+    from quotations.addon_models import default_gst as category_gst
+    from quotations.models import PanelOption, Product
+    out = []
+    for o in PanelOption.objects.filter(is_active=True).order_by("company", "panel_type", "wattage"):
+        watts = o.wattage.normalize()
+        watts = int(watts) if watts == watts.to_integral_value() else watts
+        name = " ".join(("%s %s %s W" % (o.company, o.panel_type, watts)).split())
+        out.append({"group": "Solar panels", "name": name, "make": "", "unit": "Nos", "gst": 5, "cat": "@panels",
+                    "rate": float((o.rate_per_watt * o.wattage).quantize(Decimal("0.01")))})
+    for p in Product.objects.filter(is_active=True).order_by("category", "name"):
+        out.append({"group": p.get_category_display(), "name": p.name, "make": p.make or "", "unit": p.unit or "Nos",
+                    "rate": float(p.rate), "gst": int(category_gst(p.category)), "cat": p.category})
+    return out
+
+
 def _catalog():
+    """Search list for the item pickers: the Sales app's rate list first; items the Sales app does not price (BOS items, end caps, MC4)
+    and groups it has none of come from store/catalog.json."""
     path = Path(__file__).resolve().parent / "catalog.json"
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        fallback = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
+        fallback = []
+    try:
+        sales = _sales_catalog()
+    except Exception:
+        sales = []
+    have = {i["cat"] for i in sales}
+    rest = []
+    for item in fallback:
+        cats = _FILE_GROUPS.get(item.get("group"))
+        if cats is None or not (have & set(cats)):
+            rest.append(item)
+    return [{k: v for k, v in i.items() if k != "cat"} for i in sales] + rest
 
 
 @login_required

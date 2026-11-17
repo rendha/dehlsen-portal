@@ -1,0 +1,33 @@
+{% extends "portal/base.html" %}
+{% block title %}Commissioned projects · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.tabs a{padding:8px 14px;border-radius:20px;background:#fff;color:var(--ink);text-decoration:none;font-weight:600;font-size:13px;box-shadow:0 1px 5px rgba(30,50,80,.1)}
+.tabs a.on{background:var(--blue);color:#fff}.tabs a b{margin-left:4px}
+.cc{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 8px rgba(30,50,80,.07)}
+.cc h2{margin:0;font-size:16px}.cc h2 a{color:var(--ink);text-decoration:none}.cc small{color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:8px}
+.box{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px}.box h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.b{display:inline-block;border-radius:12px;padding:2px 9px;font-size:12px;font-weight:700}.ok{background:#e3f5ea;color:#1d7a43}.no{background:#fdecea;color:#b02a1c}.wait{background:#fff3e0;color:#b35a08}.na{background:#eef1f5;color:#5a6a7d}
+.docs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.docs span{font-size:11px;padding:2px 7px;border-radius:10px}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Commissioned projects</h1><small>Subsidy tracking and handover &middot; {{ total }} customer{{ total|pluralize }}</small></div><a class="pill" href="{% url 'project_dashboard' %}">&lsaquo; Dashboard</a></div>
+<div class="tabs">{% for key, label in tabs %}<a class="{% if show == key %}on{% endif %}" href="?show={{ key }}">{{ label }}<b>{% for k, n in counts.items %}{% if k == key %}{{ n }}{% endif %}{% endfor %}</b></a>{% endfor %}</div>
+<form method="get" style="display:flex;gap:8px;margin:6px 0"><input type="hidden" name="show" value="{{ show }}"><input name="q" value="{{ q }}" placeholder="Search by customer name, phone, place..." style="flex:1;max-width:380px;margin:0"><button class="mini" type="submit" style="margin:0;padding:10px 16px;font-weight:700">&#128269; Search</button></form>
+{% for i in items %}<div class="cc">
+<h2><a href="{% url 'progress_detail' i.w.pk %}">{{ i.w.name }}</a></h2>
+<small>{{ i.w.project_id }}{% if i.w.kw %} &middot; {{ i.w.kw }} kW{% endif %}{% if i.w.location %} &middot; {{ i.w.location }}{% endif %} &middot; commissioned {% if i.start %}{{ i.start|date:"j M Y" }}{% else %}(date not entered){% endif %}{% if i.owner %} &middot; {{ i.owner }}{% endif %}</small>
+<div class="grid">
+<div class="box"><h3>Subsidy</h3>
+{% if not i.has_subsidy %}<span class="b na">No subsidy ({{ i.scheme }})</span>
+{% elif i.credited %}<span class="b ok">Credited {{ i.credited|date:"j M Y" }}</span>
+{% else %}<span class="b {% if i.late %}no{% else %}wait{% endif %}">{{ i.sub_status }}</span>{% if i.waiting is not None %} <small>{{ i.waiting }} days since commissioning{% if i.late %} &ndash; late{% endif %}</small>{% endif %}{% endif %}
+{% if i.has_subsidy %}<br><small>Bank details on portal: {{ i.bank|default:"not recorded" }}</small>{% endif %}</div>
+<div class="box"><h3>Handover</h3>
+<span class="b {% if i.handed %}ok{% else %}no{% endif %}">{% if i.handed %}Handed over{% else %}Not handed over{% endif %}</span>
+{% if i.w.handover_date %}<small> {{ i.w.handover_date|date:"j M Y" }}{% if i.w.handover_mode %} &middot; {{ i.w.handover_mode }}{% endif %}</small>{% endif %}
+<br><small>Invoice: {{ i.w.invoice_no|default:"not recorded" }}{% if i.w.invoice_date %} &middot; {{ i.w.invoice_date|date:"j M Y" }}{% endif %}{% if i.warranty %}<br>Workmanship warranty until {{ i.warranty|date:"j M Y" }}{% endif %}</small></div>
+<div class="box"><h3>Documents given &middot; {{ i.docs_n }} of {{ n_docs }}</h3>
+<div class="docs">{% for name, given in i.docs.items %}<span class="{% if given %}ok{% else %}no{% endif %}">{% if given %}&#10003;{% else %}&#10007;{% endif %} {{ name }}</span>{% endfor %}</div></div>
+</div></div>{% empty %}<div class="cc">No customers here.</div>{% endfor %}
+</div>{% endblock %}
