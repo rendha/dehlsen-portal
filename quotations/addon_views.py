@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from . import pdf_layout as L
-from .addon_models import AddonItem, AddonQuotation, default_gst
+from .addon_models import AddonItem, AddonQuotation, _m, default_gst
 from .models import PanelOption, Product
 
 
@@ -23,6 +23,25 @@ def _dec(v, default="0"):
         return Decimal(str(v).replace(",", "").strip() or default)
     except (InvalidOperation, ValueError):
         return Decimal(default)
+
+
+def _rate_from_gross(gross, gst, qty):
+    """Per-unit rate (2 decimals, before GST) whose GST-inclusive total is closest to qty x the price the person typed."""
+    base = (gross / (Decimal("1") + gst / Decimal("100"))).quantize(Decimal("0.01"))
+    target, best = _m(qty * gross), None
+    for d in range(-3, 4):
+        r = base + Decimal(d) / 100
+        t = _m(qty * r)
+        err = abs(t + _m(t * gst / Decimal("100")) - target)
+        if best is None or err < best[0]:
+            best = (err, r)
+    return best[1]
+
+
+# lump-sum work lines offered in the item search; the price is typed for each job
+WORK_LINES = [("Electrical Material Including Cable", "Lot"),
+              ("Electrical Re cabling and Combination Re arranging", "L.S."),
+              ("Structure Fabrication & Installation Work", "L.S.")]
 
 
 def _can_see_all(request):
@@ -48,6 +67,11 @@ def addon_products(request):
         qs = qs.filter(Q(name__icontains=word) | Q(make__icontains=word) | Q(specification__icontains=word))
     show = _unlocked(request)
     out = []
+    words0 = [w.lower() for w in q.split()]
+    for n, (title, unit) in enumerate(WORK_LINES):
+        if words0 and all(w in title.lower() for w in words0):
+            out.append({"id": "work:%d" % n, "name": title, "make": "", "unit": unit, "category": "Work / lump sum", "gst": "18",
+                        "spec": "", "typed": True})
     # solar panels live in Panel options (a rate per watt), not in Products: search them too, panels first
     words = [w.lower() for w in q.split()]
     for o in PanelOption.objects.filter(is_active=True).order_by("company", "panel_type", "wattage"):
@@ -95,7 +119,7 @@ def addon_new(request):
         addon.offer_no = L.next_offer_no(AddonQuotation, timezone.localdate(), prefix="UPG")
         addon.save()
         ids, specs, makes, units = (P.getlist(k) for k in ("product_id", "specification", "make", "unit"))
-        qtys, rates, gsts = P.getlist("quantity"), P.getlist("rate"), P.getlist("gst")
+        qtys, rates, gsts, modes = P.getlist("quantity"), P.getlist("rate"), P.getlist("gst"), P.getlist("rate_mode")
         for i, desc in enumerate(descs):
             desc = desc.strip()
             if not desc:
@@ -115,6 +139,8 @@ def addon_new(request):
                 make, spec, unit = get(makes) or panel.company, get(specs), get(units) or "Nos"
             else:         # typed item: the person types its rate
                 rate, gst = _dec(get(rates)), _dec(get(gsts), "18")
+                if get(modes) == "incl":      # the typed price already includes GST: work back to the rate before GST
+                    rate = _rate_from_gross(rate, gst, qty)
                 make, spec, unit = get(makes), get(specs), get(units) or "Nos"
             AddonItem.objects.create(addon=addon, product=product, description=desc[:300], specification=spec, make=make[:200],
                                      unit=unit[:50], quantity=qty, rate=rate, gst_percent=gst)

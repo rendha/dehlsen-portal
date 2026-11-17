@@ -89,8 +89,10 @@ def _cover(a):
 
 
 def _rate_with_gst(it):
+    """Unit price including GST, taken from the line total so rate x qty always equals the amount shown."""
     from decimal import Decimal, ROUND_HALF_UP
-    return (it.rate * (Decimal("1") + it.gst_percent / Decimal("100"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    q = it.quantity or Decimal("1")
+    return (it.total_value / q).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _rows(a):
