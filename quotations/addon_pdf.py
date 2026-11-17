@@ -1,5 +1,5 @@
-"""PDF of an add-on quotation, in the normal quotation design: cover, welcome page, then ONE summary page with the items table
-(a separate BOQ page only when there are too many items for the box)."""
+"""PDF of an add-on quotation, in the normal quotation design: cover, welcome page, then ONE summary page
+(items with rate and amount incl. GST, project cost, amount in words, scope of work, notes)."""
 import io
 
 from pypdf import PdfReader, PdfWriter
@@ -7,7 +7,7 @@ from pypdf import PdfReader, PdfWriter
 from . import pdf_layout as L
 from .pdf_generator import ASSETS_DIR, ASSETS_URI, PAYMENT_NOTE, PAYMENT_TERMS, _part, bank_details
 
-BOX_ITEMS = 5      # items that fit in the overview box; more than this -> the BOQ page carries the item-wise prices
+TIGHT_AFTER = 3    # more lines than this in the overview box -> smaller type so everything fits on the one page
 
 _ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen",
          "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
@@ -107,7 +107,6 @@ def _rows(a):
 
 def build_addon_pdf(a):
     rows = _rows(a)
-    overflow = len(rows) > BOX_ITEMS
     base = {"assets": ASSETS_URI}
     parts = [_part("cover.html", dict(base, cover_fields=_cover(a))), PdfReader(str(ASSETS_DIR / "page_welcome.pdf"))]
     diff = a.final_total - a.calculated_total      # lines add up to the calculated total; show any manual price change
@@ -119,10 +118,8 @@ def build_addon_pdf(a):
                  total="₹ %s/-" % L.money_text(a.final_total))
     scope, keep = scope_text(a)
     price.update(scope=scope, keep=keep)
-    if True:      # BOQ & Price page: full details (specification, make, rate, amount), scope of work and notes
-        parts.append(_part("addon_boq.html", dict(base, boq_rows=rows, **price)))
     parts.append(_part("addon_summary.html", dict(
-        base, rows=[] if overflow else rows, overflow=overflow, **price,
+        base, rows=rows, tight=len(rows) > TIGHT_AFTER, **price,
         payment_terms=PAYMENT_TERMS, payment_note=PAYMENT_NOTE,
         bank_lines=L.positioned([{"text": "%s: %s" % (k, v)} for k, v in bank_details()], L.BANK_TOP, L.BANK_PITCH))))
     w = PdfWriter()
