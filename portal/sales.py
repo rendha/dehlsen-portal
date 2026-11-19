@@ -33,20 +33,68 @@ def people_of(t):
     return [t.user]
 
 
-def count(people, start, end):
-    """-> (value, customers) of these people inside the dates: the sold value (price after discount) of their projects in the
-    payment collection list (portal.Collection: loaded from the sheet, and added automatically when a quotation is confirmed), by booking date."""
+def _words(place):
+    """Names a sheet/quotation may use for this place: 'Kochi' is also written EKM / Ernakulam / Cochin."""
+    w = set(place.name.lower().replace(" and others", "").replace(",", " ").split())
+    if w & {"kochi", "cochin", "ernakulam", "ekm"}:
+        w |= {"kochi", "cochin", "ernakulam", "ekm"}
+    return w
+
+
+def _region_place(region, places):
+    r = (region or "").strip().lower()
+    if not r:
+        return None
+    for p in places:
+        if r in _words(p):
+            return p.id
+    return None
+
+
+def _owned(start, end, place=None, people=()):
+    """-> [(Collection, owner_place_id)] booked inside the dates that count for this place (or, with no place, for these people).
+    A project whose region is a known place (EKM -> Kochi) belongs to THAT place whoever sold it; any other project belongs to the place of its sales person."""
     from . import payments
-    from .models import Collection
+    from .models import Collection, Place
+    places = list(Place.objects.all())
     keys = set()
     for u in people:
         keys |= keys_of(u)
-    value, clients = Decimal(0), 0
+    out = []
     for c in Collection.objects.filter(booking_date__gte=start, booking_date__lte=end):
-        if payments.is_mine(keys, c.sales_name):
-            value += Decimal(c.net_value)
-            clients += 1
-    return value, clients
+        rp = _region_place(c.region, places) if place is not None else None
+        if place is not None and rp is not None:
+            if rp == place.id:
+                out.append(c)
+        elif payments.is_mine(keys, c.sales_name):
+            out.append(c)
+    return out
+
+
+def count(people, start, end, place=None):
+    """-> (value, customers): the sold value (price after discount) of the projects in the payment collection list (portal.Collection: loaded from
+    the sheet, and added automatically when a quotation is confirmed), by booking date.  For a place see _owned."""
+    rows = _owned(start, end, place, people)
+    return sum((Decimal(c.net_value) for c in rows), Decimal(0)), len(rows)
+
+
+def place_members(t):
+    """-> [(name, value)] of a place target: every member, and anybody else (not a member) who sold in this place, with what he achieved there."""
+    from . import payments
+    rows = _owned(t.start_date, t.end_date, t.place, people_of(t))
+    users = people_of(t)
+    got = {u.id: Decimal(0) for u in users}
+    extra = {}
+    for c in rows:
+        for u in users:
+            if payments.is_mine(keys_of(u), c.sales_name):
+                got[u.id] += Decimal(c.net_value)
+                break
+        else:
+            extra[c.sales_name or "Not named"] = extra.get(c.sales_name or "Not named", Decimal(0)) + Decimal(c.net_value)
+    out = [(_label(u), got[u.id]) for u in users]
+    out += sorted(extra.items(), key=lambda x: -x[1])
+    return out
 
 
 def is_year(t):
@@ -70,7 +118,7 @@ def achieved(t, all_targets):
                 total += v
                 customers += c or 0
             return total, customers
-    return count(people_of(t), t.start_date, t.end_date)
+    return count(people_of(t), t.start_date, t.end_date, t.place if t.place_id else None)
 
 
 def indian(value):
@@ -132,7 +180,7 @@ def build(today=None):
                     ql["state"] = "done" if q.end_date < today else ("now" if q.start_date <= today else "next")
                     line["quarters"].append(ql)
             if t.place_id:
-                line["members"] = [{"name": _label(u), "got_short": short(count([u], t.start_date, t.end_date)[0])} for u in people_of(t)]
+                line["members"] = [{"name": n, "got_short": short(v)} for n, v in place_members(t)]
             out[kind].append(line)
         out[kind].sort(key=lambda l: (-l["percent"], l["name"].lower()))
         for i, l in enumerate(out[kind], 1):
