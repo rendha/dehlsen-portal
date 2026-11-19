@@ -1027,6 +1027,7 @@ self.addEventListener("fetch", (e) => {
   if (r.method !== "GET") { return; }
   const u = new URL(r.url);
   if (u.origin !== self.location.origin) { return; }
+  if (u.pathname.startsWith("/sales/pdf/") || u.pathname.startsWith("/sales/view/") || /\\.pdf$/i.test(u.pathname) || r.headers.has("range")) { return; }   // PDFs and partial-file requests go straight to the network (iPhone Safari fails when a service worker answers them)
   if (r.mode === "navigate") { e.respondWith(fetch(r).catch(() => caches.match("/offline/"))); return; }
   if (u.pathname.startsWith("/static/")) { e.respondWith(caches.match(r).then((hit) => hit || fetch(r))); }
 });
