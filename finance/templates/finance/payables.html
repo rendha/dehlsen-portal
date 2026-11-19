@@ -1,0 +1,30 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="cards">
+<div class="c"><small>Total payable (invoices only)</small><b>&#8377; {{ total|inr }}</b></div>
+<div class="c r"><small>Overdue</small><b>&#8377; {{ overdue|inr }}</b></div>
+<div class="c a"><small>Due in 7 days</small><b>&#8377; {{ soon|inr }}</b></div>
+<div class="c"><small>Advances with vendors (not owed)</small><b>&#8377; {{ advances|inr }}</b></div>
+</div>
+<div class="card">
+<form class="bar" method="get">
+<select name="company" onchange="this.form.submit()"><option value="">Both companies</option><option value="Dehlsen"{% if company == 'Dehlsen' %} selected{% endif %}>Dehlsen</option><option value="Reed"{% if company == 'Reed' %} selected{% endif %}>Reed</option></select>
+<select name="vendor" onchange="this.form.submit()"><option value="">All vendors</option>{% for v in vendors %}<option value="{{ v.id }}"{% if vendor_id == v.id|stringformat:'s' %} selected{% endif %}>{{ v.name }}</option>{% endfor %}</select>
+<select name="status" onchange="this.form.submit()"><option value="unpaid"{% if status == 'unpaid' %} selected{% endif %}>Unpaid</option><option value="overdue"{% if status == 'overdue' %} selected{% endif %}>Overdue</option><option value="soon"{% if status == 'soon' %} selected{% endif %}>Due soon</option><option value="paid"{% if status == 'paid' %} selected{% endif %}>Paid</option><option value="all"{% if status == 'all' %} selected{% endif %}>All</option></select>
+<span class="sp"></span>
+<a class="btn auto w" href="{% url 'fin_export' %}">Download CSV</a>
+{% if edit %}<a class="btn auto" href="{% url 'fin_invoice_new' %}">+ Vendor invoice</a>{% endif %}
+</form>
+<div class="scroll"><table class="t"><tr><th>Due</th><th>Vendor</th><th>Invoice</th><th>Company</th><th>For</th><th class="n">Amount</th><th class="n">Balance</th><th>Status</th></tr>
+{% for i in rows %}<tr>
+<td>{{ i.due_date|date:"d M" }}{% if i.balance > 0 %}<br><small>{% if i.days_to_due < 0 %}{{ i.days_to_due|stringformat:"d"|slice:"1:" }} days late{% elif i.days_to_due == 0 %}today{% else %}in {{ i.days_to_due }} days{% endif %}</small>{% endif %}</td>
+<td><a href="{% url 'fin_invoice' i.pk %}">{{ i.vendor.name }}</a></td>
+<td>{{ i.number|default:"-" }}<br><small>{{ i.date|date:"d M" }}</small></td>
+<td>{{ i.company }}</td>
+<td>{{ i.customer_name|default:i.delivery_to }}{% if i.description %}<br><small>{{ i.description }}</small>{% endif %}</td>
+<td class="n">{{ i.amount|inr }}</td><td class="n"><b>{{ i.balance|inr }}</b>{% if i.advance_applied %}<br><small>advance {{ i.advance_applied|inr }}</small>{% endif %}</td>
+<td><span class="tag {{ i.status|tagclass }}">{{ i.status|label }}</span>{% if not i.material_received %}<br><small>material not marked received</small>{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="8">Nothing here.</td></tr>{% endfor %}
+</table></div>
+<p><small>Shown balance: &#8377; {{ shown|inr }}. A proforma is not counted here until its invoice is entered.</small></p>
+</div>{% endblock %}

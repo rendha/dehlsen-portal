@@ -4,7 +4,7 @@
 <style>.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}.kpi{background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,.06)}.kpi b{display:block;font-size:22px}.kpi.red b{color:#b91c1c}.kpi.amb b{color:#b45309}</style>
 <h1>Procurement</h1>
 <p class="muted">What we buy, from whom, on credit or paid, what is due, and where each customer stands.</p>
-<div class="actions">{% if editor %}<a class="btn" href="{% url 'proc_add' %}">+ Add a purchase</a>{% endif %}<a class="btn light" href="{% url 'proc_customers' %}">Customer position</a></div>
+<div class="actions">{% if editor %}<a class="btn" href="{% url 'proc_order' %}">+ Order material</a>{% endif %}<a class="btn light" href="{% url 'proc_customers' %}">Customer position</a></div>
 
 <div class="kpis">
 <div class="kpi"><span class="muted">We owe suppliers</span><b>&#8377;{{ owed_total|floatformat:"0g" }}</b></div>

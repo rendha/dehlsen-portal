@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "quotations",     # Sales
     "store",          # Project (materials)
     "cleaning",       # Service (cleaning manager)
+    "finance",        # Accounts (vendor proformas, invoices, payments)
 ]
 
 MIDDLEWARE = [

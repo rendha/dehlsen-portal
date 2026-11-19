@@ -321,6 +321,9 @@ class Payment(models.Model):
     from_sheet = models.BooleanField(default=False)
     entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
+    confirmed = models.BooleanField(default=True, help_text="A payment typed by a sales person waits here until Accounts confirms it with the bank. Only confirmed payments count in Collection.received.")
+    confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    confirmed_on = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -530,3 +533,135 @@ class CrewAssignment(models.Model):
     @property
     def site_name(self):
         return self.project.name if self.project_id else self.site
+
+
+
+class Meeting(models.Model):
+    """A scheduled meeting and its minutes: who attends, what was discussed and decided, and the action items to be checked later."""
+    STATUS = [("scheduled", "Scheduled"), ("held", "Held"), ("cancelled", "Cancelled")]
+
+    title = models.CharField(max_length=200)
+    date = models.DateField(db_index=True)
+    time = models.TimeField(null=True, blank=True)
+    venue = models.CharField(max_length=200, blank=True)
+    objective = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default="scheduled")
+    conducted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+                                     help_text="The person who conducts the meeting and keeps its minutes")
+    follow_up_of = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="follow_ups",
+                                     help_text="The earlier meeting whose unfinished items are checked in this one")
+    prepared_by = models.CharField(max_length=120, blank=True)
+    approved_by = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+    def __str__(self):
+        return "%s (%s)" % (self.title, self.date)
+
+    def can_edit(self, user):
+        return bool(getattr(user, "is_superuser", False) or (self.conducted_by_id and self.conducted_by_id == user.id)
+                    or (self.created_by_id and self.created_by_id == user.id))
+
+
+class MeetingAttendee(models.Model):
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="attendees")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    name = models.CharField(max_length=120, blank=True, help_text="For people without a portal login")
+    present = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def label(self):
+        if self.user_id:
+            return self.user.get_full_name() or self.user.get_username()
+        return self.name
+
+
+class MeetingPoint(models.Model):
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="points")
+    title = models.CharField(max_length=200)
+    notes = models.TextField(blank=True, help_text="What was discussed and decided")
+    position = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+
+    def __str__(self):
+        return self.title
+
+
+class MeetingAction(models.Model):
+    """One thing said in a meeting that somebody has to do, with a date, so that it can be checked later."""
+    STATUS = [("open", "Open"), ("progress", "In progress"), ("done", "Done"), ("dropped", "Dropped")]
+
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name="actions")
+    point = models.ForeignKey(MeetingPoint, null=True, blank=True, on_delete=models.SET_NULL, related_name="actions")
+    text = models.CharField(max_length=500)
+    owner_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="meeting_actions")
+    owner_name = models.CharField(max_length=120, blank=True, help_text="For people without a portal login")
+    target_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS, default="open")
+    done_on = models.DateField(null=True, blank=True)
+    remark = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.text
+
+    @property
+    def owner_label(self):
+        if self.owner_user_id:
+            return self.owner_user.get_full_name() or self.owner_user.get_username()
+        return self.owner_name
+
+    @property
+    def is_open(self):
+        return self.status in ("open", "progress")
+
+    @property
+    def overdue(self):
+        return bool(self.is_open and self.target_date and self.target_date < timezone.localdate())
+
+class BankLoan(models.Model):
+    """A customer who wants a bank loan: the lead waits here (not yet a project) until the bank sanctions it.
+    Sanctioned -> the lead is marked Won and the loan details go to the project.  Rejected -> own money / another bank, or the lead is Lost."""
+    DOCS, APPLIED, QUERY, SANCTIONED, REJECTED, CASH, LOST = "docs", "applied", "query", "sanctioned", "rejected", "cash", "lost"
+    STATUS = [(DOCS, "Documents being collected"), (APPLIED, "Applied"), (QUERY, "Query from bank"), (SANCTIONED, "Sanctioned"),
+              (REJECTED, "Rejected - decide"), (CASH, "Switched to own money"), (LOST, "Lost (loan rejected)")]
+    ACTIVE = (DOCS, APPLIED, QUERY, REJECTED)
+    lead = models.OneToOneField(Lead, on_delete=models.CASCADE, related_name="loan")
+    bank = models.CharField(max_length=100, blank=True)
+    branch = models.CharField(max_length=100, blank=True)
+    amount = models.DecimalField("loan amount applied for", max_digits=12, decimal_places=2, default=0)
+    applied_on = models.DateField(null=True, blank=True)
+    expected_on = models.DateField("expected sanction date", null=True, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS, default=DOCS)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="loans_followed")
+    notes = models.TextField(blank=True)
+    reject_reason = models.CharField(max_length=200, blank=True)
+    sanctioned_on = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return "Loan of %s (%s)" % (self.lead, self.get_status_display())
+
+    @property
+    def active(self):
+        return self.status in self.ACTIVE
+
+    @property
+    def waiting_days(self):
+        d = self.applied_on or self.created_at.date()
+        return (timezone.localdate() - d).days

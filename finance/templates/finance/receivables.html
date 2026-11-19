@@ -1,0 +1,31 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="card" style="text-align:center;padding:18px"><small style="color:var(--mut)">TOTAL RECEIVABLE &middot; {{ n_open }} customer{{ n_open|pluralize }} still owe us</small>
+<div style="font-size:34px;font-weight:700;color:#b36b00">&#8377; {{ to_collect|inr }}</div>
+<small style="color:var(--mut)">sold &#8377; {{ sold|inr }} &middot; received &#8377; {{ collected|inr }}</small></div>
+<div class="cards">
+<div class="c"><small>Collected so far on these</small><b>&#8377; {{ collected|inr }}</b></div>
+<div class="c"><small>Sold on these</small><b>&#8377; {{ sold|inr }}</b></div>
+<div class="c a"><small>Payments waiting for confirmation</small><b>&#8377; {{ pending_sum|inr }}</b>{% if pending_n %}<small>{{ pending_n }} entr{{ pending_n|pluralize:"y,ies" }}</small>{% endif %}</div>
+<div class="c r"><small>No payment for {{ slow_days }}+ days</small><b>&#8377; {{ slow_sum|inr }}</b></div>
+{% if profit %}<div class="c"><small>Expected profit on these</small><b>&#8377; {{ gp_total|inr }}</b><small>&#8377; {{ gp_left|inr }} still to come in</small></div>{% endif %}
+</div>
+{% if profit and gp_missing %}<p class="help">Expected profit is filled in for {{ gp_n }} of {{ gp_n|add:gp_missing }} customers. Fill the rest in the sheet / Admin to see the full figure.</p>{% endif %}
+<div class="card">
+<form class="bar" method="get">
+<select name="region" onchange="this.form.submit()"><option value="">All regions</option>{% for x in regions %}<option{% if region == x %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>
+<select name="person" onchange="this.form.submit()"><option value="">All sales people</option>{% for x in people %}<option{% if person == x %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>
+<select name="show" onchange="this.form.submit()"><option value="open"{% if show == 'open' %} selected{% endif %}>All with balance</option><option value="pending"{% if show == 'pending' %} selected{% endif %}>Waiting for confirmation</option><option value="slow"{% if show == 'slow' %} selected{% endif %}>No payment for {{ slow_days }}+ days</option></select>
+<span class="sp"></span><small>Showing &#8377; {{ shown|inr }}</small>
+</form>
+<div class="scroll"><table class="t"><tr><th>Customer</th><th>Sales</th><th class="n">Sold</th><th class="n">Received</th><th class="n">To collect</th>{% if profit %}<th class="n">Expected profit</th>{% endif %}<th>Last payment</th><th></th></tr>
+{% for r in rows %}<tr>
+<td><a href="{% url 'fin_receivable' r.c.pk %}">{{ r.c.customer }}</a><br><small>{{ r.c.project_id }}{% if r.c.region %} &middot; {{ r.c.region }}{% endif %}</small></td>
+<td>{{ r.c.sales_name }}</td>
+<td class="n">{{ r.c.net_value|inr }}</td><td class="n">{{ r.c.received|inr }}<br><small>{{ r.pct }}%</small></td>
+<td class="n"><b>{{ r.balance|inr }}</b></td>
+{% if profit %}<td class="n">{% if r.gp %}{{ r.gp|inr }}<br><small>{{ r.gp_left|inr }} to come</small>{% else %}<small>-</small>{% endif %}</td>{% endif %}
+<td>{% if r.last %}{{ r.last|date:"d M Y" }}<br><small>{{ r.days }} days ago</small>{% else %}<small>none{% if r.days is not None %} &middot; booked {{ r.days }} days ago{% endif %}</small>{% endif %}</td>
+<td>{% if r.pending %}<span class="tag a">{{ r.pending|length }} to confirm</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="8"><small>Nothing to show.</small></td></tr>{% endfor %}</table></div>
+</div>{% endblock %}

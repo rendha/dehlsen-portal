@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Schedule a meeting · Dehlsen Energy{% endblock %}
+{% block head %}{% include "portal/_meeting_css.html" %}{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Schedule a meeting</h1><small>You can add the minutes during or after the meeting</small></div><a class="pill" href="{% url 'meetings' %}">&lsaquo; Back</a></div>
+{% if messages %}{% for m in messages %}<div class="note {% if m.tags == 'error' %}bad{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
+<div class="mt"><form method="post" class="card f">{% csrf_token %}
+<label>Meeting title *</label><input name="title" required placeholder="e.g. Strategic Planning & Business Development Meeting">
+<div class="g2"><div><label>Date *</label><input type="date" name="date" value="{{ today|date:'Y-m-d' }}" required></div><div><label>Time</label><input type="time" name="time" value="19:00"></div></div>
+<label>Venue</label><input name="venue" placeholder="e.g. Meeting Hall, Dehlsen Engineering">
+<label>Meeting objective</label><textarea name="objective" rows="3" placeholder="Why the meeting is being held"></textarea>
+<label>Conducted by (keeps the minutes)</label><select name="conducted_by">{% for u in users %}<option value="{{ u.pk }}" {% if u.pk == me.pk %}selected{% endif %}>{{ u.get_full_name|default:u.get_username }}</option>{% endfor %}</select>
+<label>Who is attending (portal users)</label><div class="chk">{% for u in users %}<label><input type="checkbox" name="attendees" value="{{ u.pk }}" {% if u.pk == me.pk %}checked{% endif %}>{{ u.get_full_name|default:u.get_username }}</label>{% endfor %}</div>
+<label>Others without a login (one name per line)</label><textarea name="others" rows="2" placeholder="e.g. CA / consultant name"></textarea>
+<label>Follow-up of (optional)</label><select name="follow_up_of"><option value="">Automatic (the last meeting with the same title)</option>{% for p in prev %}<option value="{{ p.pk }}">{{ p.title }} &middot; {{ p.date|date:"j M Y" }}</option>{% endfor %}</select>
+<button class="btn o" type="submit" style="margin-top:14px">Schedule meeting</button></form></div></div>{% endblock %}

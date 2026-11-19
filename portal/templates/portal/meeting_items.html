@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Open action items · Dehlsen Energy{% endblock %}
+{% block head %}{% include "portal/_meeting_css.html" %}{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Open action items</h1><small>Things said in meetings that are not done yet</small></div><a class="pill" href="{% url 'meetings' %}">&lsaquo; Meetings</a></div>
+<div class="mt">
+<div class="acts" style="margin:0 0 8px"><a href="{% url 'meeting_items' %}" style="{% if not who %}background:#2a46a0;color:#fff{% endif %}">Everyone</a><a href="{% url 'meeting_items' %}?who=me" style="{% if who %}background:#2a46a0;color:#fff{% endif %}">Only mine</a></div>
+<p style="font-size:13px;margin:4px 0">{{ items|length }} open{% if overdue %} &middot; <b style="color:#b02a1c">{{ overdue }} overdue</b>{% endif %}</p>
+{% for a in items %}<div class="ai {% if a.overdue %}late{% endif %}"><div class="t">{{ a.text }}</div>
+<div class="m"><b>{{ a.owner_label|default:"Unassigned" }}</b>{% if a.target_date %} &middot; by {{ a.target_date|date:"j M Y" }}{% if a.overdue %} <span class="tag red">Overdue</span>{% endif %}{% endif %} &middot; <a href="{% url 'meeting' a.meeting_id %}">{{ a.meeting.title }} ({{ a.meeting.date|date:"j M" }})</a></div>
+{% if a.owner_user_id == request.user.id or a.meeting.conducted_by_id == request.user.id or a.meeting.created_by_id == request.user.id or request.user.is_superuser %}<div class="st">
+<form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="status" value="done"><button>&#10003; Done</button></form>
+<form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="status" value="progress"><button {% if a.status == 'progress' %}class="on"{% endif %}>In progress</button></form>
+<form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="status" value="dropped"><button>Drop</button></form></div>{% endif %}</div>
+{% empty %}<div class="note">Nothing is pending. &#127881;</div>{% endfor %}
+</div></div>{% endblock %}

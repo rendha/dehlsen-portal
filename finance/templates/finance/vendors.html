@@ -1,0 +1,7 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="card"><div class="bar"><span class="sp"></span>{% if edit %}<a class="btn auto" href="{% url 'fin_vendor_new' %}">+ Vendor</a>{% endif %}</div>
+<div class="scroll"><table class="t"><tr><th>Vendor</th><th>Credit</th><th>GST no.</th><th>Phone</th><th class="n">Invoices</th><th class="n">Total billed</th><th class="n">We owe</th><th class="n">Advance with vendor</th></tr>
+{% for r in rows %}<tr><td>{% if edit %}<a href="{% url 'fin_vendor' r.v.pk %}">{{ r.v.name }}</a>{% else %}{{ r.v.name }}{% endif %}{% if not r.v.is_active %} <small>(inactive)</small>{% endif %}</td>
+<td>{% if r.v.credit_days %}{{ r.v.credit_days }} days{% else %}Cash{% endif %}</td><td>{{ r.v.gst_no|default:"-" }}</td><td>{{ r.v.phone|default:"-" }}</td>
+<td class="n">{{ r.n }}</td><td class="n">{{ r.total|inr }}</td><td class="n"><b>{{ r.owed|inr }}</b></td><td class="n">{{ r.adv|inr }}</td></tr>{% endfor %}</table></div></div>{% endblock %}

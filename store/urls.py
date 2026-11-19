@@ -16,6 +16,7 @@ urlpatterns = [
     path("procurement/customers/", procurement.proc_customers, name="proc_customers"),
     path("procurement/customer/<int:pk>/", procurement.proc_customer, name="proc_customer"),
     path("procurement/add/", procurement.proc_add, name="proc_add"),
+    path("procurement/order/", procurement.proc_order, name="proc_order"),
     path("procurement/purchase/<int:pk>/", procurement.proc_purchase, name="proc_purchase"),
     path("accounts/", views.accounts_home, name="accounts"),
     path("accounts/<int:pk>/", views.accounts_customer, name="accounts_customer"),

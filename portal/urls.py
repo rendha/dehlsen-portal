@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import crew, project_work, views, project_dashboard
+from . import crew, loans, meetings, project_work, views, project_dashboard
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -23,6 +23,7 @@ urlpatterns = [
     path("leads/<int:pk>/update/", views.lead_update, name="lead_update"),
     path("leads/<int:pk>/type/", views.lead_type, name="lead_type"),
     path("leads/<int:pk>/won/", views.lead_won, name="lead_won"),
+    path("leads/<int:pk>/loan/", loans.detail, name="loan_detail"),
     path("leads/<int:pk>/lost/", views.lead_lost, name="lead_lost"),
     path("leads/<int:pk>/done/", views.lead_done, name="lead_done"),
     path("progress/", project_work.progress, name="progress"),
@@ -32,6 +33,14 @@ urlpatterns = [
     path("progress/dashboard/", project_dashboard.dashboard, name="project_dashboard"),
     path("progress/commissioned/", project_dashboard.commissioned, name="project_commissioned"),
     path("progress/<int:pk>/", project_work.project_detail, name="progress_detail"),
+    path("meetings/", meetings.meetings, name="meetings"),
+    path("meetings/new/", meetings.meeting_new, name="meeting_new"),
+    path("meetings/items/", meetings.meeting_items, name="meeting_items"),
+    path("meetings/<int:pk>/", meetings.meeting, name="meeting"),
+    path("meetings/<int:pk>/do/", meetings.meeting_do, name="meeting_do"),
+    path("meetings/action/<int:pk>/status/", meetings.action_status, name="action_status"),
+    path("meetings/<int:pk>/file/<str:filename>", meetings.meeting_pdf, name="meeting_pdf_named"),
+    path("meetings/<int:pk>/view/<str:filename>", meetings.meeting_pdf_view, name="meeting_pdf_view"),
     path("crew/", crew.crew, name="crew"),
     path("crew/add/", crew.crew_add, name="crew_add"),
     path("crew/<int:pk>/status/", crew.crew_status, name="crew_status"),

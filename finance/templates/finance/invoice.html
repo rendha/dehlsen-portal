@@ -1,0 +1,27 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="card"><h3 style="margin:0 0 10px">Invoice {{ inv.number|default:"(no number)" }} &middot; {{ inv.vendor.name }}</h3>
+<dl class="kv"><dt>Status</dt><dd><span class="tag {{ inv.status|tagclass }}">{{ inv.status|label }}</span></dd>
+<dt>Invoice date</dt><dd>{{ inv.date|date:"d M Y" }}</dd><dt>Due date</dt><dd>{{ inv.due_date|date:"d M Y" }} ({{ inv.credit_days }} credit days)</dd>
+<dt>Company</dt><dd>{{ inv.company }}</dd><dt>Deliver to</dt><dd>{{ inv.delivery_to }}{% if inv.customer_name %} &middot; {{ inv.customer_name }}{% endif %}</dd>
+<dt>Material</dt><dd>{{ inv.description|default:"-" }}</dd>
+<dt>Material received</dt><dd>{% if inv.material_received %}Yes{% if inv.received_on %} ({{ inv.received_on|date:"d M" }}){% endif %}{% else %}Not marked{% endif %}</dd>
+<dt>Checked</dt><dd>{% if inv.approved %}Yes, ready to pay{% else %}Not yet{% endif %}</dd>
+<dt>Amount (incl. GST)</dt><dd>&#8377; {{ inv.amount|inr }}</dd><dt>Paid</dt><dd>&#8377; {{ inv.paid|inr }}</dd>
+<dt>Advance deducted</dt><dd>&#8377; {{ inv.advance_applied|inr }}{% if inv.proforma %} (proforma <a href="{% url 'fin_proforma' inv.proforma.pk %}">{{ inv.proforma.number|default:"view" }}</a>){% endif %}</dd>
+<dt>Balance</dt><dd><b>&#8377; {{ inv.balance|inr }}</b>{% if inv.balance < 0 %} (paid more than the bill){% endif %}</dd>
+{% if inv.remarks %}<dt>Remarks</dt><dd>{{ inv.remarks }}</dd>{% endif %}{% if inv.pdf_link %}<dt>PDF</dt><dd><a href="{{ inv.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}
+{% if inv.check_note %}<dt>To confirm</dt><dd>{{ inv.check_note }}</dd>{% endif %}</dl>
+{% if edit %}<div class="bar" style="margin-top:12px">
+<form method="post" action="{% url 'fin_invoice_flag' inv.pk %}">{% csrf_token %}<input type="hidden" name="what" value="received"><button class="btn auto w">{% if inv.material_received %}Unmark material received{% else %}Mark material received{% endif %}</button></form>
+<form method="post" action="{% url 'fin_invoice_flag' inv.pk %}">{% csrf_token %}<input type="hidden" name="what" value="approve"><button class="btn auto w">{% if inv.approved %}Unmark checked{% else %}Mark checked, ready to pay{% endif %}</button></form>
+<a class="btn auto w" href="{% url 'fin_invoice_edit' inv.pk %}">Edit</a></div>{% endif %}
+</div>
+<div class="card"><h3 style="margin:0 0 10px">Payments</h3>
+<table class="t"><tr><th>Date</th><th class="n">Paid out</th><th>Mode</th><th>Reference</th><th>Note</th><th></th></tr>
+{% for p in payments %}<tr><td>{{ p.paid_on|date:"d M Y" }}</td><td class="n">{{ p.amount|inr }}{% if p.fee %}<br><small>charge {{ p.fee|inr }}</small>{% endif %}</td><td>{{ p.mode }}</td><td>{{ p.reference }}</td><td>{{ p.note }}</td>
+<td>{% if user.is_superuser %}<form class="inl" method="post" action="{% url 'fin_pay_delete' p.pk %}" onsubmit="return confirm('Delete this payment?')">{% csrf_token %}<button>delete</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">No payment yet.</td></tr>{% endfor %}</table>
+{% if edit %}<form method="post" action="{% url 'fin_pay' 'invoice' inv.pk %}" style="margin-top:12px">{% csrf_token %}<div class="fgrid">{% for f in form %}<div>{{ f.label_tag }}{{ f }}{% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}</div>{% endfor %}</div>
+<button class="btn auto">Record payment</button></form>{% endif %}
+</div>{% endblock %}

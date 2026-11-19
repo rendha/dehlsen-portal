@@ -1,0 +1,59 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ m.title }} · Dehlsen Energy{% endblock %}
+{% block head %}{% include "portal/_meeting_css.html" %}{% endblock %}
+{% block body %}{% load static %}<div class="app">
+<div class="top"><div><h1 style="font-size:20px">{{ m.title }}</h1><small>{{ m.date|date:"l, j F Y" }}{% if m.time %} &middot; {{ m.time|time:"g:i A" }}{% endif %}{% if m.venue %} &middot; {{ m.venue }}{% endif %}</small></div><a class="pill" href="{% url 'meetings' %}">&lsaquo; Meetings</a></div>
+{% if messages %}{% for x in messages %}<div class="note {% if x.tags == 'error' %}bad{% endif %}">{{ x }}</div>{% endfor %}{% endif %}
+<div class="mt">
+
+<div class="card">
+<span class="tag {% if m.status == 'held' %}grn{% elif m.status == 'cancelled' %}gry{% endif %}">{{ m.get_status_display }}</span>
+{% if m.conducted_by %}<span class="tag">Conducted by {{ m.conducted_by.get_full_name|default:m.conducted_by.get_username }}</span>{% endif %}
+{% if m.objective %}<p style="white-space:pre-line;margin:8px 0 0;font-size:14px"><b>Objective:</b> {{ m.objective }}</p>{% endif %}
+{% if s.total %}<div style="margin-top:10px;font-size:14px"><b>{{ s.done }} of {{ s.total }}</b> action items done{% if s.overdue %} &middot; <span style="color:#b02a1c"><b>{{ s.overdue }} overdue</b></span>{% endif %}</div><div class="bar"><i style="width:{{ s.pct }}%"></i></div>{% endif %}
+<div class="acts"><a href="{% url 'meeting_pdf_view' m.pk pdf_name %}" style="background:#2a46a0;color:#fff;border-color:#2a46a0">&#128196; Minutes of meeting (PDF)</a>
+{% if editor %}<details style="display:inline"><summary style="display:inline-block;border:1px solid #d5d9e2;border-radius:8px;padding:5px 10px;background:#f6f7fa;color:inherit;font-size:12px">Edit details</summary>
+<form method="post" action="{% url 'meeting_do' m.pk %}" class="f" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="op" value="edit">
+<label>Title</label><input name="title" value="{{ m.title }}">
+<div class="g2"><div><label>Date</label><input type="date" name="date" value="{{ m.date|date:'Y-m-d' }}"></div><div><label>Time</label><input type="time" name="time" value="{{ m.time|time:'H:i' }}"></div></div>
+<label>Venue</label><input name="venue" value="{{ m.venue }}">
+<label>Objective</label><textarea name="objective" rows="3">{{ m.objective }}</textarea>
+<div class="g2"><div><label>Status</label><select name="status">{% for k, l in meeting_status %}<option value="{{ k }}" {% if m.status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+<div><label>Conducted by</label><select name="conducted_by">{% for u in users %}<option value="{{ u.pk }}" {% if u.pk == m.conducted_by_id %}selected{% endif %}>{{ u.get_full_name|default:u.get_username }}</option>{% endfor %}</select></div></div>
+<div class="g2"><div><label>Prepared by (on the PDF)</label><input name="prepared_by" value="{{ m.prepared_by }}"></div><div><label>Reviewed &amp; approved by</label><input name="approved_by" value="{{ m.approved_by }}"></div></div>
+<button class="btn o" style="margin-top:10px">Save</button></form></details>
+<form method="post" action="{% url 'meeting_do' m.pk %}" onsubmit="return confirm('Delete this meeting with all its minutes and action items?')">{% csrf_token %}<input type="hidden" name="op" value="delete"><button>Delete meeting</button></form>{% endif %}</div>
+</div>
+
+{% if pending %}<div class="card" style="border-left:4px solid #e08a1c"><h3 style="margin:0 0 4px">Pending from {{ m.follow_up_of.title }} ({{ m.follow_up_of.date|date:"j M" }})</h3><small>Check these first: said last time, not done yet</small>
+{% for a in pending %}<div class="ai {% if a.overdue %}late{% endif %}"><div class="t">{{ a.text }}</div><div class="m"><b>{{ a.owner_label|default:"Unassigned" }}</b>{% if a.target_date %} &middot; by {{ a.target_date|date:"j M Y" }}{% if a.overdue %} <span class="tag red">Overdue</span>{% endif %}{% endif %}</div>
+{% if a.owner_user_id == me_id or editor %}<div class="st"><form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><input type="hidden" name="status" value="done"><button>&#10003; Done</button></form>
+<form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><input type="hidden" name="status" value="dropped"><button>Drop</button></form></div>{% endif %}</div>{% endfor %}</div>{% endif %}
+
+<div class="card"><h3 style="margin:0 0 6px">Attendees</h3>
+{% if editor %}<form method="post" action="{% url 'meeting_do' m.pk %}" class="chk">{% csrf_token %}<input type="hidden" name="op" value="attendance">
+{% for a in attendees %}<label><input type="checkbox" name="present" value="{{ a.pk }}" {% if a.present %}checked{% endif %}>{{ a.label }}{% if not a.user %} <small style="color:#667">(no login)</small>{% endif %}</label>{% empty %}<div class="note">Nobody added.</div>{% endfor %}
+{% if attendees %}<small style="color:#667">Tick who was present, then save.</small><br><button class="btn o" style="margin-top:6px;font-size:13px">Save attendance</button>{% endif %}</form>
+<details><summary>+ Add attendees</summary><form method="post" action="{% url 'meeting_do' m.pk %}" class="f">{% csrf_token %}<input type="hidden" name="op" value="att_add">
+<select name="user"><option value="">Portal user...</option>{% for u in more_users %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.get_username }}</option>{% endfor %}</select>
+<textarea name="others" rows="2" placeholder="Or other names, one per line"></textarea><button class="btn o" style="font-size:13px">Add</button></form></details>
+{% if attendees %}<details><summary>Remove an attendee</summary>{% for a in attendees %}<form method="post" action="{% url 'meeting_do' m.pk %}" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="att_del"><input type="hidden" name="id" value="{{ a.pk }}"><button style="font-size:12px;margin:2px;padding:4px 8px;border:1px solid #d5d9e2;border-radius:8px;background:#f6f7fa">&times; {{ a.label }}</button></form>{% endfor %}</details>{% endif %}
+{% else %}{% for a in attendees %}<div style="font-size:14px;margin:3px 0">{% if a.present %}&#10003;{% else %}&#9675;{% endif %} {{ a.label }}</div>{% empty %}<div class="note">Nobody added.</div>{% endfor %}{% endif %}
+</div>
+
+<h3 style="margin:16px 0 0">Discussion &amp; decisions</h3>
+{% for p in points %}<div class="pt"><h4>{{ p.title }}</h4>{% if p.notes %}<div class="n">{{ p.notes }}</div>{% endif %}
+{% for a in p.rows %}{% include "portal/_meeting_action.html" %}{% endfor %}
+{% if editor %}<details><summary>+ Action item for this point</summary>{% include "portal/_meeting_action_form.html" with pid=p.pk %}</details>
+<details><summary>Edit point</summary><form method="post" action="{% url 'meeting_do' m.pk %}" class="f">{% csrf_token %}<input type="hidden" name="op" value="point_edit"><input type="hidden" name="id" value="{{ p.pk }}"><input name="title" value="{{ p.title }}"><textarea name="notes" rows="4">{{ p.notes }}</textarea><button class="btn o" style="font-size:13px">Save</button></form>
+<form method="post" action="{% url 'meeting_do' m.pk %}" onsubmit="return confirm('Delete this point? Its action items stay, without a point.')">{% csrf_token %}<input type="hidden" name="op" value="point_del"><input type="hidden" name="id" value="{{ p.pk }}"><button style="font-size:12px;margin-top:6px;padding:5px 10px;border:1px solid #d5d9e2;border-radius:8px;background:#f6f7fa">Delete point</button></form></details>{% endif %}
+</div>{% empty %}<div class="note">No discussion point yet.</div>{% endfor %}
+{% if loose %}<div class="pt"><h4>Other action items</h4>{% for a in loose %}{% include "portal/_meeting_action.html" %}{% endfor %}</div>{% endif %}
+{% if editor %}<div class="card"><h4 style="margin:0">Add a discussion point</h4>
+<form method="post" action="{% url 'meeting_do' m.pk %}" class="f">{% csrf_token %}<input type="hidden" name="op" value="point_add"><label>Heading</label><input name="title" required placeholder="e.g. Progress Review - Electrical Contractor Licence">
+<label>What was discussed / decided (one line per decision)</label><textarea name="notes" rows="4"></textarea><button class="btn o" style="margin-top:8px">Add point</button></form>
+<details><summary>+ Action item without a point</summary>{% include "portal/_meeting_action_form.html" with pid="" %}</details></div>{% endif %}
+
+<div class="card"><h4 style="margin:0 0 6px">Send on WhatsApp</h4><textarea class="wa" id="wa" readonly>{{ wa }}</textarea>
+<div class="acts"><a href="{{ wa_url }}" target="_blank" rel="noopener" style="background:#25d366;color:#fff;border-color:#25d366">Open in WhatsApp</a><button type="button" onclick="var t=document.getElementById('wa');t.select();navigator.clipboard?navigator.clipboard.writeText(t.value):document.execCommand('copy');this.textContent='Copied'">Copy</button></div></div>
+</div></div>{% endblock %}

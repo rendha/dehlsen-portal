@@ -1,0 +1,27 @@
+{% extends "portal/base.html" %}
+{% block title %}Meetings · Dehlsen Energy{% endblock %}
+{% block head %}{% include "portal/_meeting_css.html" %}{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Meetings</h1><small>Schedule, minutes, and what has to be done after</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+{% if messages %}{% for m in messages %}<div class="note {% if m.tags == 'error' %}bad{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
+<div class="mt">
+<div class="acts" style="margin:0 0 10px"><a class="btn o" href="{% url 'meeting_new' %}" style="font-size:14px;padding:9px 14px">+ Schedule a meeting</a><a href="{% url 'meeting_items' %}" style="font-size:14px;padding:9px 14px">All open action items</a></div>
+
+{% if mine %}<div class="card"><h3 style="margin:0 0 6px">My action items <small style="font-weight:400">({{ mine|length }})</small></h3>
+{% for a in mine %}<div class="ai {% if a.overdue %}late{% endif %}"><div class="t">{{ a.text }}</div>
+<div class="m">{{ a.meeting.title }} &middot; {{ a.meeting.date|date:"j M" }}{% if a.target_date %} &middot; by <b>{{ a.target_date|date:"j M Y" }}</b>{% if a.overdue %} <span class="tag red">Overdue</span>{% endif %}{% endif %}</div>
+<div class="st"><form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'meetings' %}"><input type="hidden" name="status" value="done"><button>&#10003; Done</button></form>
+<form method="post" action="{% url 'action_status' a.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'meetings' %}"><input type="hidden" name="status" value="progress"><button {% if a.status == 'progress' %}class="on"{% endif %}>In progress</button></form>
+<a href="{% url 'meeting' a.meeting_id %}" style="font-size:12px;padding:5px 10px">Open meeting</a></div></div>{% endfor %}</div>{% endif %}
+
+<h3 style="margin:14px 0 4px">Upcoming</h3>
+{% for r in upcoming %}<a class="row" href="{% url 'meeting' r.m.pk %}"><b>{{ r.m.title }}</b>{% if r.m.date == today %} <span class="tag amb">Today</span>{% endif %}<br>
+<small>{{ r.m.date|date:"l, j M Y" }}{% if r.m.time %} &middot; {{ r.m.time|time:"g:i A" }}{% endif %}{% if r.m.venue %} &middot; {{ r.m.venue }}{% endif %} &middot; {{ r.n_att }} attending</small></a>
+{% empty %}<div class="note">No meeting is scheduled.</div>{% endfor %}
+
+<h3 style="margin:16px 0 4px">Earlier meetings</h3>
+{% for r in past %}<a class="row" href="{% url 'meeting' r.m.pk %}"><b>{{ r.m.title }}</b> <span class="tag {% if r.m.status == 'cancelled' %}gry{% else %}grn{% endif %}">{{ r.m.get_status_display }}</span><br>
+<small>{{ r.m.date|date:"j M Y" }}{% if r.m.venue %} &middot; {{ r.m.venue }}{% endif %}</small>
+{% if r.s.total %}<div style="font-size:12px;margin-top:4px">{{ r.s.done }} of {{ r.s.total }} action items done{% if r.s.overdue %} &middot; <span style="color:#b02a1c">{{ r.s.overdue }} overdue</span>{% endif %}</div><div class="bar"><i style="width:{{ r.s.pct }}%"></i></div>{% endif %}</a>
+{% empty %}<div class="note">Nothing yet.</div>{% endfor %}
+</div></div>{% endblock %}

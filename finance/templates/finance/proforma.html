@@ -1,0 +1,24 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="card"><h3 style="margin:0 0 10px">Proforma {{ pf.number|default:"(no number)" }} &middot; {{ pf.vendor.name }}</h3>
+<dl class="kv"><dt>Status</dt><dd><span class="tag {% if pf.status == 'pending' %}a{% elif pf.status == 'invoiced' %}g{% endif %}">{{ pf.get_status_display }}</span>{% if pf.status_note %} {{ pf.status_note }}{% endif %}</dd>
+<dt>Date</dt><dd>{{ pf.date|date:"d M Y" }}</dd><dt>Company</dt><dd>{{ pf.company }}</dd><dt>Deliver to</dt><dd>{{ pf.delivery_to }}{% if pf.customer_name %} &middot; {{ pf.customer_name }}{% endif %}</dd>
+<dt>Material</dt><dd>{{ pf.description|default:"-" }}</dd><dt>Amount (incl. GST)</dt><dd><b>&#8377; {{ pf.amount|inr }}</b></dd><dt>Advance paid</dt><dd>&#8377; {{ pf.advance_paid|inr }}</dd>
+{% if pf.pdf_link %}<dt>PDF</dt><dd><a href="{{ pf.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}
+{% if pf.check_note %}<dt>To confirm</dt><dd>{{ pf.check_note }}</dd>{% endif %}</dl>
+{% if invoice %}<p class="note ok">Invoice entered: <a href="{% url 'fin_invoice' invoice.pk %}">{{ invoice.number|default:"view invoice" }}</a>. The advance is deducted there.</p>{% endif %}
+<div class="bar" style="margin-top:12px">
+{% if approver and pf.status == 'pending' %}<form method="post" action="{% url 'fin_proforma_status' pf.pk %}">{% csrf_token %}<input type="hidden" name="status" value="approved"><button class="btn auto g">Approve</button></form>
+<form method="post" action="{% url 'fin_proforma_status' pf.pk %}">{% csrf_token %}<input type="hidden" name="status" value="rejected"><button class="btn auto o">Reject</button></form>{% endif %}
+{% if edit and pf.status != 'invoiced' %}<a class="btn auto" href="{% url 'fin_invoice_new' %}?proforma={{ pf.pk }}">Vendor's invoice has come</a><a class="btn auto w" href="{% url 'fin_proforma_edit' pf.pk %}">Edit</a>
+<form method="post" action="{% url 'fin_proforma_status' pf.pk %}">{% csrf_token %}<input type="hidden" name="status" value="cancelled"><button class="btn auto w">Cancel</button></form>{% endif %}
+</div></div>
+<div class="card"><h3 style="margin:0 0 10px">Advance payments</h3>
+<table class="t"><tr><th>Date</th><th class="n">Paid out</th><th>Mode</th><th>Reference</th><th>Note</th><th></th></tr>
+{% for p in payments %}<tr><td>{{ p.paid_on|date:"d M Y" }}</td><td class="n">{{ p.amount|inr }}{% if p.fee %}<br><small>charge {{ p.fee|inr }}</small>{% endif %}</td><td>{{ p.mode }}</td><td>{{ p.reference }}</td><td>{{ p.note }}</td>
+<td>{% if user.is_superuser %}<form class="inl" method="post" action="{% url 'fin_pay_delete' p.pk %}" onsubmit="return confirm('Delete this payment?')">{% csrf_token %}<button>delete</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">No advance paid.</td></tr>{% endfor %}</table>
+{% if edit and pf.status != 'invoiced' and pf.status != 'rejected' and pf.status != 'cancelled' %}
+<form method="post" action="{% url 'fin_pay' 'proforma' pf.pk %}" style="margin-top:12px">{% csrf_token %}<div class="fgrid">{% for f in form %}<div>{{ f.label_tag }}{{ f }}</div>{% endfor %}</div>
+<button class="btn auto">Record advance paid</button></form>{% endif %}
+</div>{% endblock %}

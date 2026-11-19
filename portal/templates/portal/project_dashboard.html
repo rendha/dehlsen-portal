@@ -26,6 +26,13 @@ h3.sh{margin:16px 2px 6px;font-size:13px;letter-spacing:.04em;text-transform:upp
 <a href="{% url 'progress' %}?tab=risk"><span class="ic" style="background:#b02a1c">&#9888;</span><span><b>Money at risk</b><small>Material at site, not yet paid</small></span></a>
 <a href="{% url 'progress' %}?tab=bank"><span class="ic" style="background:#2e9e5b">&#127974;</span><span><b>Bank loans</b><small>Stages waiting for the bank</small></span></a>
 </div>
+{% if loans and loans.n %}<h3 class="sh">Awaiting bank loan <small style="text-transform:none;letter-spacing:0">(not projects yet)</small></h3>
+<div class="k"><div><b>{{ loans.n }}</b><small>waiting for the bank</small></div><div><b>Rs {{ loans.amount|floatformat:0 }}</b><small>loan amount applied for</small></div>
+<div class="warn"><b>{{ loans.late }}</b><small>late or over 30 days</small></div><div class="bad"><b>{{ loans.rejected }}</b><small>rejected - decide</small></div></div>
+<div class="pn"><table><tr><th>Customer</th><th>Bank</th><th class="r">Amount</th><th>Status</th><th class="r">Days</th><th>Expected</th><th>Followed by</th></tr>
+{% for i in loans.items %}<tr><td><a href="{% url 'loan_detail' i.loan.lead_id %}"><b>{{ i.loan.lead.customer_name }}</b></a></td><td>{{ i.loan.bank|default:"-" }}</td><td class="r">{{ i.loan.amount|floatformat:0 }}</td>
+<td>{{ i.loan.get_status_display }}</td><td class="r"{% if i.slow %} style="color:#b02a1c;font-weight:700"{% endif %}>{{ i.days }}</td>
+<td{% if i.late %} style="color:#b02a1c;font-weight:700"{% endif %}>{{ i.loan.expected_on|date:"j M"|default:"-" }}</td><td>{{ i.loan.owner.first_name|default:i.loan.owner.username|default:"-" }}</td></tr>{% endfor %}</table></div>{% endif %}
 <h3 class="sh">Projects</h3>
 <div class="k">
 <a href="{% url 'progress' %}?tab=all"><b>{{ d.n }}</b><small>Total projects</small></a>

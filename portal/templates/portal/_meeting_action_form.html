@@ -1,0 +1,4 @@
+<form method="post" action="{% url 'meeting_do' m.pk %}" class="f">{% csrf_token %}<input type="hidden" name="op" value="action_add"><input type="hidden" name="point" value="{{ pid }}">
+<label>What has to be done</label><input name="text" required placeholder="e.g. Arrange 4 wireman licences">
+<div class="g2"><div><label>Responsible</label><select name="owner" onchange="this.parentNode.parentNode.nextElementSibling.style.display=this.value=='__other__'?'block':'none'"><option value="">Choose...</option>{% for t in attendees %}<option value="{{ t.pk }}">{{ t.label }}</option>{% endfor %}<option value="__other__">Other (type the name)</option></select></div><div><label>Target date</label><input type="date" name="target_date"></div></div>
+<input name="owner_other" placeholder="Type the name" style="display:none"><button class="btn o" style="font-size:13px;margin-top:6px">Add action item</button></form>

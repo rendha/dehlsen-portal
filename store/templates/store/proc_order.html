@@ -1,0 +1,52 @@
+{% extends "store/base.html" %}
+{% load l10n %}
+{% block title %}Order material{% endblock %}
+{% block content %}
+<style>.f label{display:block;font-size:12px;margin-top:10px;color:#6b7280}.f input,.f select{width:100%;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pk{display:grid;grid-template-columns:26px 1fr 90px 90px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #e5e7eb}.pk input[type=checkbox]{width:20px;height:20px}
+.xr{display:grid;grid-template-columns:1fr 80px 90px;gap:8px;margin-top:6px}</style>
+<h1>Order material</h1><p class="muted">Pick the customer, tick the materials, choose the vendor. It is saved in Accounts as a <b>proforma</b> (a request, not owed until the invoice comes).</p>
+<div class="card f" style="max-width:700px">
+{% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+<form method="get"><label>Customer (leave empty for general stock)</label>
+<select name="customer" onchange="this.form.submit()"><option value="">General stock (no customer)</option>{% for c in customers %}<option value="{{ c.pk }}" {% if cust and cust.pk == c.pk %}selected{% endif %}>{{ c.name }}{% if c.offer_no %} - {{ c.offer_no }}{% endif %}</option>{% endfor %}</select></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="customer" value="{{ cust.pk|default:'' }}">
+{% if cust %}<label>Materials of {{ cust.name }} (ticked = the project person marked "Purchase")</label>
+{% for r in rows %}<div class="pk"><input type="checkbox" name="pick_{{ r.l.pk }}" {% if r.tick %}checked{% endif %} data-amt="{{ r.l.amount_with_gst|floatformat:2 }}" data-q="{{ r.l.quantity }}">
+<div><b>{{ r.l.name }}</b>{% if r.l.make %} <span class="muted">{{ r.l.make }}</span>{% endif %}<div class="muted">{{ r.l.quantity|floatformat:"-2" }} {{ r.l.unit }} &middot; {{ r.l.get_source_display }}</div></div>
+<input name="qty_{{ r.l.pk }}" value="{{ r.l.quantity|floatformat:'-2' }}" inputmode="decimal" title="quantity to order" data-rate="{{ r.l.rate|unlocalize }}" data-gst="{{ r.l.gst|unlocalize }}"><span class="muted">&#8377;{{ r.l.rate|floatformat:"0g" }}</span></div>
+{% empty %}<p class="muted">No open materials for this customer.</p>{% endfor %}{% endif %}
+<label>Other items (search the catalogue, or type)</label>
+<datalist id="cat">{% for i in catalog %}<option value="{{ i.n }}">{% endfor %}</datalist>
+{% for i in xrange %}<div class="xr"><input name="x_name_{{ i }}" list="cat" placeholder="Item" class="xn" autocomplete="off"><input name="x_qty_{{ i }}" placeholder="Qty" inputmode="decimal" class="xq"><input class="xr_" placeholder="Rate" inputmode="decimal"></div>{% endfor %}
+<div class="g2"><div><label>Vendor</label><select name="vendor" onchange="document.getElementById('vo').style.display=this.value==='__new__'?'block':'none'" required><option value="">Choose a vendor...</option>{% for x in vendors %}<option value="{{ x.pk }}" {% if v.vendor == x.pk|stringformat:'s' %}selected{% endif %}>{{ x.name }}</option>{% endfor %}<option value="__new__" {% if v.vendor == "__new__" %}selected{% endif %}>+ New vendor</option></select>
+<input name="vendor_other" id="vo" value="{{ v.vendor_other }}" placeholder="New vendor name" style="display:{% if v.vendor == '__new__' %}block{% else %}none{% endif %}"></div>
+<div><label>Proforma no. (if the vendor sent one)</label><input name="number" value="{{ v.number }}"></div></div>
+<div class="g2"><div><label>Date</label><input type="date" name="date" value="{{ v.date }}"></div><div><label>Deliver to</label><select name="delivery_to"><option {% if v.delivery_to != "Customer Site" %}selected{% endif %}>Godown</option><option {% if v.delivery_to == "Customer Site" %}selected{% endif %}>Customer Site</option></select></div></div>
+<label>Proforma amount incl. GST &#8377; <span class="muted" id="sug"></span></label><input name="amount" id="amt" value="{{ v.amount }}" inputmode="decimal" required>
+<div class="actions"><button class="btn" type="submit">Save order</button><a class="btn light" href="{% url 'proc_home' %}">Cancel</a></div>
+</form></div>
+{{ catmap|json_script:"catmap" }}
+<script>
+(function(){
+  var cat=JSON.parse(document.getElementById('catmap').textContent);
+  var sug=document.getElementById('sug'),amt=document.getElementById('amt');
+  function num(x){x=parseFloat(String(x).replace(/,/g,''));return isNaN(x)?0:x}
+  function calc(){
+    var t=0;
+    document.querySelectorAll('.pk').forEach(function(r){
+      var cb=r.querySelector('input[type=checkbox]'),q=r.querySelector('input[name^=qty_]');
+      if(cb.checked){t+=num(q.value)*num(q.dataset.rate)*(1+num(q.dataset.gst)/100);}
+    });
+    document.querySelectorAll('.xr').forEach(function(r){
+      var n=r.querySelector('.xn').value,q=num(r.querySelector('.xq').value),rt=num(r.querySelector('.xr_').value),g=cat[n]?cat[n][1]:18;
+      t+=q*rt*(1+g/100);
+    });
+    sug.textContent=t>0?'(estimate from our rates: '+Math.round(t).toLocaleString('en-IN')+' - change it to the vendor proforma)':'';
+    if(t>0&&!amt.dataset.touched){amt.value=t.toFixed(2);}
+  }
+  amt.addEventListener('input',function(){amt.dataset.touched='1'});
+  document.querySelectorAll('.xn').forEach(function(n){n.addEventListener('change',function(){var r=n.parentNode.querySelector('.xr_');if(cat[n.value]&&!r.value){r.value=cat[n.value][0];}calc();});});
+  document.addEventListener('input',calc);document.addEventListener('change',calc);calc();
+})();
+</script>{% endblock %}

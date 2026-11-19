@@ -23,9 +23,11 @@
 <a class="tile" href="/sales/"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Sales</h3><p>Quotations, reports, hybrid calculator</p></a>
 <a class="tile" href="{% url 'project_dashboard' %}"><div class="ic" style="background:var(--orange)">&#128203;</div><h3>Project</h3><p>Where every customer's work stands, KSEB, warranty</p></a>
 <a class="tile" href="/project/procurement/"><div class="ic" style="background:#0f9d9a">&#128230;</div><h3>Procurement</h3><p>Buying, material lists, stock, supplier payments</p></a>
+{% if finance_access %}<a class="tile" href="{% url 'fin_home' %}"><div class="ic" style="background:#0b7285">&#8377;</div><h3>Accounts</h3><p>Vendor bills, proformas, payments</p></a>{% endif %}
 <a class="tile" href="/service/"><div class="ic" style="background:var(--green)">&#10022;</div><h3>Service</h3><p>Cleaning, schedule, customers</p></a>
 <a class="tile" href="{% url 'leads' %}"><div class="ic" style="background:#d64545">&#9733;</div><h3>Leads</h3><p>Calls, site visits, priority</p></a>
 <a class="tile" href="{% url 'crew' %}"><div class="ic" style="background:#c2570c">&#128119;</div><h3>Crew plan</h3><p>Who goes to which site, calendar</p></a>
+<a class="tile" href="{% url 'meetings' %}">{% if meeting_badge %}<span class="badge">{{ meeting_badge }}</span>{% endif %}<div class="ic" style="background:#3b5bdb">&#128197;</div><h3>Meetings</h3><p>Schedule, minutes, action items to check</p></a>
 <a class="tile" href="{% url 'task' %}">{% if task_badge %}<span class="badge">{{ task_badge }}</span>{% endif %}<div class="ic" style="background:var(--purple)">&#10004;</div><h3>Task</h3><p>Give a task, calendar, my tasks</p></a>
 </div>
 {% if show_collections and coll.total.projects %}{% include "portal/_collection_summary.html" %}{% endif %}

@@ -67,7 +67,7 @@ def build(user, director, person="", region=""):
         s["net"] += r.net_value; s["got"] += r.received
         if (not person or r.sales_name == person) and (not region or reg == region):
             projects.append({"pk": r.pk, "payments": [{"amount": sales.indian(x.amount), "date": x.date.strftime("%d %b %Y") if x.date else "no date", "stage": x.get_stage_display(),
-                                                       "by": (x.entered_by.get_full_name() or x.entered_by.get_username()) if x.entered_by else "", "id": x.id}
+                                                       "by": (x.entered_by.get_full_name() or x.entered_by.get_username()) if x.entered_by else "", "id": x.id, "pending": not x.confirmed}
                                                       for x in r.payments.all()[:6]],
                              "id": r.project_id, "info": " \u00b7 ".join(x for x in (r.segment, r.system_type, r.almm, r.panel, r.inverter, r.work_status) if x),
                              "customer": r.customer, "region": reg, "person": r.sales_name, "net": sales.indian(r.net_value),

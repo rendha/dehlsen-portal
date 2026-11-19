@@ -1,0 +1,7 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="note">Money already paid to vendors whose invoice has <b>not</b> come yet. It is not owed by us. When the invoice is entered, this amount is deducted from it. Total: <b>&#8377; {{ total|inr }}</b></div>
+<div class="card"><div class="scroll"><table class="t"><tr><th>Vendor</th><th>Proforma</th><th>For</th><th class="n">Proforma amount</th><th class="n">Advance paid</th><th>Status</th></tr>
+{% for p in rows %}<tr><td><a href="{% url 'fin_proforma' p.pk %}">{{ p.vendor.name }}</a></td><td>{{ p.number|default:"-" }}<br><small>{{ p.date|date:"d M" }}</small></td><td>{{ p.customer_name|default:p.delivery_to }}{% if p.description %}<br><small>{{ p.description }}</small>{% endif %}</td>
+<td class="n">{{ p.amount|inr }}</td><td class="n"><b>{{ p.advance_paid|inr }}</b></td><td>{{ p.get_status_display }}</td></tr>
+{% empty %}<tr><td colspan="6">No advances outstanding.</td></tr>{% endfor %}</table></div></div>{% endblock %}

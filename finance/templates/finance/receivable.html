@@ -1,0 +1,30 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<p><a href="{% url 'fin_receivables' %}">&lsaquo; Receivables</a></p>
+<div class="card"><h2 style="margin:0 0 8px">{{ c.customer }}</h2>
+<dl class="kv"><dt>Project</dt><dd>{{ c.project_id }}{% if c.region %} &middot; {{ c.region }}{% endif %}</dd>
+<dt>Sales person</dt><dd>{{ c.sales_name }}{% if c.phone %} &middot; {{ c.phone }}{% endif %}</dd>
+<dt>Sold for</dt><dd>&#8377; {{ c.net_value|inr }}{% if c.discount %} <small>(after discount &#8377; {{ c.discount|inr }})</small>{% endif %}</dd>
+<dt>Received</dt><dd>&#8377; {{ c.received|inr }} ({{ r.pct }}%)</dd>
+<dt>To collect</dt><dd><b>&#8377; {{ r.balance|inr }}</b></dd>
+{% if profit %}<dt>Expected profit</dt><dd>{% if r.gp %}&#8377; {{ r.gp|inr }} <small>(&#8377; {{ r.gp_got|inr }} earned so far on the money received, &#8377; {{ r.gp_left|inr }} still to come)</small>{% else %}<small>not entered yet</small>{% endif %}</dd>{% endif %}
+{% if r.pending_sum %}<dt>Waiting</dt><dd>&#8377; {{ r.pending_sum|inr }} entered by sales, not yet confirmed</dd>{% endif %}</dl></div>
+<div class="card"><h3 style="margin:0 0 8px">Who paid, and when <small style="font-weight:400;color:var(--mut)">({{ payments|length }} payment{{ payments|length|pluralize }})</small></h3>
+<div class="scroll"><table class="t"><tr><th>Date</th><th>For</th><th class="n">Amount</th><th class="n">Received so far</th><th class="n">Left</th><th>Entered by</th><th>Status</th><th></th></tr>
+{% for p in payments %}<tr><td>{{ p.date|date:"d M Y"|default:"no date" }}</td><td>{{ p.get_stage_display }}{% if p.note %}<br><small>{{ p.note }}</small>{% endif %}</td>
+<td class="n">{{ p.amount|inr }}</td><td class="n">{% if p.confirmed %}{{ p.running|inr }}{% endif %}</td><td class="n">{% if p.confirmed %}{{ p.left|inr }}{% endif %}</td>
+<td>{% if p.entered_by %}{{ p.entered_by.get_full_name|default:p.entered_by.username }}{% elif p.from_sheet %}<small>sheet</small>{% endif %}</td>
+<td>{% if p.confirmed %}Received{% if p.confirmed_on %}<br><small>confirmed {{ p.confirmed_on|date:"d M" }}</small>{% endif %}{% else %}<span class="tag a">Waiting for Accounts</span>{% endif %}</td>
+<td>{% if not p.confirmed and confirmer %}
+<form method="post" action="{% url 'fin_receipt_confirm' p.pk %}" class="inl">{% csrf_token %}<button style="color:#1f7a43;font-weight:700">Confirm received</button></form>
+<form method="post" action="{% url 'fin_receipt_reject' p.pk %}" class="inl" onsubmit="return confirm('Not received - remove this entry?')">{% csrf_token %}<button>Not received</button></form>
+{% elif p.confirmed and confirmer %}<form method="post" action="{% url 'collection_pay_delete' p.pk %}" class="inl" onsubmit="return confirm('Remove this payment?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button>remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="8"><small>No payments yet.</small></td></tr>{% endfor %}</table></div></div>
+{% if confirmer %}<div class="card"><h3 style="margin:0 0 8px">Add a payment received</h3>
+<form method="post" action="{% url 'collection_pay' c.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+<div class="fgrid"><div><label>Amount received (Rs)</label><input name="amount" inputmode="decimal" required></div>
+<div><label>Date</label><input type="date" name="date" value="{{ today }}" max="{{ today }}" required></div>
+<div><label>For</label><select name="stage">{% for k, n in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+<div><label>Reference (bank / UPI / cheque no.)</label><input name="note" maxlength="200"></div></div>
+<button class="btn" type="submit">Save payment</button></form></div>{% endif %}
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "portal/base.html" %}{% load fin %}
+{% block title %}Accounts - Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}.tabs a{background:#fff;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:14px;color:var(--ink);text-decoration:none}
+.tabs a.on{background:var(--blue);color:#fff;border-color:var(--blue)}.tabs .n{background:var(--red);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;margin-left:4px}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0 0 14px}@media(min-width:760px){.cards{grid-template-columns:repeat(4,1fr)}}
+.cards .c{background:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 2px 10px rgba(30,50,80,.06)}.cards .c small{color:var(--mut);display:block}.cards .c b{font-size:20px}
+.cards .c.r b{color:var(--red)}.cards .c.a b{color:#b36b00}
+table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left;color:var(--mut);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:2px solid var(--line)}
+.t td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}.t td.n,.t th.n{text-align:right;white-space:nowrap}.t tr:hover td{background:#f8fafd}
+.t a{color:var(--blue);text-decoration:none;font-weight:600}.tag.a{background:#fff1d6;color:#b36b00}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}.bar select{width:auto;margin:0;padding:8px 10px}.bar .sp{flex:1}
+.scroll{overflow-x:auto}.msg{border-radius:12px;padding:10px 14px;margin:0 0 12px;background:#e9f7ee;border:1px solid #bfe3cc}.msg.error{background:#fde8e8;border-color:#f3c3c3}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:14px}.kv dt{color:var(--mut)}.kv dd{margin:0}
+.fgrid{display:grid;gap:0 14px}@media(min-width:700px){.fgrid{grid-template-columns:1fr 1fr}}
+.errorlist{color:var(--red);margin:0;padding:0;list-style:none;font-size:13px}.help{color:var(--mut);font-size:12px;margin:-8px 0 10px}
+input[type=checkbox]{width:auto;margin:6px 8px 12px 0}.inl{display:inline}.inl button{background:none;border:0;color:var(--red);cursor:pointer;font:inherit;font-size:12px}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Accounts</h1><small>What we owe vendors &middot; what customers owe us</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+<div class="tabs">
+<a href="{% url 'fin_home' %}" class="{% if tab == 'payables' %}on{% endif %}">Payables</a>
+<a href="{% url 'fin_proformas' %}" class="{% if tab == 'proformas' %}on{% endif %}">Proformas{% if n_wait %}<span class="n">{{ n_wait }}</span>{% endif %}</a>
+<a href="{% url 'fin_advances' %}" class="{% if tab == 'advances' %}on{% endif %}">Advances</a>
+<a href="{% url 'fin_receivables' %}" class="{% if tab == 'receivables' %}on{% endif %}">Receivables{% if n_receipts %}<span class="n">{{ n_receipts }}</span>{% endif %}</a>
+<a href="{% url 'fin_vendors' %}" class="{% if tab == 'vendors' %}on{% endif %}">Vendors</a>
+{% if n_confirm %}<a href="{% url 'fin_confirm' %}" class="{% if tab == 'confirm' %}on{% endif %}">To confirm<span class="n">{{ n_confirm }}</span></a>{% endif %}
+</div>
+{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+{% block content %}{% endblock %}
+</div>{% endblock %}

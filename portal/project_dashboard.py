@@ -222,7 +222,12 @@ def build(rows, today=None):
 
 def dashboard(request):
     rows = pw._rows_for(request)
-    return render(request, "portal/project_dashboard.html", {"d": build(rows), "can_edit": pw.can_edit(request.user)})
+    try:
+        from . import loans
+        pending_loans = loans.pending()
+    except Exception:
+        pending_loans = None
+    return render(request, "portal/project_dashboard.html", {"d": build(rows), "can_edit": pw.can_edit(request.user), "loans": pending_loans})
 
 
 DOC_NAMES = ["Invoice", "Warranty Certificate", "Panel Datasheet", "Inverter Datasheet", "Commissioning Certificate", "Net Metering Agreement", "Monitoring App Login", "User Manual"]

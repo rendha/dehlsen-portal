@@ -6,5 +6,6 @@ urlpatterns = [
     path("sales/", include("quotations.urls")),       # Sales    -> the quotation app
     path("project/", include("store.urls")),          # Project  -> the materials app
     path("service/", include("cleaning.urls")),       # Service  -> the cleaning manager
+    path("accounts/", include("finance.urls")),       # Accounts -> vendor proformas, invoices, payments
     path("", include("portal.urls")),                 # login, home (the four buttons), Task, install-as-app files
 ]

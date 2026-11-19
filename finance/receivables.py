@@ -1,0 +1,128 @@
+"""Accounts: what customers still owe us (receivables) and the confirmation of customer payments.
+Data = portal.Collection (sold value, received) and portal.Payment.  A payment typed by a sales person is PENDING until Accounts confirms it with the
+bank; only then does it count in the received total.  Accounts / a director enter payments that count at once."""
+import datetime
+from decimal import Decimal
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db.models import F
+from django.http import HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from . import views as fin
+from .models import ZERO
+
+SLOW_DAYS = 30
+
+
+def _portal():
+    from portal import views as pv
+    from portal.models import Collection, Payment
+    return pv, Collection, Payment
+
+
+def can_see(u):
+    pv, _, _ = _portal()
+    return bool(fin.can_view(u) or pv._is_director(u))
+
+
+def can_see_profit(u):
+    """Margins are shown to the Boss, directors and Accounts only."""
+    return bool(fin.can_approve(u) or can_confirm(u))
+
+
+def can_confirm(u):
+    pv, _, _ = _portal()
+    return pv._can_confirm_money(u)
+
+
+def _row(c):
+    pays = list(c.payments.all())
+    ok = [p for p in pays if p.confirmed]
+    last = max((p.date for p in ok if p.date), default=None)
+    today = timezone.localdate()
+    ref = last or c.booking_date
+    pending = [p for p in pays if not p.confirmed]
+    gp = c.expected_gp or ZERO
+    share = (c.received / c.net_value) if c.net_value > 0 else ZERO
+    return {"gp": gp, "gp_got": (gp * min(share, 1)).quantize(Decimal("1")), "gp_left": (gp - gp * min(share, 1)).quantize(Decimal("1")),
+            "c": c, "balance": c.net_value - c.received, "last": last, "days": (today - ref).days if ref else None,
+            "pending": pending, "pending_sum": sum((p.amount for p in pending), ZERO),
+            "pct": int(min(100, c.received * 100 / c.net_value)) if c.net_value > 0 else 0}
+
+
+@login_required
+def receivables(request):
+    if not can_see(request.user):
+        return HttpResponseForbidden("Only the Boss, Store, Accounts and Project people and directors see receivables.")
+    _, Collection, _ = _portal()
+    region, person, show = request.GET.get("region", ""), request.GET.get("person", ""), request.GET.get("show", "open")
+    all_rows = [_row(c) for c in Collection.objects.prefetch_related("payments")]
+    regions = sorted({r["c"].region for r in all_rows if r["c"].region})
+    people = sorted({r["c"].sales_name for r in all_rows if r["c"].sales_name})
+    rows = [r for r in all_rows if r["balance"] > 0 and (not region or r["c"].region == region) and (not person or r["c"].sales_name == person)]
+    if show == "slow":
+        rows = [r for r in rows if r["days"] is not None and r["days"] >= SLOW_DAYS]
+    elif show == "pending":
+        rows = [r for r in rows if r["pending"]]
+    rows.sort(key=lambda r: -r["balance"])
+    base = [r for r in all_rows if r["balance"] > 0]
+    ctx = fin._ctx(request, "receivables", rows=rows, region=region, person=person, show=show, regions=regions, people=people,
+                   to_collect=sum((r["balance"] for r in base), ZERO), sold=sum((r["c"].net_value for r in base), ZERO),
+                   collected=sum((r["c"].received for r in base), ZERO), n_open=len(base),
+                   pending_sum=sum((r["pending_sum"] for r in all_rows), ZERO), pending_n=sum(len(r["pending"]) for r in all_rows),
+                   slow_sum=sum((r["balance"] for r in base if r["days"] is not None and r["days"] >= SLOW_DAYS), ZERO), shown=sum((r["balance"] for r in rows), ZERO),
+                   slow_days=SLOW_DAYS, profit=can_see_profit(request.user),
+                   gp_total=sum((r["gp"] for r in base), ZERO), gp_left=sum((r["gp_left"] for r in base), ZERO),
+                   gp_n=sum(1 for r in base if r["gp"] > 0), gp_missing=sum(1 for r in base if not r["gp"]))
+    return render(request, "finance/receivables.html", ctx)
+
+
+@login_required
+def receivable(request, pk):
+    if not can_see(request.user):
+        return HttpResponseForbidden("Only the Boss, Store, Accounts and Project people and directors see receivables.")
+    _, Collection, _ = _portal()
+    c = get_object_or_404(Collection.objects.prefetch_related("payments__entered_by", "payments__confirmed_by"), pk=pk)
+    from portal.models import Payment
+    pays = sorted(c.payments.all(), key=lambda x: (x.date or datetime.date.min, x.id))
+    run = ZERO
+    for x in pays:                                   # money received so far after this payment (only confirmed ones count)
+        if x.confirmed:
+            run += x.amount
+        x.running = run
+        x.left = c.net_value - run
+    return render(request, "finance/receivable.html", fin._ctx(request, "receivables", r=_row(c), c=c, payments=pays, stages=Payment.STAGES,
+                                                               today=timezone.localdate().isoformat(), confirmer=can_confirm(request.user), profit=can_see_profit(request.user)))
+
+
+@login_required
+@require_POST
+def receipt_confirm(request, pk):
+    _, _, Payment = _portal()
+    if not can_confirm(request.user):
+        return HttpResponseForbidden("Only Accounts confirms a customer payment.")
+    pay = get_object_or_404(Payment, pk=pk)
+    if not pay.confirmed:
+        from portal.models import Collection
+        Payment.objects.filter(pk=pay.pk, confirmed=False).update(confirmed=True, confirmed_by=request.user, confirmed_on=timezone.localdate())
+        Collection.objects.filter(pk=pay.collection_id).update(received=F("received") + pay.amount)
+        messages.success(request, "Payment of Rs %s confirmed. It now counts as received." % pay.amount)
+    return redirect("fin_receivable", pk=pay.collection_id)
+
+
+@login_required
+@require_POST
+def receipt_reject(request, pk):
+    _, _, Payment = _portal()
+    if not can_confirm(request.user):
+        return HttpResponseForbidden("Only Accounts handles a customer payment.")
+    pay = get_object_or_404(Payment, pk=pk)
+    cid = pay.collection_id
+    if not pay.confirmed:
+        pay.delete()
+        messages.success(request, "The unconfirmed payment was removed (not received).")
+    return redirect("fin_receivable", pk=cid)

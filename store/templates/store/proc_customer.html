@@ -4,7 +4,7 @@
 <style>.bar{height:8px;background:#e5e7eb;border-radius:5px;margin-top:6px}.bar i{display:block;height:8px;border-radius:5px;background:#15803d}.bar.b i{background:#3B73B9}</style>
 <h1>{{ c.name }}</h1>
 <p class="muted">{{ c.offer_no }}{% if c.system_size %} &middot; {{ c.system_size }} kW{% endif %}{% if c.location %} &middot; {{ c.location }}{% endif %}{% if c.phone %} &middot; {{ c.phone }}{% endif %}</p>
-<div class="actions"><a class="btn light" href="{% url 'proc_customers' %}">&lsaquo; Customer position</a>{% if editor %}<a class="btn light" href="{% url 'proc_add' %}?customer={{ c.pk }}">+ Purchase for this customer</a>{% endif %}</div>
+<div class="actions"><a class="btn light" href="{% url 'proc_customers' %}">&lsaquo; Customer position</a>{% if editor %}<a class="btn light" href="{% url 'proc_order' %}?customer={{ c.pk }}">+ Order material for this customer</a>{% endif %}</div>
 <div class="grid">
 <div class="card"><div class="muted">Quotation value</div><b style="font-size:22px">{% if r.quote %}&#8377;{{ r.quote|floatformat:"0g" }}{% else %}not known{% endif %}</b></div>
 <div class="card"><div class="muted">Customer has paid</div><b style="font-size:22px">&#8377;{{ r.paid|floatformat:"0g" }}</b><div class="bar"><i style="width:{{ r.paid_pct }}%"></i></div><div class="muted">{{ r.paid_pct }}% of the quotation</div></div>

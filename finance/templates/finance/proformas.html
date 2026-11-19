@@ -1,0 +1,14 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="note">A proforma is only a <b>request</b> for money. It is not counted as owed. It becomes a payable only when the vendor's invoice is entered.</div>
+<div class="card">
+<form class="bar" method="get">
+<select name="status" onchange="this.form.submit()"><option value="open"{% if status == 'open' %} selected{% endif %}>Open (waiting + approved)</option>
+{% for k, l in statuses %}<option value="{{ k }}"{% if status == k %} selected{% endif %}>{{ l }}</option>{% endfor %}<option value="all"{% if status == 'all' %} selected{% endif %}>All</option></select>
+<span class="sp"></span>{% if can_add_pf %}<a class="btn auto" href="{% url 'fin_proforma_new' %}">+ Proforma</a>{% endif %}
+</form>
+<div class="scroll"><table class="t"><tr><th>Date</th><th>Vendor</th><th>Proforma</th><th>Company</th><th>For</th><th class="n">Amount</th><th class="n">Advance paid</th><th>Status</th></tr>
+{% for p in rows %}<tr><td>{{ p.date|date:"d M" }}</td><td><a href="{% url 'fin_proforma' p.pk %}">{{ p.vendor.name }}</a></td><td>{{ p.number|default:"-" }}</td><td>{{ p.company }}</td>
+<td>{{ p.customer_name|default:p.delivery_to }}{% if p.description %}<br><small>{{ p.description }}</small>{% endif %}</td>
+<td class="n">{{ p.amount|inr }}</td><td class="n">{{ p.advance_paid|inr }}</td><td><span class="tag {% if p.status == 'pending' %}a{% elif p.status == 'rejected' or p.status == 'cancelled' %}r{% elif p.status == 'invoiced' %}g{% endif %}">{{ p.get_status_display }}</span></td></tr>
+{% empty %}<tr><td colspan="8">No proformas.</td></tr>{% endfor %}</table></div></div>{% endblock %}

@@ -290,9 +290,9 @@ def create_quotation(request):
         if lead_id:                        # "Make quotation" on a lead: its details are filled in
             try:
                 from portal.models import Lead
-                lead = Lead.objects.select_related("assigned_to").filter(pk=int(lead_id)).first()
+                lead = Lead.objects.select_related("entered_by").filter(pk=int(lead_id)).first()
                 if lead:
-                    seller = lead.assigned_to
+                    seller = lead.entered_by        # "Quotation For" = the person who created the lead (not the one it was handed to)
                     profile = getattr(seller, "portal_profile", None) if seller else None
                     posted = {"business_name": lead.customer_name, "phone": lead.phone, "location": lead.area,
                               "panel_type": {"dcr": "dcr", "non_dcr": "non_dcr"}.get(lead.dcr_choice, ""),

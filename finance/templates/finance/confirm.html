@@ -1,0 +1,10 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="note">Entries brought over from the Excel sheet that need a check. Open each one, correct it if needed, then press <b>Confirmed</b> to remove it from this list.</div>
+<div class="card"><h3 style="margin:0 0 8px">Invoices</h3><table class="t">{% for i in invoices %}<tr><td><a href="{% url 'fin_invoice' i.pk %}">{{ i.vendor.name }} {{ i.number }}</a><br><small>{{ i.check_note }}</small></td><td class="n">{{ i.amount|inr }}</td>
+<td>{% if edit %}<form method="post" action="{% url 'fin_confirm_clear' 'invoice' i.pk %}">{% csrf_token %}<button class="btn auto w">Confirmed</button></form>{% endif %}</td></tr>{% empty %}<tr><td>None.</td></tr>{% endfor %}</table></div>
+<div class="card"><h3 style="margin:0 0 8px">Proformas</h3><table class="t">{% for p in proformas %}<tr><td><a href="{% url 'fin_proforma' p.pk %}">{{ p.vendor.name }} {{ p.number }}</a><br><small>{{ p.check_note }}</small></td><td class="n">{{ p.amount|inr }}</td>
+<td>{% if edit %}<form method="post" action="{% url 'fin_confirm_clear' 'proforma' p.pk %}">{% csrf_token %}<button class="btn auto w">Confirmed</button></form>{% endif %}</td></tr>{% empty %}<tr><td>None.</td></tr>{% endfor %}</table></div>
+<div class="card"><h3 style="margin:0 0 8px">Payments</h3><table class="t">{% for p in payments %}<tr><td>{{ p.vendor.name }} &middot; {{ p.paid_on|date:"d M" }}{% if p.invoice %} &middot; <a href="{% url 'fin_invoice' p.invoice.pk %}">invoice</a>{% elif p.proforma %} &middot; <a href="{% url 'fin_proforma' p.proforma.pk %}">proforma</a>{% endif %}<br><small>{{ p.check_note }}</small></td><td class="n">{{ p.amount|inr }}</td>
+<td>{% if edit %}<form method="post" action="{% url 'fin_confirm_clear' 'payment' p.pk %}">{% csrf_token %}<button class="btn auto w">Confirmed</button></form>{% endif %}</td></tr>{% empty %}<tr><td>None.</td></tr>{% endfor %}</table></div>
+{% endblock %}

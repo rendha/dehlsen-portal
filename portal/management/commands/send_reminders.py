@@ -118,4 +118,10 @@ class Command(BaseCommand):
         except Exception as error:
             self.stdout.write("   project alerts skipped: %s" % error)
 
+        try:                                         # bank loans waiting for the bank (portal/loans.py)
+            from portal import loans
+            loans.run_reminders(dry, self.stdout.write)
+        except Exception as error:
+            self.stdout.write("   bank loan reminders skipped: %s" % error)
+
         self.stdout.write(self.style.SUCCESS("%sidle leads: %d, quotation follow-ups: %d, summaries: %d" % ("(dry run) " if dry else "", sent["idle"], sent["quote"], sent["summary"])))

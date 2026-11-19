@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .models import Customer, Line, Payment, Purchase, Supplier, SupplierPayment
-from .views import _money, is_accounts, is_boss, is_project, is_store
+from .views import _catalog, _money, is_accounts, is_boss, is_project, is_store
 
 ZERO = Decimal("0")
 
@@ -272,3 +272,64 @@ def proc_purchase(request, pk):
         return redirect("proc_purchase", pk=p.pk)
     return render(request, "store/proc_purchase.html", {"p": p, "editor": editor, "payments": list(p.payments.all()), "modes": Payment.MODES,
                                                           "today": timezone.localdate()})
+
+
+@login_required
+def proc_order(request):
+    """Order material from a vendor by PICKING the customer's materials (no typing).  Saves a vendor PROFORMA in Accounts (a request, not owed yet)."""
+    from finance.models import Proforma, Vendor
+    from finance import views as fin
+    if not can_view(request.user):
+        return _deny()
+    if not (can_edit(request.user) or fin.can_add_proforma(request.user)):
+        return HttpResponseForbidden("Only the Store and Accounts people order material.")
+    customers = list(Customer.objects.order_by("name"))
+    cust = None
+    cid = request.POST.get("customer") or request.GET.get("customer") or ""
+    if cid.isdigit():
+        cust = next((c for c in customers if c.pk == int(cid)), None)
+    lines = []
+    if cust:
+        lines = [l for l in cust.lines.all() if l.quantity > 0 and l.store_status != Line.DONE]
+        lines.sort(key=lambda l: (l.source != Line.PURCHASE, l.position, l.id))
+    vendors = list(Vendor.objects.filter(is_active=True).order_by("name"))
+    error, v = "", {"date": timezone.localdate().isoformat(), "delivery_to": "Godown"}
+    if request.method == "POST":
+        v = request.POST.dict()
+        items, picked = [], []
+        for l in lines:
+            if request.POST.get("pick_%d" % l.pk):
+                q = _money(request.POST.get("qty_%d" % l.pk)) or l.quantity
+                items.append("%s%s x %s" % (l.name, (" (%s)" % l.make) if l.make else "", ("%g" % q)))
+                picked.append(l)
+        for i in range(1, 6):                         # items that are not in the customer's list (from the catalogue, or typed)
+            nm, q = (request.POST.get("x_name_%d" % i) or "").strip(), _money(request.POST.get("x_qty_%d" % i))
+            if nm and q:
+                items.append("%s x %g" % (nm[:80], q))
+        vname = (v.get("vendor_other", "").strip() if v.get("vendor") == "__new__" else "")
+        vendor = Vendor.objects.filter(pk=v["vendor"]).first() if (v.get("vendor") or "").isdigit() else None
+        if vname and vendor is None:
+            vendor, _ = Vendor.objects.get_or_create(name=vname[:150])
+        amount = _money(v.get("amount"))
+        if vendor is None:
+            error = "Choose the vendor (or add a new one)."
+        elif not items:
+            error = "Tick at least one material, or add an item."
+        elif amount is None:
+            error = "Type the proforma amount (a number above zero). The suggested figure is only an estimate."
+        if not error:
+            pf = Proforma.objects.create(
+                vendor=vendor, number=v.get("number", "").strip()[:60], date=_date(v.get("date"), timezone.localdate()),
+                delivery_to=v.get("delivery_to") if v.get("delivery_to") in ("Godown", "Customer Site") else "Godown",
+                customer_name=(cust.name if cust else "General stock")[:150], description=", ".join(items)[:300], amount=amount,
+                created_by=request.user)
+            for l in picked:                           # the project person's "not decided" lines are now decided: purchase
+                if l.source == Line.UNDECIDED:
+                    l.source = Line.PURCHASE
+                    l.save(update_fields=["source"])
+            messages.success(request, "Order saved in Accounts as a proforma (a request, not owed yet). It waits for approval.")
+            return redirect("fin_proforma", pk=pf.pk)
+    cat = [{"n": i.get("name", ""), "r": i.get("rate", 0), "g": i.get("gst", 18)} for i in _catalog()]
+    rows = [{"l": l, "tick": (v.get("pick_%d" % l.pk) == "on") if request.method == "POST" else l.source == Line.PURCHASE} for l in lines]
+    return render(request, "store/proc_order.html", {"customers": customers, "cust": cust, "rows": rows, "vendors": vendors, "v": v, "error": error,
+                                                      "catalog": cat, "catmap": {c["n"]: [float(c["r"] or 0), float(c["g"] or 18)] for c in cat}, "xrange": range(1, 6)})

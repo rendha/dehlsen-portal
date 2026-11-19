@@ -323,6 +323,11 @@ def lead_update(request, pk):
 BILL = "Electricity bill"      # caption that marks an electricity-bill photo (kept in the same table as the site photos)
 
 
+# Photo slots on the site-details page: form field name -> caption used to tag the photo
+SLOT_PHOTOS = [("inverter_photo", "Inverter position"), ("netmeter_photo", "Net meter position")]
+SLOT_CAPTIONS = [c for _, c in SLOT_PHOTOS]
+
+
 def _save_bill(lead, files):
     n = 0
     for f in files:
@@ -408,6 +413,14 @@ def lead_site(request, pk):
             if f.size <= 6 * 1024 * 1024 and (f.content_type or "").startswith("image/"):
                 SitePhoto.objects.create(lead=obj, data=f.read(), content_type=f.content_type, caption=f.name[:120])
                 added += 1
+        slot_added = []
+        for field, caption in SLOT_PHOTOS:
+            for f in request.FILES.getlist(field):
+                if f.size <= 6 * 1024 * 1024 and (f.content_type or "").startswith("image/"):
+                    SitePhoto.objects.create(lead=obj, data=f.read(), content_type=f.content_type, caption=caption)
+                    slot_added.append(caption.lower())
+        if slot_added:
+            _lead_log(obj, request.user, "site", "added photo of the " + " and ".join(sorted(set(slot_added))))
         bills = _save_bill(obj, request.FILES.getlist("bill"))
         if bills:
             _lead_log(obj, request.user, "note", "added the electricity bill photo")
@@ -425,9 +438,10 @@ def lead_site(request, pk):
             return redirect(reverse("lead_site", args=[obj.pk]))
         return redirect("leads")
     fields = [{"name": k, "label": label, "hint": hint, "kind": kind, "value": getattr(site, k, "") if site else ""} for k, label, hint, kind in SITE_TEXT]
-    photos = list(SitePhoto.objects.filter(lead=obj).exclude(caption=BILL).values_list("id", flat=True))
+    photos = list(SitePhoto.objects.filter(lead=obj).exclude(caption__in=[BILL] + SLOT_CAPTIONS).values_list("id", flat=True))
     bills = list(SitePhoto.objects.filter(lead=obj, caption=BILL).values_list("id", flat=True))
-    return render(request, "portal/lead_site.html", {"lead": obj, "fields": fields, "photos": photos, "bills": bills, "then": then})
+    slots = [{"field": f, "label": c, "ids": list(SitePhoto.objects.filter(lead=obj, caption=c).values_list("id", flat=True))} for f, c in SLOT_PHOTOS]
+    return render(request, "portal/lead_site.html", {"lead": obj, "fields": fields, "photos": photos, "bills": bills, "slots": slots, "then": then})
 
 
 def lead_photo(request, pk, photo_id):
@@ -691,6 +705,15 @@ def collections(request):
                                                        "stages": Payment.STAGES})
 
 
+def _can_confirm_money(user):
+    """Accounts, a director or a superuser: their payment entries and confirmations count at once."""
+    try:
+        from store.views import is_accounts
+        return bool(user.is_superuser or _is_director(user) or is_accounts(user))
+    except Exception:
+        return bool(user.is_superuser or _is_director(user))
+
+
 @require_POST
 def collection_pay(request, pk):
     """The sales person of the customer (or a director) records a payment received."""
@@ -709,9 +732,14 @@ def collection_pay(request, pk):
         messages.error(request, "Enter the amount, and a date that is not in the future.")
     else:
         stage = request.POST.get("stage") if request.POST.get("stage") in dict(Payment.STAGES) else "other"
-        Payment.objects.create(collection=c, amount=amount, date=date, stage=stage, note=request.POST.get("note", "")[:200], entered_by=request.user)
-        Collection.objects.filter(pk=c.pk).update(received=F("received") + amount)
-        messages.success(request, "Payment recorded for %s." % c.customer)
+        auto = _can_confirm_money(request.user)          # Accounts / a director: counted at once.  A sales person's entry waits for Accounts.
+        Payment.objects.create(collection=c, amount=amount, date=date, stage=stage, note=request.POST.get("note", "")[:200], entered_by=request.user,
+                               confirmed=auto, confirmed_by=request.user if auto else None, confirmed_on=timezone.localdate() if auto else None)
+        if auto:
+            Collection.objects.filter(pk=c.pk).update(received=F("received") + amount)
+            messages.success(request, "Payment recorded for %s." % c.customer)
+        else:
+            messages.success(request, "Payment noted for %s. It counts once Accounts confirms it with the bank." % c.customer)
     return redirect(request.POST.get("next") or "collections")
 
 
@@ -726,7 +754,8 @@ def collection_pay_delete(request, pk):
     elif not (director or (pay.entered_by_id == request.user.id and pay.created_at.date() == timezone.now().date())):
         messages.error(request, "Only a director can remove this payment now.")
     else:
-        Collection.objects.filter(pk=pay.collection_id).update(received=F("received") - pay.amount)
+        if pay.confirmed:
+            Collection.objects.filter(pk=pay.collection_id).update(received=F("received") - pay.amount)
         pay.delete()
         messages.success(request, "Payment removed.")
     return redirect(request.POST.get("next") or "collections")
