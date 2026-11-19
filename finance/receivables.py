@@ -29,6 +29,17 @@ def can_see(u):
     return bool(fin.can_view(u) or pv._is_director(u))
 
 
+def limited(u):
+    """A sales person who is not in Accounts / Boss / directors: sees only the receivables of his own customers."""
+    return not can_see(u)
+
+
+def _mine(u, collection):
+    from portal import payments
+    from portal import sales
+    return payments.is_mine(sales.keys_of(u), collection.sales_name)
+
+
 def can_see_profit(u):
     """Margins are shown to the Boss, directors and Accounts only."""
     return bool(fin.can_approve(u) or can_confirm(u))
@@ -56,11 +67,10 @@ def _row(c):
 
 @login_required
 def receivables(request):
-    if not can_see(request.user):
-        return HttpResponseForbidden("Only the Boss, Store, Accounts and Project people and directors see receivables.")
     _, Collection, _ = _portal()
+    lim = limited(request.user)
     region, person, show = request.GET.get("region", ""), request.GET.get("person", ""), request.GET.get("show", "open")
-    all_rows = [_row(c) for c in Collection.objects.prefetch_related("payments")]
+    all_rows = [_row(c) for c in Collection.objects.prefetch_related("payments") if not lim or _mine(request.user, c)]
     regions = sorted({r["c"].region for r in all_rows if r["c"].region})
     people = sorted({r["c"].sales_name for r in all_rows if r["c"].sales_name})
     rows = [r for r in all_rows if r["balance"] > 0 and (not region or r["c"].region == region) and (not person or r["c"].sales_name == person)]
@@ -75,7 +85,7 @@ def receivables(request):
                    collected=sum((r["c"].received for r in base), ZERO), n_open=len(base),
                    pending_sum=sum((r["pending_sum"] for r in all_rows), ZERO), pending_n=sum(len(r["pending"]) for r in all_rows),
                    slow_sum=sum((r["balance"] for r in base if r["days"] is not None and r["days"] >= SLOW_DAYS), ZERO), shown=sum((r["balance"] for r in rows), ZERO),
-                   slow_days=SLOW_DAYS, profit=can_see_profit(request.user),
+                   slow_days=SLOW_DAYS, profit=can_see_profit(request.user), limited=lim,
                    gp_total=sum((r["gp"] for r in base), ZERO), gp_left=sum((r["gp_left"] for r in base), ZERO),
                    gp_n=sum(1 for r in base if r["gp"] > 0), gp_missing=sum(1 for r in base if not r["gp"]))
     return render(request, "finance/receivables.html", ctx)
@@ -83,10 +93,11 @@ def receivables(request):
 
 @login_required
 def receivable(request, pk):
-    if not can_see(request.user):
-        return HttpResponseForbidden("Only the Boss, Store, Accounts and Project people and directors see receivables.")
     _, Collection, _ = _portal()
     c = get_object_or_404(Collection.objects.prefetch_related("payments__entered_by", "payments__confirmed_by"), pk=pk)
+    lim = limited(request.user)
+    if lim and not _mine(request.user, c):
+        return HttpResponseForbidden("You see the receivables of your own customers only.")
     from portal.models import Payment
     pays = sorted(c.payments.all(), key=lambda x: (x.date or datetime.date.min, x.id))
     run = ZERO
@@ -96,7 +107,7 @@ def receivable(request, pk):
         x.running = run
         x.left = c.net_value - run
     return render(request, "finance/receivable.html", fin._ctx(request, "receivables", r=_row(c), c=c, payments=pays, stages=Payment.STAGES,
-                                                               today=timezone.localdate().isoformat(), confirmer=can_confirm(request.user), profit=can_see_profit(request.user)))
+                                                               today=timezone.localdate().isoformat(), confirmer=can_confirm(request.user), profit=can_see_profit(request.user), limited=lim))
 
 
 @login_required

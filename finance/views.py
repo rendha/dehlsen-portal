@@ -18,7 +18,8 @@ from .models import ZERO, Invoice, Payment, Proforma, Vendor
 
 
 def can_view(u):
-    return is_boss(u) or is_store(u) or is_accounts(u) or is_project(u)
+    from portal import views as pv                       # directors see all of Accounts too
+    return is_boss(u) or is_store(u) or is_accounts(u) or is_project(u) or bool(pv._is_director(u))
 
 
 def can_edit(u):
