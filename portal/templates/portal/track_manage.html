@@ -18,11 +18,8 @@
 <small>The customer's private link (no login needed):</small><div class="link">{{ url }}</div>
 {% if no_phone %}<p class="note bad" style="margin-top:8px">This customer has no usable phone number. Add it on the project page first.</p>{% endif %}
 <div class="btns"><a class="wa {% if not wa_welcome %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_welcome|default:'#' }}">Send welcome message</a>
-</div>
-<div class="btns"><a class="wa {% if not wa_schedule %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_schedule|default:'#' }}">Send schedule (English)</a>
-<a class="wa {% if not wa_schedule_ml %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_schedule_ml|default:'#' }}">Send schedule (മലയാളം)</a></div>
-<div class="btns"><a class="wa {% if not wa_update %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_update|default:'#' }}">Send update (English)</a>
-<a class="wa {% if not wa_update_ml %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_update_ml|default:'#' }}">Send update (മലയാളം)</a></div>
+<a class="wa {% if not wa_schedule %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_schedule|default:'#' }}">Send schedule</a>
+<a class="wa {% if not wa_update %}off{% endif %}" target="_blank" rel="noopener" href="{{ wa_update|default:'#' }}">Send update</a></div>
 <div class="btns"><a class="btn o auto" href="{{ url }}" style="text-decoration:none">Preview customer page</a></div>
 {% if not has_dates %}<small style="color:var(--mut)">Save at least one date to enable the WhatsApp buttons.</small>{% endif %}</div>
 </div>{% endblock %}

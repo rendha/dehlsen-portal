@@ -143,7 +143,7 @@ def _greet_name(w):
 
 
 def _who(name):
-    return (" - %s" % re.sub(r"\s+", " ", name.strip()).title()) if (name or "").strip() else ""
+    return (": %s" % re.sub(r"\s+", " ", name.strip()).title()) if (name or "").strip() else ""
 
 
 def welcome_text(w, url, lang="en"):
@@ -164,16 +164,14 @@ def welcome_text(w, url, lang="en"):
             "ഹൃദയപൂർവ്വം,", "ടീം ഡെൽസൻ എനർജി"])
     return "\n".join([
         "Dear %s," % _greet_name(w), "",
-        "Welcome to the Dehlsen Energy family! ☀️",
-        "Thank you for trusting us with your solar project%s. We're delighted to have you with us." % pid, "",
-        "From here, your project moves from our sales team to the people who will build it. Here is who will look after you at each stage:", "",
-        "🤝 *Sales team*%s" % sales, "Your contact until now. They have handed over everything we discussed, so you won't need to repeat yourself.", "",
-        "🛠️ *Project team*%s" % eng, "Handles material delivery, structure, panel mounting, electrical work and inverter installation at your site. They will call you before every site visit.", "",
-        "📄 *Documentation team*%s" % doc, "Handles the KSEB application, inspection and net-metering paperwork, subsidy documents and your final handover file.", "",
-        "📍 *Track every step, any time:*", _link(url, lang),
-        "You will see what is done, what is next and the expected dates. We'll message you at each milestone, and if any date changes we will tell you first.", "",
-        "📞 *Need anything?* Call or WhatsApp us on %s. Please quote your project number%s." % (CONTACT_PHONE, pid), "",
-        "Thank you once again. We look forward to powering your home with clean energy.", "",
+        "Welcome to Dehlsen Energy! \u2600\ufe0f Thank you for choosing us for your solar project%s." % pid, "",
+        "Your team:",
+        "\U0001F91D *Sales*%s \u2013 your contact so far" % sales,
+        "\U0001F6E0\ufe0f *Project*%s \u2013 site work and installation; will call before each visit" % eng,
+        "\U0001F4C4 *Documentation*%s \u2013 KSEB, subsidy and handover papers" % doc, "",
+        "\U0001F4CD Track every step here:", _link(url, lang),
+        "We'll update you at each milestone, and tell you first if a date changes.", "",
+        "\U0001F4DE Questions? Call or WhatsApp %s with your project number." % CONTACT_PHONE, "",
         "Warm regards,", "Team Dehlsen Energy"])
 
 
