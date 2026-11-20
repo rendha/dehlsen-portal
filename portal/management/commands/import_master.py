@@ -101,7 +101,7 @@ class Command(BaseCommand):
                 w.inverter_at_site = yes(r["inverter_at_site"])
             if r.get("docs_given") and (not w.docs_given or over):
                 w.docs_given = r["docs_given"]
-            if r.get("stage"):
+            if r.get("stage") and (over or w.done_count == 0 or not w.project_stage):      # never overwrite the stage of a project the team has already ticked
                 w.project_stage = r["stage"]
                 if w.done_count == 0:
                     for f in stage_ticks(r["stage"]):

@@ -104,9 +104,21 @@ def _d(d):
     return d.strftime("%d %b %Y")
 
 
+def _clean_name(w):
+    """The customer's name without a title, brackets or initials at either end:  'A. A BALAN' -> 'Balan',  'ABDUL GAFOOR M A (KUNHI)' -> 'Abdul Gafoor'."""
+    name = re.sub(r"[\(\[].*?[\)\]]", " ", (w.name or ""))
+    name = re.sub(r"^\s*(mr|mrs|ms|dr|er|adv)\.?\s+", "", name.strip(), flags=re.I)
+    words = [x for x in re.split(r"\s+", name.strip()) if x]
+    is_initial = lambda x: len(x.strip(".")) <= 1
+    while words and is_initial(words[0]):
+        words.pop(0)
+    while words and is_initial(words[-1]):
+        words.pop()
+    return " ".join(words).title()
+
+
 def _first_name(w):
-    name = re.sub(r"^(mr|mrs|ms|dr|er|adv)\.?\s+", "", (w.name or "").strip(), flags=re.I)
-    return (name.split() or ["there"])[0].title()
+    return _clean_name(w) or "there"
 
 
 def _link(url, lang):
@@ -114,12 +126,13 @@ def _link(url, lang):
 
 
 def _greet_name(w):
-    """Keeps the title, so a doctor stays Dr. Sujith."""
-    m = re.match(r"^(mr|mrs|ms|dr|er|adv)\.?\s+(\S+)", (w.name or "").strip(), flags=re.I)
-    if m:
+    """Keeps the title, so a doctor stays Dr. Sujith; initials are dropped (A. Balan -> Balan)."""
+    base = _clean_name(w)
+    m = re.match(r"^(mr|mrs|ms|dr|er|adv)\.?\s+", (w.name or "").strip(), flags=re.I)
+    if m and base:
         t = m.group(1).title()
-        return "%s%s %s" % (t, "" if t.lower() == "adv" else ".", m.group(2).title())
-    return _first_name(w)
+        return "%s%s %s" % (t, "" if t.lower() == "adv" else ".", base)
+    return base or "there"
 
 
 def _who(name):
