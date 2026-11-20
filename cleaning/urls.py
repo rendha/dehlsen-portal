@@ -43,6 +43,7 @@ urlpatterns = [
     path('schedule/<int:pk>/delete/', views.delete_schedule_view, name='delete_schedule'),
     path('schedule/<int:pk>/status/', views.update_schedule_status_view, name='update_schedule_status'),
     path('schedule/<int:pk>/reschedule/', views.reschedule_api, name='reschedule_api'),
+    path('schedule/changes/', views.schedule_changes_view, name='schedule_changes'),
 
     # APIs
     path('api/schedule/events/', views.schedule_events_api, name='schedule_events_api'),

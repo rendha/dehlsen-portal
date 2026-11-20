@@ -378,6 +378,12 @@ class CleaningSchedule(models.Model):
         blank=True
     )
 
+    # why the visit was rescheduled or cancelled (asked whenever the status is set to one of these)
+    reason = models.CharField(
+        max_length=300,
+        blank=True
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True
     )

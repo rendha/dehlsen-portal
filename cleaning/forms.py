@@ -289,6 +289,7 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
             'scheduled_time',
             'assigned_to',
             'status',
+            'reason',
             'is_free',
             'notes',
         ]
@@ -374,6 +375,13 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
                 }
             ),
 
+            'reason': forms.TextInput(
+                attrs={
+                    'class': 'form-control',
+                    'placeholder': 'Why? (e.g. customer not at home, rain, customer asked to postpone)',
+                }
+            ),
+
             'notes': forms.Textarea(
                 attrs={
                     'class': 'form-control',
@@ -388,6 +396,7 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.setup_service_field()
+        self.fields['reason'].required = False
 
         # Editing an existing office schedule: start with the switch on
         inst = self.instance
@@ -431,6 +440,12 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
     def clean(self):
 
         cleaned_data = super().clean()
+
+        # A rescheduled or cancelled visit needs its reason
+        status = cleaned_data.get('status')
+        if status in ('Rescheduled', 'Cancelled') and not (cleaned_data.get('reason') or '').strip():
+            if not self.instance.pk or self.instance.status != status or not (self.instance.reason or '').strip():
+                self.add_error('reason', 'Please write the reason for the %s.' % ('cancellation' if status == 'Cancelled' else 'reschedule'))
 
         # Office work: no customer, site or address needed
         if cleaned_data.get('office_work'):

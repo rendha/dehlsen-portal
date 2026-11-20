@@ -248,6 +248,26 @@ def edit_job_view(request, pk):
 
 
 @owner_required
+def schedule_changes_view(request):
+    """Every cancelled or rescheduled visit with its reason.  ?status=Cancelled|Rescheduled, ?month=YYYY-MM"""
+    rows = CleaningSchedule.objects.filter(status__in=['Rescheduled', 'Cancelled']).select_related('customer', 'site', 'service_type', 'assigned_to')
+    status = request.GET.get('status', '')
+    if status in ('Rescheduled', 'Cancelled'):
+        rows = rows.filter(status=status)
+    month = (request.GET.get('month') or '').strip()
+    if re.fullmatch(r'\d{4}-\d{2}', month):
+        rows = rows.filter(scheduled_date__year=int(month[:4]), scheduled_date__month=int(month[5:]))
+    else:
+        month = ''
+    rows = list(rows.order_by('-updated_at')[:500])
+    return render(request, 'schedule_changes.html', {
+        'rows': rows, 'status': status, 'month': month,
+        'n_cancelled': sum(1 for r in rows if r.status == 'Cancelled'), 'n_resched': sum(1 for r in rows if r.status == 'Rescheduled'),
+        'no_reason': sum(1 for r in rows if not (r.reason or '').strip()),
+    })
+
+
+@owner_required
 def schedule_view(request):
     # Two calendars on one page: ?type=cleaning (default) or ?type=services
     kind = 'services' if request.GET.get('type') == 'services' else 'cleaning'
@@ -1396,9 +1416,13 @@ def edit_schedule_view(request, pk):
             instance=schedule
         )
 
+        old_status = schedule.status
+
         if form.is_valid():
 
             schedule = form.save()
+            if schedule.status != old_status and schedule.status in ('Rescheduled', 'Cancelled'):
+                _log_reason(schedule, schedule.status, schedule.reason)
 
             return redirect(_schedule_calendar_url(schedule))
 
@@ -1455,6 +1479,15 @@ def accept_schedule_view(request, pk):
     })
 
 
+def _log_reason(schedule, status, reason):
+    """Keeps the reason on the schedule and adds a dated line to its notes, so every reschedule stays on record."""
+    reason = (reason or '').strip()[:300]
+    schedule.reason = reason
+    line = '%s %s: %s' % (timezone.localdate().strftime('%d %b %Y'), status, reason)
+    schedule.notes = ((schedule.notes or '').rstrip() + '\n' + line).strip()
+    schedule.save(update_fields=['reason', 'notes', 'updated_at'])
+
+
 def update_schedule_status_view(request, pk):
 
     schedule = get_object_or_404(
@@ -1495,6 +1528,13 @@ def update_schedule_status_view(request, pk):
             status=400
         )
 
+    reason = (request.POST.get('reason') or '').strip()
+    if new_status in ('Rescheduled', 'Cancelled') and not reason:
+        return JsonResponse(
+            {'success': False, 'error': 'Please write the reason first.'},
+            status=400
+        )
+
     schedule.status = new_status
     if new_status == 'Completed' and not schedule.completed_at:
         schedule.completed_at = timezone.now()
@@ -1503,10 +1543,14 @@ def update_schedule_status_view(request, pk):
         'completed_at',
         'updated_at',
     ])
+    if new_status in ('Rescheduled', 'Cancelled'):
+        _log_reason(schedule, new_status, reason)
 
     return JsonResponse({
         'success': True,
         'status': schedule.status,
+        'reason': schedule.reason,
+        'notes': schedule.notes,
     })    
 
 
@@ -1568,6 +1612,7 @@ def _schedule_events(schedules, for_owner):
             'status': schedule.status,
             'is_free': bool(schedule.is_free),
             'notes': schedule.notes or '',
+            'reason': schedule.reason or '',
             'assigned_to': assigned,
             'accepted_at': timezone.localtime(schedule.accepted_at).strftime('%d %b, %I:%M %p') if schedule.accepted_at else '',
             'took': schedule.took_text,
@@ -1658,6 +1703,17 @@ def reschedule_api(request, pk):
 
     new_date = request.POST.get('date')
     new_time = request.POST.get('time')
+    reason = (request.POST.get('reason') or '').strip()
+
+    if not reason:
+
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'Please write the reason for the reschedule.'
+            },
+            status=400
+        )
 
     if not new_date:
 
@@ -1686,9 +1742,12 @@ def reschedule_api(request, pk):
         schedule.status = 'Rescheduled'
 
         schedule.save()
+        _log_reason(schedule, 'Rescheduled', reason)
 
         return JsonResponse({
             'success': True,
+            'reason': schedule.reason,
+            'notes': schedule.notes,
             'date': schedule.scheduled_date.isoformat(),
             'time': (
                 schedule.scheduled_time.strftime('%H:%M')
