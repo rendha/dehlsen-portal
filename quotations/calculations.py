@@ -655,7 +655,9 @@ def _compute(quotation):
         rate = decimal_or_zero(quotation.inverter_rate)
         components["inverter"] = {"name": clean_text(quotation.inverter_make) or "Other inverter", "make": clean_text(quotation.inverter_make),
                                   "quantity": Decimal("1"), "rate": rate, "amount": money(rate), "unit": "Nos",
-                                  "capacity": inverter_kw or None, "phase": None, "mppt": 1}
+                                  "capacity": inverter_kw or None, "mppt": 1,
+                                  "phase": {"single": "SINGLE", "three": "THREE"}.get(clean_text(getattr(quotation, "other_inverter_phase", "")).lower())
+                                           or inverter_traits(clean_text(quotation.inverter_make), None).get("phase")}
         lines_components.append(_line("inverter", "Inverter", rate, "other inverter, rate entered by hand"))
         if rate <= 0:
             warnings.append("'Other' inverter selected but no rate was entered.")

@@ -88,6 +88,22 @@ def next_offer_no(quotation_model, on_date, prefix="INQ"):
     return "%s%d" % (head, last + 1)
 
 
+QUOTE_BASE = 3100      # the first quotation of every financial year is DQ/26-27/3101: customers cannot tell how many quotations were made
+
+
+def next_quote_no(quotation_model, on_date):
+    """The next quotation number, e.g. 'DQ/26-27/3127'.  A running number per financial year that starts at QUOTE_BASE.
+    The old long INQ-2026... numbers are not touched."""
+    head = "DQ/%s/" % financial_year(on_date)
+    last = QUOTE_BASE
+    for no in quotation_model.objects.filter(offer_no__startswith=head).values_list("offer_no", flat=True):
+        try:
+            last = max(last, int(no.rsplit("/", 1)[1]))
+        except ValueError:
+            pass
+    return "%s%d" % (head, last + 1)
+
+
 # --------------------------------------------------------------------- cover
 def cover_fields(offer_no, category, location, capacity, date_str, validity_days, business):
     rows = [  # text, left, top, base size, max width

@@ -10,6 +10,7 @@
 {% block body %}<div class="app">
 <div class="top"><div><h1>{{ w.name }}</h1><small>{% if w.kw %}{{ w.kw }} kW{% endif %}{% if w.project_id %} · {{ w.project_id }}{% endif %}{% if w.location %} · {{ w.location }}{% endif %}</small></div><a class="pill" href="{% url 'progress' %}#p{{ w.pk }}">&lsaquo; Progress</a></div>
 {% for m in messages %}<div class="note {% if m.tags == 'warning' %}bad{% endif %}" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
+{% if editor %}<a class="btn o auto" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px" href="{% url 'progress_customer' w.id %}">&#128241; Customer page &amp; WhatsApp</a>{% endif %}
 <form method="post">{% csrf_token %}
 <div class="sec"><h2>Customer details</h2>
 {% if editor %}<label>Customer name</label><input name="name" value="{{ w.name }}">

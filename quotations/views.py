@@ -59,6 +59,15 @@ from .pdf_generator import build_quotation_pdf
 DEFAULT_PANEL_DCR_STATUS = "dcr"
 
 
+
+def _new_offer_no():
+    """DQ/26-27/3127 style number (see pdf_layout.next_quote_no); falls back to the old long number if anything goes wrong."""
+    try:
+        from . import pdf_layout
+        return pdf_layout.next_quote_no(Quotation, timezone.localdate())
+    except Exception:
+        return f"INQ-{timezone.now().strftime('%Y%m%d%H%M%S%f')}"
+
 def _people_names():
     """Every person who already has a quotation, once - offered as suggestions under the "Quotation For" box (same spelling = one person)."""
     return stats.distinct_names(Quotation.objects.exclude(customer_name="").values_list("customer_name", flat=True))
@@ -350,7 +359,7 @@ def create_quotation(request):
     selected_package = find_solar_package(system_size, phase)
 
     quotation = Quotation.objects.create(
-        offer_no=f"INQ-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
+        offer_no=_new_offer_no(),
 
         # customer
         business_name=business_name,
@@ -644,6 +653,8 @@ def quotation_detail(request, quotation_id):
 
         other_inverter_name = clean_text(request.POST.get("other_inverter_name") or request.POST.get("other_inverter"))
         other_inverter_rate = decimal_or_zero(request.POST.get("other_inverter_rate"))
+        _p = clean_text(request.POST.get("other_inverter_phase")).lower()
+        quotation.other_inverter_phase = _p if _p in ("single", "three") else ""
 
         inverter_item = find_quotation_item(quotation, "INVERTER")
 

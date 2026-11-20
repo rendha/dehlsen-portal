@@ -583,6 +583,7 @@ class Quotation(models.Model):
     # INVERTER
     # =====================================================
 
+    other_inverter_phase = models.CharField(max_length=10, blank=True, default="", help_text="Phase of a hand-entered ('Other') inverter: single / three (empty = same as the house)")
     inverter_kw = models.DecimalField(
         max_digits=6,
         decimal_places=2,

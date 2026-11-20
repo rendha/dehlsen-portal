@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import crew, customers, loans, meetings, project_work, views, project_dashboard, leadlink
+from . import crew, customers, loans, meetings, project_work, views, project_dashboard, leadlink, tracking
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -43,6 +43,8 @@ urlpatterns = [
     path("progress/dashboard/", project_dashboard.dashboard, name="project_dashboard"),
     path("progress/commissioned/", project_dashboard.commissioned, name="project_commissioned"),
     path("progress/<int:pk>/", project_work.project_detail, name="progress_detail"),
+    path("progress/<int:pk>/customer/", tracking.manage, name="progress_customer"),
+    path("track/<str:token>/", tracking.public, name="track_public"),
     path("meetings/", meetings.meetings, name="meetings"),
     path("meetings/new/", meetings.meeting_new, name="meeting_new"),
     path("meetings/items/", meetings.meeting_items, name="meeting_items"),

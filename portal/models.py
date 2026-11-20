@@ -177,9 +177,31 @@ class Lead(models.Model):
     map_link = models.CharField("Google Maps location", max_length=500, blank=True, help_text="A Google Maps link, or latitude,longitude, or an address (optional)")
     site_visit_by = models.DateField("site visit by", null=True, blank=True, help_text="The date the site visit must be done by (optional)")
     quotation_by = models.DateField("quotation by", null=True, blank=True, help_text="The date the quotation must be given by (optional)")
+    lead_no = models.CharField("lead ID", max_length=20, blank=True, db_index=True, help_text="Filled automatically, e.g. L26-27/0012")
 
     class Meta:
         ordering = ["done", "-created_at"]
+
+    @staticmethod
+    def make_lead_no(when=None):
+        """The next lead ID of the financial year (April-March): L26-27/0001, L26-27/0002 ..."""
+        when = timezone.localtime(when).date() if when else timezone.localdate()
+        year = when.year if when.month >= 4 else when.year - 1
+        head = "L%02d-%02d/" % (year % 100, (year + 1) % 100)
+        last = 0
+        for no in Lead.objects.filter(lead_no__startswith=head).values_list("lead_no", flat=True):
+            try:
+                last = max(last, int(no.rsplit("/", 1)[1]))
+            except ValueError:
+                pass
+        return "%s%04d" % (head, last + 1)
+
+    def save(self, *args, **kwargs):
+        if not self.lead_no:
+            self.lead_no = Lead.make_lead_no(self.created_at if self.pk is None else None)
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = list(kwargs["update_fields"]) + ["lead_no"]
+        super().save(*args, **kwargs)
 
     @property
     def map_url(self):
@@ -401,6 +423,8 @@ class ProjectWork(models.Model):
     quotation_id = models.IntegerField(null=True, blank=True, db_index=True, help_text="The confirmed quotation of this customer (filled automatically)")
     engineer = models.CharField("site in-charge / engineer", max_length=60, blank=True)
     kseb = models.JSONField(default=dict, blank=True)
+    track_token = models.CharField(max_length=40, blank=True, db_index=True, help_text="The private link the customer opens to see the schedule (made when first needed)")
+    customer_plan = models.JSONField(default=dict, blank=True, help_text="Planned dates shown to the customer, by step key")
     kseb_consumer_no = models.CharField(max_length=30, blank=True)
     arn = models.CharField("PM Surya Ghar application no.", max_length=40, blank=True)
     scheme = models.CharField(max_length=40, blank=True)

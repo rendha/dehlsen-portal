@@ -358,6 +358,14 @@
                 <input type="text" id="other_inverter" name="other_inverter" value="{{ other_inverter_name }}" placeholder="Enter inverter name">
             </div>
             <div class="field">
+                <label for="other_inverter_phase">Inverter phase</label>
+                <select name="other_inverter_phase" id="other_inverter_phase">
+                    <option value="" {% if not quotation.other_inverter_phase %}selected{% endif %}>Same as house ({{ quotation.get_phase_display }})</option>
+                    <option value="single" {% if quotation.other_inverter_phase == "single" %}selected{% endif %}>Single phase inverter</option>
+                    <option value="three" {% if quotation.other_inverter_phase == "three" %}selected{% endif %}>Three phase inverter</option>
+                </select>
+            </div>
+            <div class="field">
                 <label for="other_inverter_rate">Rate (&#8377;)</label>
                 <input type="number" id="other_inverter_rate" name="other_inverter_rate" value="{{ other_inverter_rate }}" step="0.01" placeholder="Enter rate">
             </div>

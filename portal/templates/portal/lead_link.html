@@ -9,7 +9,7 @@
 </style>{% endblock %}
 {% block body %}<div class="app">
 <div class="top"><div><h1>{% if mode == "link" %}Link a quotation{% else %}Quotations without a lead{% endif %}</h1>
-<small>{% if mode == "link" %}for {{ lead.customer_name }} {{ lead.phone }}{% else %}{{ total }} old quotation{{ total|pluralize }} that no lead holds{% endif %}</small></div><a class="pill" href="{% url 'leads' %}">&larr; Leads</a></div>
+<small>{% if mode == "link" %}for {{ lead.customer_name }} {{ lead.phone }}{% if lead.lead_no %} &middot; {{ lead.lead_no }}{% endif %}{% else %}{{ total }} old quotation{{ total|pluralize }} that no lead holds{% endif %}</small></div><a class="pill" href="{% url 'leads' %}">&larr; Leads</a></div>
 {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
 {% if mode == "link" and current %}<div class="q"><div><b>Linked now:</b> {{ current.offer_no|default:current.id }} &middot; {{ current.customer_name }}<small>{{ current.date|date:"d M Y" }}</small></div>
 <form method="post" action="{% url 'lead_unlink' lead.id %}" onsubmit="return confirm('Unlink this quotation from the lead?');">{% csrf_token %}<button class="o" type="submit">Unlink</button></form></div>{% endif %}
