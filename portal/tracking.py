@@ -48,21 +48,28 @@ def _lang(request):
     return got if got in TEXT else "en"
 
 
+def _later_work(w, today):
+    """Work that can only happen after the panels are up and the inverter is fitted."""
+    return bool(w.inv_program or w.testing or w.meter_fix or project_work.kseb_date(w, "inspection") or (w.commission_date and w.commission_date <= today))
+
+
 def _done(w, key, today):
+    """The progress screen's 'Panel' and 'Inverter' ticks mean the MATERIAL has arrived, not that it is mounted or fitted,
+    so the customer's mounting / installation steps are read from the work that follows them."""
     if key == "site_visit":
         return bool(w.site_estimation)
     if key == "feasibility":
         return w.feasibility == "ok" or bool(w.feasibility_date)
     if key == "material":
-        return w.material_dispatched is True
+        return w.material_dispatched is True or bool(w.bos and w.inverter_done and w.panel_done)
     if key == "structure":
         return bool(w.structure)
-    if key == "panel":
-        return bool(w.panel_done)
-    if key == "inverter":
-        return bool(w.inverter_done)
-    if key == "electrical":
-        return bool(w.electrical)
+    if key == "panel":                                  # structure work and panel mounting are one job: finished together
+        return bool(w.structure) or _later_work(w, today)
+    if key == "inverter":                               # the inverter is installed once programming, testing or anything after it has started
+        return _later_work(w, today)
+    if key == "electrical":                             # the electrical work is only finished once the inverter is installed
+        return bool(w.electrical) and _later_work(w, today)
     if key == "inspection":
         return bool(project_work.kseb_date(w, "inspection"))
     if key == "handover":
