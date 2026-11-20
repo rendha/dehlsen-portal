@@ -17,12 +17,24 @@ def _quotations():
 
 
 def _rows(qs, linked):
-    """Shows each quotation with its number, date, customer, size and price, and whether a lead already has it."""
+    """Shows each quotation with enough to tell them apart: number, time made, customer, size, system, DCR, inverter, place, price.
+    A customer with several quotations (same phone) is told 'Quotation 2 of 3' and the newest is marked Latest."""
+    Quotation = _quotations()
+    qs = list(qs)
+    order = {}
+    for qid, phone in Quotation.objects.order_by("date", "id").values_list("id", "phone"):
+        key = _digits(phone)
+        if key:
+            order.setdefault(key, []).append(qid)
     out = []
     for q in qs:
+        key = _digits(q.phone)
+        same = order.get(key, [])
+        n = same.index(q.id) + 1 if q.id in same else 1
         out.append({"id": q.id, "offer": q.offer_no or ("#%s" % q.id), "name": q.customer_name or q.business_name, "phone": q.phone, "date": q.date,
-                    "kw": q.system_size, "price": sales.indian(q.final_quotation_price) if q.final_quotation_price else "", "won": q.is_customer,
-                    "lead": linked.get(q.id)})
+                    "made": getattr(q, "created_at", None), "kw": q.system_size, "price": sales.indian(q.final_quotation_price) if q.final_quotation_price else "",
+                    "won": q.is_customer, "lead": linked.get(q.id), "system": q.get_system_type_display(), "dcr": q.get_panel_dcr_status_display(),
+                    "inverter": q.inverter_make, "place": q.location, "nth": n, "of": len(same), "latest": len(same) > 1 and n == len(same)})
     return out
 
 
