@@ -31,7 +31,6 @@
 <form method="post" action="{% url 'collection_pay' p.pk %}" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
 <label>Amount received (Rs)</label><input name="amount" inputmode="decimal" required>
 <label>Date</label><input type="date" name="date" value="{{ today }}" max="{{ today }}" required>
-<label>For</label><select name="stage">{% for k, n in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select>
 <label>Note (optional)</label><input name="note" maxlength="200">
 <button class="btn g" type="submit">Save payment</button></form></details>{% endif %}
 </div>

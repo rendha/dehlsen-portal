@@ -324,6 +324,9 @@ class Payment(models.Model):
     confirmed = models.BooleanField(default=True, help_text="A payment typed by a sales person waits here until Accounts confirms it with the bank. Only confirmed payments count in Collection.received.")
     confirmed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     confirmed_on = models.DateField(null=True, blank=True)
+    bank_checked = models.BooleanField(default=False, help_text="Accounts ticks this once the money is seen in the bank statement.")
+    bank_checked_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    bank_checked_on = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

@@ -30,8 +30,13 @@ def can_see(u):
 
 
 def limited(u):
-    """A sales person who is not in Accounts / Boss / directors: sees only the receivables of his own customers."""
-    return not can_see(u)
+    """True = no vendor side (payables, proformas, vendors): only people allowed in the vendor accounts see those tabs."""
+    return not fin.can_view(u)
+
+
+def own_only(u):
+    """A sales person who cannot confirm money: sees only the receivables of his own customers."""
+    return not (can_see(u) or can_confirm(u))
 
 
 def _mine(u, collection):
@@ -60,7 +65,7 @@ def _row(c):
     gp = c.expected_gp or ZERO
     share = (c.received / c.net_value) if c.net_value > 0 else ZERO
     return {"gp": gp, "gp_got": (gp * min(share, 1)).quantize(Decimal("1")), "gp_left": (gp - gp * min(share, 1)).quantize(Decimal("1")),
-            "c": c, "balance": c.net_value - c.received, "last": last, "days": (today - ref).days if ref else None,
+            "c": c, "balance": max(c.net_value - c.received, ZERO), "nodeal": c.net_value <= 0, "last": last, "days": (today - ref).days if ref else None,
             "pending": pending, "pending_sum": sum((p.amount for p in pending), ZERO),
             "pct": int(min(100, c.received * 100 / c.net_value)) if c.net_value > 0 else 0}
 
@@ -68,12 +73,12 @@ def _row(c):
 @login_required
 def receivables(request):
     _, Collection, _ = _portal()
-    lim = limited(request.user)
+    lim = own_only(request.user)
     region, person, show = request.GET.get("region", ""), request.GET.get("person", ""), request.GET.get("show", "open")
     all_rows = [_row(c) for c in Collection.objects.prefetch_related("payments") if not lim or _mine(request.user, c)]
     regions = sorted({r["c"].region for r in all_rows if r["c"].region})
     people = sorted({r["c"].sales_name for r in all_rows if r["c"].sales_name})
-    rows = [r for r in all_rows if r["balance"] > 0 and (not region or r["c"].region == region) and (not person or r["c"].sales_name == person)]
+    rows = [r for r in all_rows if (r["balance"] > 0 or r["nodeal"]) and (not region or r["c"].region == region) and (not person or r["c"].sales_name == person)]
     if show == "slow":
         rows = [r for r in rows if r["days"] is not None and r["days"] >= SLOW_DAYS]
     elif show == "pending":
@@ -85,7 +90,7 @@ def receivables(request):
                    collected=sum((r["c"].received for r in base), ZERO), n_open=len(base),
                    pending_sum=sum((r["pending_sum"] for r in all_rows), ZERO), pending_n=sum(len(r["pending"]) for r in all_rows),
                    slow_sum=sum((r["balance"] for r in base if r["days"] is not None and r["days"] >= SLOW_DAYS), ZERO), shown=sum((r["balance"] for r in rows), ZERO),
-                   slow_days=SLOW_DAYS, profit=can_see_profit(request.user), limited=lim,
+                   slow_days=SLOW_DAYS, profit=can_see_profit(request.user), limited=limited(request.user),
                    gp_total=sum((r["gp"] for r in base), ZERO), gp_left=sum((r["gp_left"] for r in base), ZERO),
                    gp_n=sum(1 for r in base if r["gp"] > 0), gp_missing=sum(1 for r in base if not r["gp"]))
     return render(request, "finance/receivables.html", ctx)
@@ -95,19 +100,22 @@ def receivables(request):
 def receivable(request, pk):
     _, Collection, _ = _portal()
     c = get_object_or_404(Collection.objects.prefetch_related("payments__entered_by", "payments__confirmed_by"), pk=pk)
-    lim = limited(request.user)
+    lim = own_only(request.user)
     if lim and not _mine(request.user, c):
         return HttpResponseForbidden("You see the receivables of your own customers only.")
     from portal.models import Payment
     pays = sorted(c.payments.all(), key=lambda x: (x.date or datetime.date.min, x.id))
+    from portal.payments import pay_labels
+    labels = pay_labels(pays)
     run = ZERO
     for x in pays:                                   # money received so far after this payment (only confirmed ones count)
         if x.confirmed:
             run += x.amount
         x.running = run
+        x.label = labels.get(x.id, "")
         x.left = c.net_value - run
     return render(request, "finance/receivable.html", fin._ctx(request, "receivables", r=_row(c), c=c, payments=pays, stages=Payment.STAGES,
-                                                               today=timezone.localdate().isoformat(), confirmer=can_confirm(request.user), profit=can_see_profit(request.user), limited=lim))
+                                                               today=timezone.localdate().isoformat(), confirmer=can_confirm(request.user), profit=can_see_profit(request.user), limited=limited(request.user)))
 
 
 @login_required
@@ -137,3 +145,34 @@ def receipt_reject(request, pk):
         pay.delete()
         messages.success(request, "The unconfirmed payment was removed (not received).")
     return redirect("fin_receivable", pk=cid)
+
+
+@login_required
+def received(request):
+    """Every customer payment entered lately, whoever entered it, so Accounts can match each with the bank statement."""
+    if not (can_see(request.user) or can_confirm(request.user)):
+        return HttpResponseForbidden("Only Accounts, the directors and Fousan see this list.")
+    _, _, Payment = _portal()
+    show = request.GET.get("show", "open")
+    qs = Payment.objects.select_related("collection", "entered_by", "bank_checked_by").filter(confirmed=True, from_sheet=False,
+                                                                                                created_at__gte=timezone.now() - datetime.timedelta(days=45))
+    if show == "open":
+        qs = qs.filter(bank_checked=False)
+    rows = list(qs.order_by("-created_at")[:200])
+    from portal.payments import pay_labels
+    for p in rows:
+        p.label = pay_labels(list(p.collection.payments.all())).get(p.id, "")
+    return render(request, "finance/received.html", fin._ctx(request, "received", rows=rows, show=show, confirmer=can_confirm(request.user),
+                                                              limited=limited(request.user), total=sum((p.amount for p in rows), ZERO)))
+
+
+@login_required
+@require_POST
+def received_tick(request, pk):
+    _, _, Payment = _portal()
+    if not can_confirm(request.user):
+        return HttpResponseForbidden("Only Accounts, the directors and Fousan can tick a payment against the bank.")
+    undo = bool(request.POST.get("undo"))
+    Payment.objects.filter(pk=pk).update(bank_checked=not undo, bank_checked_by=None if undo else request.user,
+                                         bank_checked_on=None if undo else timezone.localdate())
+    return redirect(request.POST.get("next") or "fin_received")

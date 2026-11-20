@@ -22,6 +22,8 @@ input[type=checkbox]{width:auto;margin:6px 8px 12px 0}.inl{display:inline}.inl b
 {% if not limited %}<a href="{% url 'fin_home' %}" class="{% if tab == 'payables' %}on{% endif %}">Payables</a>
 <a href="{% url 'fin_proformas' %}" class="{% if tab == 'proformas' %}on{% endif %}">Proformas{% if n_wait %}<span class="n">{{ n_wait }}</span>{% endif %}</a>
 <a href="{% url 'fin_advances' %}" class="{% if tab == 'advances' %}on{% endif %}">Advances</a>{% endif %}
+<a href="{% url 'cust_home' %}">Customers</a>
+<a href="{% url 'fin_received' %}" class="{% if tab == 'received' %}on{% endif %}">Received{% if n_unchecked %}<span class="n">{{ n_unchecked }}</span>{% endif %}</a>
 <a href="{% url 'fin_receivables' %}" class="{% if tab == 'receivables' %}on{% endif %}">Receivables{% if n_receipts %}<span class="n">{{ n_receipts }}</span>{% endif %}</a>
 {% if not limited %}<a href="{% url 'fin_vendors' %}" class="{% if tab == 'vendors' %}on{% endif %}">Vendors</a>{% endif %}
 {% if n_confirm and not limited %}<a href="{% url 'fin_confirm' %}" class="{% if tab == 'confirm' %}on{% endif %}">To confirm<span class="n">{{ n_confirm }}</span></a>{% endif %}

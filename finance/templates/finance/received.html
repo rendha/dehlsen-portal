@@ -1,0 +1,14 @@
+{% extends "finance/base.html" %}{% load fin %}
+{% block content %}
+<div class="card"><b>Money received from customers</b><br><small style="color:var(--mut)">Every payment entered in the last 45 days, whoever entered it. Tick each one once you see it in the bank statement.</small>
+<form class="bar" method="get" style="margin-top:10px"><select name="show" onchange="this.form.submit()"><option value="open"{% if show == 'open' %} selected{% endif %}>Not yet matched with the bank</option><option value="all"{% if show == 'all' %} selected{% endif %}>All (last 45 days)</option></select><span class="sp"></span><small>&#8377; {{ total|inr }} shown</small></form>
+<div class="scroll"><table class="t"><tr><th>Date</th><th>Customer</th><th>For</th><th class="n">Amount</th><th>Entered by</th><th>Bank</th></tr>
+{% for p in rows %}<tr><td>{{ p.date|date:"d M Y"|default:"-" }}</td>
+<td><a href="{% url 'fin_receivable' p.collection_id %}">{{ p.collection.customer }}</a><br><small>{{ p.collection.project_id }}</small></td>
+<td>{{ p.label }}</td><td class="n"><b>{{ p.amount|inr }}</b></td>
+<td>{{ p.entered_by.get_full_name|default:p.entered_by.username }}<br><small>{{ p.created_at|date:"d M, H:i" }}</small></td>
+<td>{% if p.bank_checked %}<span class="tag g">Matched</span><br><small>{{ p.bank_checked_by.get_full_name|default:p.bank_checked_by.username }} &middot; {{ p.bank_checked_on|date:"d M" }}</small>
+{% if confirmer %}<form method="post" action="{% url 'fin_received_tick' p.id %}" style="display:inline">{% csrf_token %}<input type="hidden" name="undo" value="1"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini" type="submit">Undo</button></form>{% endif %}
+{% elif confirmer %}<form method="post" action="{% url 'fin_received_tick' p.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="mini g" type="submit">&#10004; Matched with bank</button></form>
+{% else %}<span class="tag a">Not matched</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6"><small>Nothing to show.</small></td></tr>{% endfor %}</table></div></div>{% endblock %}

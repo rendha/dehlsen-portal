@@ -42,6 +42,15 @@ def _invoices():
     return Invoice.objects.select_related("vendor", "proforma").prefetch_related("payments", "proforma__payments", "proforma__invoices")
 
 
+def _unchecked():
+    """Customer payments Accounts has not yet ticked against the bank statement."""
+    try:
+        from portal.models import Payment as CustomerPayment
+        return CustomerPayment.objects.filter(bank_checked=False, confirmed=True).count()
+    except Exception:
+        return 0
+
+
 def _pending_receipts():
     """Customer payments typed by sales people that Accounts has not confirmed yet."""
     try:
@@ -55,7 +64,7 @@ def _ctx(request, tab, **kw):
     kw.update({"tab": tab, "edit": can_edit(request.user), "can_add_pf": can_add_proforma(request.user), "approver": can_approve(request.user),
                "n_confirm": Invoice.objects.exclude(check_note="").count() + Proforma.objects.exclude(check_note="").count()
                + Payment.objects.exclude(check_note="").count(),
-               "n_wait": Proforma.objects.filter(status=Proforma.PENDING).count(), "n_receipts": _pending_receipts()})
+               "n_wait": Proforma.objects.filter(status=Proforma.PENDING).count(), "n_receipts": _pending_receipts(), "n_unchecked": _unchecked()})
     return kw
 
 

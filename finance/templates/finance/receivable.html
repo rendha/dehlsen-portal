@@ -11,7 +11,7 @@
 {% if r.pending_sum %}<dt>Waiting</dt><dd>&#8377; {{ r.pending_sum|inr }} entered by sales, not yet confirmed</dd>{% endif %}</dl></div>
 <div class="card"><h3 style="margin:0 0 8px">Who paid, and when <small style="font-weight:400;color:var(--mut)">({{ payments|length }} payment{{ payments|length|pluralize }})</small></h3>
 <div class="scroll"><table class="t"><tr><th>Date</th><th>For</th><th class="n">Amount</th><th class="n">Received so far</th><th class="n">Left</th><th>Entered by</th><th>Status</th><th></th></tr>
-{% for p in payments %}<tr><td>{{ p.date|date:"d M Y"|default:"no date" }}</td><td>{{ p.get_stage_display }}{% if p.note %}<br><small>{{ p.note }}</small>{% endif %}</td>
+{% for p in payments %}<tr><td>{{ p.date|date:"d M Y"|default:"no date" }}</td><td>{{ p.label }}{% if p.note %}<br><small>{{ p.note }}</small>{% endif %}</td>
 <td class="n">{{ p.amount|inr }}</td><td class="n">{% if p.confirmed %}{{ p.running|inr }}{% endif %}</td><td class="n">{% if p.confirmed %}{{ p.left|inr }}{% endif %}</td>
 <td>{% if p.entered_by %}{{ p.entered_by.get_full_name|default:p.entered_by.username }}{% elif p.from_sheet %}<small>sheet</small>{% endif %}</td>
 <td>{% if p.confirmed %}Received{% if p.confirmed_on %}<br><small>confirmed {{ p.confirmed_on|date:"d M" }}</small>{% endif %}{% else %}<span class="tag a">Waiting for Accounts</span>{% endif %}</td>
@@ -24,7 +24,6 @@
 <form method="post" action="{% url 'collection_pay' c.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
 <div class="fgrid"><div><label>Amount received (Rs)</label><input name="amount" inputmode="decimal" required></div>
 <div><label>Date</label><input type="date" name="date" value="{{ today }}" max="{{ today }}" required></div>
-<div><label>For</label><select name="stage">{% for k, n in stages %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
 <div><label>Reference (bank / UPI / cheque no.)</label><input name="note" maxlength="200"></div></div>
 <button class="btn" type="submit">Save payment</button></form></div>{% endif %}
 {% endblock %}

@@ -133,3 +133,21 @@ def unsync_quotation(quotation):
 def can_edit(user, collection, director):
     """The sales person of this customer (or a director) may add payments to it."""
     return bool(director or is_mine(sales.keys_of(user), collection.sales_name))
+
+
+def tell_accounts(pay, actor):
+    """Phone alert to the Accounts people (and nobody else) for every customer payment entered, whoever enters it."""
+    try:
+        from django.contrib.auth import get_user_model
+        from . import notify
+        who = actor.get_full_name() or actor.get_username()
+        text = "Rs %s received from %s, entered by %s%s" % (sales_indian(pay.amount), pay.collection.customer, who, "" if pay.confirmed else " (waiting for confirmation)")
+        for u in get_user_model().objects.filter(groups__name="Accounts", is_active=True).exclude(pk=getattr(actor, "pk", None)).distinct():
+            notify.send_push(u, "Customer payment", text, "/finance/received/")
+    except Exception:
+        pass
+
+
+def sales_indian(value):
+    from . import sales
+    return sales.indian(value)

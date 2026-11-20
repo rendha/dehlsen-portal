@@ -1,0 +1,41 @@
+{% extends "portal/base.html" %}
+{% block title %}Customers - Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0 0 14px}@media(min-width:760px){.cards{grid-template-columns:repeat(4,1fr)}}
+.cards .c{background:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 2px 10px rgba(30,50,80,.06)}.cards .c small{color:var(--mut);display:block}.cards .c b{font-size:19px}
+.cards .c.r b{color:var(--red)}.cards .c.a b{color:#b36b00}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}.bar input{margin:0;flex:1;min-width:180px}.bar select{width:auto;margin:0}.bar button{width:auto}
+table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left;color:var(--mut);font-weight:600;font-size:12px;padding:6px 8px;border-bottom:2px solid var(--line)}
+.t td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}.t td.n,.t th.n{text-align:right;white-space:nowrap}.t a{color:var(--blue);text-decoration:none;font-weight:600}
+.scroll{overflow-x:auto}.msg{border-radius:12px;padding:10px 14px;margin:0 0 12px;background:#e9f7ee;border:1px solid #bfe3cc}.msg.error{background:#fde8e8;border-color:#f3c3c3}
+.tag.a{background:#fff1d6;color:#b36b00}.inl{display:inline}.mini{border:0;border-radius:8px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer;color:#fff}
+.mini.g{background:var(--green)}.mini.r{background:var(--red)}.pbar{height:6px;background:#e8eef6;border-radius:4px;margin-top:4px;min-width:70px}.pbar i{display:block;height:6px;background:var(--green);border-radius:4px}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Customers</h1><small>What every customer paid and still owes &middot; money received is confirmed by Accounts</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+<div class="cards">
+<div class="c"><small>Customers</small><b>{{ n }}</b></div>
+<div class="c"><small>Sold (total)</small><b>{{ sold }}</b></div>
+<div class="c"><small>Received (confirmed)</small><b>{{ got }}</b></div>
+<div class="c r"><small>Still to collect</small><b>{{ left }}</b></div>
+</div>
+{% if pend_n %}<div class="cards"><div class="c a"><small>Waiting for confirmation</small><b>{{ pend_sum }}</b><small>{{ pend_n }} payment{{ pend_n|pluralize }}</small></div></div>{% endif %}
+{% if confirmer and waiting %}<div class="card"><h3 style="margin:0 0 8px">Waiting for your confirmation</h3>
+<div class="scroll"><table class="t"><tr><th>Date</th><th>Customer</th><th class="n">Amount</th><th>Entered by</th><th>Note</th><th></th></tr>
+{% for w in waiting %}<tr><td>{{ w.p.date|date:"d M Y"|default:"no date" }}</td><td><a href="{% url 'cust_detail' w.c.pk %}">{{ w.c.customer }}</a><br><small>{{ w.c.project_id }}</small></td><td class="n">{{ w.amount }}</td><td>{{ w.by }}</td><td>{{ w.p.note }}</td>
+<td style="white-space:nowrap"><form class="inl" method="post" action="{% url 'cust_confirm' w.p.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}"><button class="mini g" type="submit">Confirm</button></form>
+<form class="inl" method="post" action="{% url 'cust_reject' w.p.pk %}" onsubmit="return confirm('Remove this payment? It was not received.')">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}"><button class="mini r" type="submit">Reject</button></form></td></tr>{% endfor %}
+</table></div></div>{% endif %}
+<div class="card">
+<form method="get" class="bar"><input name="q" value="{{ q }}" placeholder="Search customer, project ID, sales person, region">
+<select name="show"><option value="all" {% if show == 'all' %}selected{% endif %}>All customers</option><option value="owing" {% if show == 'owing' %}selected{% endif %}>Money still to collect</option><option value="pending" {% if show == 'pending' %}selected{% endif %}>Waiting for confirmation</option></select>
+<button class="btn auto" type="submit">Show</button></form>
+<div class="scroll"><table class="t"><tr><th>Customer</th><th>Sales</th><th class="n">Sold</th><th class="n">Received</th><th class="n">Balance</th><th></th></tr>
+{% for r in rows %}<tr><td><a href="{% url 'cust_detail' r.c.pk %}">{{ r.c.customer }}</a><br><small>{{ r.c.project_id }}{% if r.c.region %} &middot; {{ r.c.region }}{% endif %}</small></td><td>{{ r.c.sales_name }}</td>
+<td class="n">{% if r.nodeal %}<span class="tag a">deal value missing</span>{% else %}{{ r.net }}{% endif %}</td>
+<td class="n">{{ r.got }}<div class="pbar"><i style="width:{{ r.pct }}%"></i></div></td><td class="n">{{ r.left }}</td>
+<td>{% if r.pending %}<span class="tag a">{{ r.pending }} waiting &middot; {{ r.pending_sum }}</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" style="color:var(--mut)">No customer found.</td></tr>{% endfor %}
+</table></div>{% if more %}<small style="color:var(--mut)">{{ more }} more - use the search to narrow it down.</small>{% endif %}</div>
+</div>{% endblock %}

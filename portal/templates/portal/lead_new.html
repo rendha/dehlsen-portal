@@ -62,7 +62,7 @@
 <input id="qtb" type="date" name="quotation_by" value="{{ values.quotation_by }}">
 {% if bills %}<label>Electricity bill photos saved</label><div style="display:flex;gap:8px;flex-wrap:wrap">{% for b in bills %}<div style="text-align:center;font-size:12px"><a href="{% url 'lead_photo' editing.id b %}" target="_blank"><img src="{% url 'lead_photo' editing.id b %}" style="height:90px;border-radius:8px;border:1px solid var(--line)"></a><br><label style="display:inline;font-weight:400"><input type="checkbox" name="delete_bill" value="{{ b }}" style="width:auto"> remove</label></div>{% endfor %}</div>{% endif %}
 <label for="bl">{% if editing %}Add electricity bill photo{% else %}Electricity bill photo (optional){% endif %}</label>
-<input id="bl" type="file" name="bill" accept="image/*" capture="environment">
+<input id="bl" type="file" name="bill" accept="image/*">
 <label for="ml">Google Maps location (optional)</label>
 <input id="ml" name="map_link" value="{{ values.map_link }}" placeholder="Paste a Google Maps link, or tap the button below" autocomplete="off">
 <button type="button" class="btn o" style="margin:6px 0 4px;padding:8px 12px;font-size:13px" onclick="useMyLocation(this,'ml')">&#128205; Use my current location</button>

@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import crew, loans, meetings, project_work, views, project_dashboard
+from . import crew, customers, loans, meetings, project_work, views, project_dashboard, leadlink
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -11,10 +11,20 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("targets/", views.targets, name="targets"),
     path("collections/", views.collections, name="collections"),
+    path("customers/", customers.home, name="cust_home"),
+    path("customers/<int:pk>/", customers.detail, name="cust_detail"),
+    path("customers/<int:pk>/pay/", customers.pay, name="cust_pay"),
+    path("customers/payment/<int:pk>/confirm/", customers.confirm, name="cust_confirm"),
+    path("customers/payment/<int:pk>/reject/", customers.reject, name="cust_reject"),
     path("collections/<int:pk>/pay/", views.collection_pay, name="collection_pay"),
     path("collections/payment/<int:pk>/delete/", views.collection_pay_delete, name="collection_pay_delete"),
     path("leads/", views.leads, name="leads"),
     path("leads/add/", views.lead_new, name="lead_new"),
+    path("leads/unlinked/", leadlink.unlinked, name="lead_unlinked"),
+    path("leads/from-quotation/<int:qid>/", leadlink.from_quotation, name="lead_from_quotation"),
+    path("leads/<int:pk>/link/", leadlink.link, name="lead_link"),
+    path("leads/<int:pk>/link/save/", leadlink.link_save, name="lead_link_save"),
+    path("leads/<int:pk>/unlink/", leadlink.unlink, name="lead_unlink"),
     path("leads/<int:pk>/unvisit/", views.lead_unvisit, name="lead_unvisit"),
     path("leads/<int:pk>/edit/", views.lead_edit, name="lead_edit"),
     path("leads/<int:pk>/site/", views.lead_site, name="lead_site"),

@@ -1,0 +1,22 @@
+{% extends "portal/base.html" %}
+{% block title %}{% if mode == "link" %}Link a quotation{% else %}Quotations without a lead{% endif %} - Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.bar{display:flex;gap:8px;margin:0 0 12px}.bar input{margin:0;flex:1}.bar button{border:0;border-radius:10px;padding:0 16px;background:var(--blue);color:#fff;font:inherit;cursor:pointer}
+.q{background:#fff;border-radius:14px;padding:12px 14px;margin:0 0 10px;box-shadow:0 2px 10px rgba(30,50,80,.06);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.q small{color:var(--mut);display:block}.tag{display:inline-block;font-size:11px;border-radius:999px;padding:2px 9px;background:#eef3fa;color:var(--blue);font-weight:600;margin-left:4px}.tag.g{background:#e3f5ea;color:var(--green)}.tag.a{background:#fff1d6;color:#b36b00}
+.q button{border:0;border-radius:10px;padding:8px 14px;background:var(--blue);color:#fff;font:inherit;cursor:pointer}.q button.o{background:#eef3fa;color:var(--ink)}
+.msg{border-radius:12px;padding:10px 14px;margin:0 0 12px;background:#e9f7ee;border:1px solid #bfe3cc}.msg.error{background:#fde8e8;border-color:#f0b9b9}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>{% if mode == "link" %}Link a quotation{% else %}Quotations without a lead{% endif %}</h1>
+<small>{% if mode == "link" %}for {{ lead.customer_name }} {{ lead.phone }}{% else %}{{ total }} old quotation{{ total|pluralize }} that no lead holds{% endif %}</small></div><a class="pill" href="{% url 'leads' %}">&larr; Leads</a></div>
+{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+{% if mode == "link" and current %}<div class="q"><div><b>Linked now:</b> {{ current.offer_no|default:current.id }} &middot; {{ current.customer_name }}<small>{{ current.date|date:"d M Y" }}</small></div>
+<form method="post" action="{% url 'lead_unlink' lead.id %}" onsubmit="return confirm('Unlink this quotation from the lead?');">{% csrf_token %}<button class="o" type="submit">Unlink</button></form></div>{% endif %}
+<form class="bar" method="get"><input name="q" value="{{ q }}" placeholder="Search name, phone or quotation number"><button type="submit">Search</button></form>
+{% for r in rows %}<div class="q"><div><b>{{ r.offer }}</b> &middot; {{ r.name }}{% if r.same %}<span class="tag g">Same phone</span>{% endif %}{% if r.won %}<span class="tag">Customer</span>{% endif %}{% if r.lead %}<span class="tag a">Lead: {{ r.lead.customer_name }}</span>{% endif %}
+<small>{{ r.date|date:"d M Y" }} &middot; {{ r.phone }}{% if r.kw %} &middot; {{ r.kw }} kW{% endif %}{% if r.price %} &middot; &#8377; {{ r.price }}{% endif %}</small></div>
+{% if mode == "link" %}{% if not r.lead %}<form method="post" action="{% url 'lead_link_save' lead.id %}">{% csrf_token %}<input type="hidden" name="quotation" value="{{ r.id }}"><button type="submit">Link this</button></form>{% endif %}
+{% else %}<form method="post" action="{% url 'lead_from_quotation' r.id %}">{% csrf_token %}<button type="submit">Make a lead</button></form>{% endif %}</div>
+{% empty %}<p style="color:var(--mut)">Nothing found.</p>{% endfor %}
+</div>{% endblock %}

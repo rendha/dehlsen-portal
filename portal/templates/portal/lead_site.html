@@ -16,11 +16,11 @@
 {% endfor %}
 <label id="bill">Electricity bill photo</label>
 {% if bills %}<div class="ph">{% for pid in bills %}<div><a href="{% url 'lead_photo' lead.id pid %}" target="_blank"><img src="{% url 'lead_photo' lead.id pid %}" alt=""></a><label><input type="checkbox" name="delete" value="{{ pid }}">remove</label></div>{% endfor %}</div>{% endif %}
-<input type="file" name="bill" accept="image/*" capture="environment" multiple>
+<input type="file" name="bill" accept="image/*" multiple>
 <small style="color:var(--mut)">Take a photo of the customer's electricity bill (it is kept separate from the roof photos).</small>
 {% for s in slots %}<label>{{ s.label }} photo</label>
 {% if s.ids %}<div class="ph">{% for pid in s.ids %}<div><a href="{% url 'lead_photo' lead.id pid %}" target="_blank"><img src="{% url 'lead_photo' lead.id pid %}" alt=""></a><label><input type="checkbox" name="delete" value="{{ pid }}">remove</label></div>{% endfor %}</div>{% endif %}
-<input type="file" name="{{ s.field }}" accept="image/*" capture="environment" multiple>
+<input type="file" name="{{ s.field }}" accept="image/*" multiple>
 {% endfor %}
 <label>Roof photos, layout sketch, anything else</label>
 {% if photos %}<div class="ph">{% for pid in photos %}<div><a href="{% url 'lead_photo' lead.id pid %}" target="_blank"><img src="{% url 'lead_photo' lead.id pid %}" alt=""></a><label><input type="checkbox" name="delete" value="{{ pid }}">remove</label></div>{% endfor %}</div>{% endif %}

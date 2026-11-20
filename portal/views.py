@@ -705,11 +705,17 @@ def collections(request):
                                                        "stages": Payment.STAGES})
 
 
+CONFIRMERS = {"fousan", "fouzan", "admin"}                       # besides Accounts and the directors, these people confirm customer payments
+
+
 def _can_confirm_money(user):
-    """Accounts, a director or a superuser: their payment entries and confirmations count at once."""
+    """Accounts, a director, a superuser or a named confirmer (Fousan): their payment entries and confirmations count at once."""
+    names = {(user.get_username() or "").lower(), (user.first_name or "").lower(), (getattr(getattr(user, "portal_profile", None), "sales_name", "") or "").lower()}
+    if names & CONFIRMERS or user.is_staff:                # a portal admin (Django admin user) can do it too
+        return True
     try:
-        from store.views import is_accounts
-        return bool(user.is_superuser or _is_director(user) or is_accounts(user))
+        from store.views import is_accounts, is_boss
+        return bool(user.is_superuser or _is_director(user) or is_accounts(user) or is_boss(user))
     except Exception:
         return bool(user.is_superuser or _is_director(user))
 
@@ -720,7 +726,7 @@ def collection_pay(request, pk):
     from decimal import Decimal, InvalidOperation
     from django.db.models import F
     c = get_object_or_404(Collection, pk=pk)
-    if not payments.can_edit(request.user, c, _is_director(request.user)):
+    if not (_can_confirm_money(request.user) or payments.can_edit(request.user, c, _is_director(request.user))):
         messages.error(request, "This customer belongs to another sales person.")
         return redirect("collections")
     try:
@@ -731,10 +737,11 @@ def collection_pay(request, pk):
     if not amount or amount <= 0 or date > timezone.localdate():
         messages.error(request, "Enter the amount, and a date that is not in the future.")
     else:
-        stage = request.POST.get("stage") if request.POST.get("stage") in dict(Payment.STAGES) else "other"
+        stage = "advance" if not c.payments.exists() else "other"      # the first payment is the Advance, the next ones are Payment 1, Payment 2 ... (shown by pay_labels)
         auto = _can_confirm_money(request.user)          # Accounts / a director: counted at once.  A sales person's entry waits for Accounts.
-        Payment.objects.create(collection=c, amount=amount, date=date, stage=stage, note=request.POST.get("note", "")[:200], entered_by=request.user,
-                               confirmed=auto, confirmed_by=request.user if auto else None, confirmed_on=timezone.localdate() if auto else None)
+        new_pay = Payment.objects.create(collection=c, amount=amount, date=date, stage=stage, note=request.POST.get("note", "")[:200], entered_by=request.user,
+                                         confirmed=auto, confirmed_by=request.user if auto else None, confirmed_on=timezone.localdate() if auto else None)
+        payments.tell_accounts(new_pay, request.user)
         if auto:
             Collection.objects.filter(pk=c.pk).update(received=F("received") + amount)
             messages.success(request, "Payment recorded for %s." % c.customer)
@@ -748,7 +755,7 @@ def collection_pay_delete(request, pk):
     """Remove a wrong entry: the person who entered it (same day) or a director.  The total goes down by that amount."""
     from django.db.models import F
     pay = get_object_or_404(Payment, pk=pk)
-    director = _is_director(request.user)
+    director = _is_director(request.user) or _can_confirm_money(request.user)       # Accounts and Fousan remove entries like a director
     if pay.from_sheet and not director:
         messages.error(request, "Only a director can remove an entry that came from the sheet.")
     elif not (director or (pay.entered_by_id == request.user.id and pay.created_at.date() == timezone.now().date())):
