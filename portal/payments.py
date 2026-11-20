@@ -151,3 +151,14 @@ def tell_accounts(pay, actor):
 def sales_indian(value):
     from . import sales
     return sales.indian(value)
+
+
+def pay_labels(pays):
+    """What each payment of one customer is for, worked out from the order they came in: the first is the Advance, then Payment 1, Payment 2 ...
+    Returns {payment id: label}.  Nobody picks the label by hand."""
+    import datetime
+    ordered = sorted(pays, key=lambda x: (x.date or datetime.date.min, x.id))
+    labels = {}
+    for i, p in enumerate(ordered):
+        labels[p.id] = "Advance" if i == 0 else "Payment %d" % i
+    return labels

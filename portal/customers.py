@@ -31,7 +31,8 @@ def _row(c, pending):
 
 @login_required
 def home(request):
-    q, show = (request.GET.get("q") or "").strip(), request.GET.get("show") or "all"
+    q = (request.GET.get("q") or "").strip()
+    show = request.GET.get("show") or ("all" if q else "owing")          # opens on the customers who still owe money; a search looks at everybody
     confirmer = _can_confirm_money(request.user)
     pend_all = list(Payment.objects.filter(confirmed=False).select_related("collection", "entered_by").order_by("date", "id"))
     by_c = {}

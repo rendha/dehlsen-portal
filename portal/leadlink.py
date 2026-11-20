@@ -31,7 +31,7 @@ def _rows(qs, linked):
         key = _digits(q.phone)
         same = order.get(key, [])
         n = same.index(q.id) + 1 if q.id in same else 1
-        out.append({"id": q.id, "offer": q.offer_no or ("#%s" % q.id), "name": q.customer_name or q.business_name, "phone": q.phone, "date": q.date,
+        out.append({"id": q.id, "offer": q.offer_no or ("#%s" % q.id), "name": q.business_name or q.customer_name, "contact": q.customer_name if q.business_name and q.customer_name and q.customer_name != q.business_name else "", "phone": q.phone, "date": q.date,
                     "made": getattr(q, "created_at", None), "kw": q.system_size, "price": sales.indian(q.final_quotation_price) if q.final_quotation_price else "",
                     "won": q.is_customer, "lead": linked.get(q.id), "system": q.get_system_type_display(), "dcr": q.get_panel_dcr_status_display(),
                     "inverter": q.inverter_make, "place": q.location, "nth": n, "of": len(same), "latest": len(same) > 1 and n == len(same)})
