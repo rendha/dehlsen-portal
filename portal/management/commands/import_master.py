@@ -6,6 +6,7 @@ is listed.  With --overwrite the core data of the workbook replaces what the por
 invoice, handover and warranty are filled when empty (or replaced with --overwrite)."""
 import datetime
 import json
+from difflib import SequenceMatcher
 from decimal import Decimal
 from pathlib import Path
 
@@ -47,16 +48,33 @@ class Command(BaseCommand):
             by_cname.setdefault(compact(w.name), w)
         by_phone = {last10(w.phone): w for w in works if last10(w.phone)}
         hit = made = diffs = 0
+        claimed = set()
+        conflicts = 0
         for pid, r in sorted(data.items()):
             name = r.get("name") or ""
             if not name:
                 continue
             w, why = finder.find(pid, r, works, by_id, by_cname, by_phone, collections, [])
+            # a guessed (name / phone) match is refused when that portal project already has a DIFFERENT project id or was already taken by another row
+            if w is not None and why and ((w.project_id and w.project_id != pid) or id(w) in claimed):
+                self.stdout.write("   skip  %s  %s  !=  %s %s  (%s) - treated as a different project" % (pid, name, w.project_id, w.name, why))
+                w = None
+            # same project id but clearly another customer (different name AND different phone): do not touch it, list it for a manual check
+            if w is not None and w.project_id == pid and w.pk:
+                a, b = compact(name), compact(w.name)
+                p1, p2 = last10(r.get("phone", "")), last10(w.phone)
+                if a and b and not same_person(name, w.name) and SequenceMatcher(None, a, b).ratio() < 0.6 and p1 and p2 and p1 != p2:
+                    conflicts += 1
+                    self.stdout.write("   CONFLICT %s  workbook '%s' %s  /  portal '%s' %s  - left untouched" % (pid, name, p1, w.name, p2))
+                    continue
+            if w is not None:
+                claimed.add(id(w))
             if w is None:
                 w = ProjectWork(name=name[:200], name_key=compact(name), project_id=pid)
                 if pid in collections:
                     w.collection = collections[pid]
                 works.append(w)
+                claimed.add(id(w))
                 made += 1
                 self.stdout.write("   NEW   %s  %s" % (pid, name))
             else:
@@ -131,5 +149,6 @@ class Command(BaseCommand):
                 by_phone.setdefault(last10(w.phone), w)
         if dry:
             self.stdout.write("DRY RUN: nothing was saved.")
+        self.stdout.write("%d id conflicts left untouched (see CONFLICT lines)" % conflicts)
         self.stdout.write(self.style.SUCCESS("matched %d projects, created %d new, %d core differences %s" % (
             hit, made, diffs, "(replaced)" if over else "(kept - use --overwrite to take the workbook's)")))

@@ -8,3 +8,4 @@ staticfiles/
 .compile_test.pyc
 *.dump
 db_backup.sqlite3
+import_report.txt
