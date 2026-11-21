@@ -1,7 +1,7 @@
 """py manage.py fix_master_ids [--dry-run]  -  one-time fix: gives four customers the project id the Project Master workbook gives them.
 
-  FEBINA P P         DH26-27/151 -> DH26-27/153   (her payment row follows)
-  JAYARAJAN          DH26-27/152 -> DH26-27/155   (JAYARAJAN T P; his payment row follows; phone/address/map/kW/consumer no from the workbook)
+  FEBINA P P         DH26-27/151 -> DH26-27/153   (her payment row keeps its number)
+  JAYARAJAN          DH26-27/152 -> DH26-27/155   (JAYARAJAN T P; his payment row keeps its number; phone/address/map/kW/consumer no from the workbook)
   SATHEESH KUMAR P K (no id)     -> DH26-27/151
   PRAMOD KUMAR P     (no id)     -> DH26-27/152
 The old holders are moved first, then the ids are given.  Phone, address, map link, kW, consumer no and booking date of these four are set from the workbook."""
@@ -40,10 +40,7 @@ class Command(BaseCommand):
             if dry:
                 continue
             w.project_id = new
-            col = w.collection
-            if col and old and col.project_id == old:
-                col.project_id = new
-                col.save()
+            # the payment rows (Collection) keep their own numbers: the payment sheet numbers these customers differently from the workbook
             if new == "DH26-27/155":
                 w.name, w.name_key = r["name"][:200], r["name"][:200].lower()
             for f in ("phone", "site_address", "map_link", "kw"):
