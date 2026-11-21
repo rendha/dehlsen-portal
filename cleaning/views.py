@@ -249,10 +249,10 @@ def edit_job_view(request, pk):
 
 @owner_required
 def schedule_changes_view(request):
-    """Every cancelled or rescheduled visit with its reason.  ?status=Cancelled|Rescheduled, ?month=YYYY-MM"""
-    rows = CleaningSchedule.objects.filter(status__in=['Rescheduled', 'Cancelled']).select_related('customer', 'site', 'service_type', 'assigned_to')
+    """Every cancelled, rescheduled or partly done visit with its reason.  ?status=Cancelled|Rescheduled|Partially done, ?month=YYYY-MM"""
+    rows = CleaningSchedule.objects.filter(status__in=['Rescheduled', 'Cancelled', 'Partially done']).select_related('customer', 'site', 'service_type', 'assigned_to')
     status = request.GET.get('status', '')
-    if status in ('Rescheduled', 'Cancelled'):
+    if status in ('Rescheduled', 'Cancelled', 'Partially done'):
         rows = rows.filter(status=status)
     month = (request.GET.get('month') or '').strip()
     if re.fullmatch(r'\d{4}-\d{2}', month):
@@ -262,7 +262,7 @@ def schedule_changes_view(request):
     rows = list(rows.order_by('-updated_at')[:500])
     return render(request, 'schedule_changes.html', {
         'rows': rows, 'status': status, 'month': month,
-        'n_cancelled': sum(1 for r in rows if r.status == 'Cancelled'), 'n_resched': sum(1 for r in rows if r.status == 'Rescheduled'),
+        'n_cancelled': sum(1 for r in rows if r.status == 'Cancelled'), 'n_resched': sum(1 for r in rows if r.status == 'Rescheduled'), 'n_partial': sum(1 for r in rows if r.status == 'Partially done'),
         'no_reason': sum(1 for r in rows if not (r.reason or '').strip()),
     })
 
@@ -1363,6 +1363,8 @@ def add_schedule_view(request):
         if form.is_valid():
 
             schedule = form.save()
+            if schedule.status in ('Rescheduled', 'Cancelled', 'Partially done') and (schedule.reason or '').strip():
+                _log_reason(schedule, schedule.status, schedule.reason)
 
             _close_request(request.POST.get('from_request'), schedule)
 
@@ -1421,7 +1423,7 @@ def edit_schedule_view(request, pk):
         if form.is_valid():
 
             schedule = form.save()
-            if schedule.status != old_status and schedule.status in ('Rescheduled', 'Cancelled'):
+            if schedule.status != old_status and schedule.status in ('Rescheduled', 'Cancelled', 'Partially done'):
                 _log_reason(schedule, schedule.status, schedule.reason)
 
             return redirect(_schedule_calendar_url(schedule))
@@ -1529,7 +1531,7 @@ def update_schedule_status_view(request, pk):
         )
 
     reason = (request.POST.get('reason') or '').strip()
-    if new_status in ('Rescheduled', 'Cancelled') and not reason:
+    if new_status in ('Rescheduled', 'Cancelled', 'Partially done') and not reason:
         return JsonResponse(
             {'success': False, 'error': 'Please write the reason first.'},
             status=400
@@ -1543,7 +1545,7 @@ def update_schedule_status_view(request, pk):
         'completed_at',
         'updated_at',
     ])
-    if new_status in ('Rescheduled', 'Cancelled'):
+    if new_status in ('Rescheduled', 'Cancelled', 'Partially done'):
         _log_reason(schedule, new_status, reason)
 
     return JsonResponse({

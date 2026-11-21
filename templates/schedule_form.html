@@ -439,12 +439,13 @@
         <div class="form-group" id="reasonBox">
 
             <label for="id_reason">
-                Reason (for Rescheduled / Cancelled)
+                Reason (for Rescheduled / Cancelled / Partially done)
             </label>
 
             {{ form.reason }}
+            {% if form.reason.errors %}<div class="text-danger small mt-1">{{ form.reason.errors|join:" " }}</div>{% endif %}
 
-            <div class="help">Required when the status is Rescheduled or Cancelled.</div>
+            <div class="help">Write the reason for Rescheduled, Cancelled or Partially done. Needed when you change an existing visit; optional when you add a new one afterwards.</div>
 
         </div>
 
@@ -452,7 +453,7 @@
         (function () {
             var s = document.getElementById('id_status'), box = document.getElementById('reasonBox');
             if (!s || !box) { return; }
-            function sync() { box.style.display = (s.value === 'Rescheduled' || s.value === 'Cancelled') ? '' : 'none'; }
+            function sync() { box.style.display = (s.value === 'Rescheduled' || s.value === 'Cancelled' || s.value === 'Partially done') ? '' : 'none'; }
             s.addEventListener('change', sync); sync();
         })();
         </script>

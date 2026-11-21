@@ -443,9 +443,9 @@ class CleaningScheduleForm(ServiceFieldMixin, forms.ModelForm):
 
         # A rescheduled or cancelled visit needs its reason
         status = cleaned_data.get('status')
-        if status in ('Rescheduled', 'Cancelled') and not (cleaned_data.get('reason') or '').strip():
-            if not self.instance.pk or self.instance.status != status or not (self.instance.reason or '').strip():
-                self.add_error('reason', 'Please write the reason for the %s.' % ('cancellation' if status == 'Cancelled' else 'reschedule'))
+        if status in ('Rescheduled', 'Cancelled', 'Partially done') and not (cleaned_data.get('reason') or '').strip():
+            if self.instance.pk and (self.instance.status != status or not (self.instance.reason or '').strip()):      # a NEW visit added afterwards needs no reason
+                self.add_error('reason', 'Please write the reason for the %s.' % {'Cancelled': 'cancellation', 'Rescheduled': 'reschedule'}.get(status, 'partial work (what was left)'))
 
         # Office work: no customer, site or address needed
         if cleaned_data.get('office_work'):

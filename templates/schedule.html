@@ -439,6 +439,34 @@ function setText(id, value) {
     document.getElementById(id).textContent = value || '-';
 }
 
+/* A reason is asked for these statuses.  The box is built here (not window.prompt, which phones and installed apps often block). */
+const NEEDS_REASON = ['Rescheduled', 'Cancelled', 'Partially done'];
+
+function askReason(title) {
+    return new Promise(function (resolve) {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+        wrap.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)">'
+            + '<div style="font-weight:700;font-size:17px;margin-bottom:10px"></div>'
+            + '<textarea rows="3" maxlength="300" class="form-control" placeholder="Write the reason" style="margin-bottom:6px"></textarea>'
+            + '<div class="text-danger small" style="min-height:18px"></div>'
+            + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
+            + '<button type="button" class="btn btn-light" data-act="no">Cancel</button>'
+            + '<button type="button" class="btn btn-primary" data-act="ok">Save</button></div></div>';
+        wrap.firstChild.firstChild.textContent = title;
+        document.body.appendChild(wrap);
+        const box = wrap.querySelector('textarea'), err = wrap.querySelector('.text-danger');
+        function close(v) { document.body.removeChild(wrap); resolve(v); }
+        wrap.querySelector('[data-act="no"]').onclick = function () { close(null); };
+        wrap.querySelector('[data-act="ok"]').onclick = function () {
+            const v = box.value.trim();
+            if (!v) { err.textContent = 'Please write a reason.'; box.focus(); return; }
+            close(v);
+        };
+        setTimeout(function () { box.focus(); }, 50);
+    });
+}
+
 function showScheduleModal(event) {
 
     currentEvent = event;
@@ -461,7 +489,7 @@ function showScheduleModal(event) {
     setText('modalAssigned', p.assigned_to || 'Not assigned');
     setText('modalNotes', p.notes);
     setText('modalReason', p.reason);
-    document.getElementById('modalReasonBox').style.display = (p.reason && (p.status === 'Rescheduled' || p.status === 'Cancelled')) ? '' : 'none';
+    document.getElementById('modalReasonBox').style.display = (p.reason && NEEDS_REASON.indexOf(p.status) >= 0) ? '' : 'none';
     setText('modalTook', p.accepted_at ? ('Accepted ' + p.accepted_at) : '-');
 
     document.getElementById('modalStatus').value = p.status;
@@ -499,16 +527,7 @@ document.getElementById('modalStatus').addEventListener('change', function () {
     const event = currentEvent;
     const status = this.value;
     const selectBox = this;
-    let reason = '';
-
-    if (status === 'Rescheduled' || status === 'Cancelled') {
-        reason = (window.prompt('Reason for ' + (status === 'Cancelled' ? 'cancelling' : 'rescheduling') + ' this visit:') || '').trim();
-        if (!reason) {
-            selectBox.value = event.extendedProps.status;      // no reason, no change
-            return;
-        }
-    }
-
+    function send(reason) {
     fetch(`/service/schedule/${event.id}/status/`, {
         method: 'POST',
         headers: {
@@ -534,6 +553,19 @@ document.getElementById('modalStatus').addEventListener('change', function () {
             document.getElementById('modalReasonBox').style.display = data.reason ? '' : 'none';
         })
         .catch(() => alert('Could not update status. Check your internet connection.'));
+    }
+
+    if (NEEDS_REASON.indexOf(status) >= 0) {
+        const what = status === 'Cancelled' ? 'Why is this visit being cancelled?'
+                   : status === 'Rescheduled' ? 'Why is this visit being rescheduled?'
+                   : 'What was left undone? (partially done)';
+        askReason(what).then(function (reason) {
+            if (!reason) { selectBox.value = event.extendedProps.status; return; }     // no reason, no change
+            send(reason);
+        });
+    } else {
+        send('');
+    }
 });
 
 
@@ -575,12 +607,13 @@ function localDate(d) {
 }
 
 function rescheduleEvent(event, info) {
+    askReason('Why is this visit being rescheduled?').then(function (reason) {
+        if (!reason) { info.revert(); return; }           // no reason, no change
+        doReschedule(event, info, reason);
+    });
+}
 
-    const reason = (window.prompt('Reason for rescheduling this visit:') || '').trim();
-    if (!reason) {
-        info.revert();                                    // no reason, no change
-        return;
-    }
+function doReschedule(event, info, reason) {
 
     const date = localDate(event.start);
 

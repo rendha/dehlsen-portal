@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <h2 class="fw-bold mb-0">Cancelled &amp; rescheduled visits</h2>
+    <h2 class="fw-bold mb-0">Cancelled, rescheduled &amp; partly done visits</h2>
     <a href="{% url 'schedule' %}" class="btn btn-outline-primary btn-sm">&larr; Back to calendar</a>
   </div>
 
@@ -10,9 +10,10 @@
     <div>
       <label class="small fw-semibold d-block" for="status">Show</label>
       <select name="status" id="status" class="form-select form-select-sm">
-        <option value="">Cancelled and rescheduled</option>
+        <option value="">All</option>
         <option value="Cancelled" {% if status == 'Cancelled' %}selected{% endif %}>Cancelled only</option>
         <option value="Rescheduled" {% if status == 'Rescheduled' %}selected{% endif %}>Rescheduled only</option>
+        <option value="Partially done" {% if status == 'Partially done' %}selected{% endif %}>Partially done only</option>
       </select>
     </div>
     <div>
@@ -23,7 +24,7 @@
     {% if status or month %}<a class="btn btn-light btn-sm" href="{% url 'schedule_changes' %}">Clear</a>{% endif %}
   </form>
 
-  <p class="text-muted small mb-2">{{ rows|length }} visit{{ rows|length|pluralize }}: {{ n_cancelled }} cancelled, {{ n_resched }} rescheduled{% if no_reason %} &middot; {{ no_reason }} without a reason (changed before this page existed){% endif %}.</p>
+  <p class="text-muted small mb-2">{{ rows|length }} visit{{ rows|length|pluralize }}: {{ n_cancelled }} cancelled, {{ n_resched }} rescheduled, {{ n_partial }} partly done{% if no_reason %} &middot; {{ no_reason }} without a reason (changed before this page existed){% endif %}.</p>
 
   <div class="table-responsive">
     <table class="table table-sm align-middle">
@@ -35,14 +36,14 @@
           <td>{{ r.get_customer_name }}{% if r.phone %}<br><small class="text-muted">{{ r.phone }}</small>{% endif %}</td>
           <td>{{ r.service_name }}</td>
           <td>{{ r.get_location }}</td>
-          <td><span class="badge {% if r.status == 'Cancelled' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ r.status }}</span></td>
+          <td><span class="badge {% if r.status == 'Cancelled' %}text-bg-danger{% elif r.status == 'Partially done' %}text-bg-info{% else %}text-bg-warning{% endif %}">{{ r.status }}</span></td>
           <td>{% if r.reason %}{{ r.reason }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
           <td>{% if r.assigned_to %}{{ r.assigned_to.get_full_name|default:r.assigned_to.username }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
           <td class="text-nowrap small">{{ r.updated_at|date:"d M, h:i A" }}</td>
           <td><a class="btn btn-sm btn-outline-primary" href="{% url 'edit_schedule' r.pk %}">Open</a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="9" class="text-center text-muted py-4">No cancelled or rescheduled visits{% if status or month %} for this filter{% endif %}.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">No cancelled, rescheduled or partly done visits{% if status or month %} for this filter{% endif %}.</td></tr>
       {% endfor %}
       </tbody>
     </table>
