@@ -1,27 +1,39 @@
-"""py manage.py relink_payments [--dry-run]  -  links every project to the payment row of the SAME customer.
+"""py manage.py relink_payments [--dry-run] [--unlink]  -  links every project to the payment row of the SAME customer.
 
 The payment sheet numbers some customers differently from the Project Master (RAYEESUDHEEN is 157 there, 160 in the master; PRAMOD KUMAR 160 there, 152 in the master),
 so a project was linked to another customer's payment row: it showed that name, deal value, received and balance.
-  1. a project whose payment row belongs to another name is moved to the payment row with its own name (or unlinked when there is none);
-  2. a payment row that has no project is linked to the project with its name.
-Only the link changes.  Payment amounts and the payment sheet's own numbers are never edited."""
+  MOVE    a project linked to another customer's payment row goes to the payment row of its own name (only when that row is free)
+  LINK    a payment row that has no project is linked to the one project of that name (a project that has no payment row)
+  CHECK   a project linked to a payment row of another name and no payment row of its own: listed only; with --unlink the wrong link is taken off
+A shortened name is the same customer (ABDUSSAREEF KORALIYADAN = ABDUSSAREEF, A T THOMAS = THOMAS AT).  The Project Master workbook is the MAIN list: after linking, every payment row takes the project number of its project (RAYEESUDHEEN 157 -> 160, PRAMOD KUMAR 160 -> 152),
+so the two lists use the same numbers.  Payment amounts are never edited.  A number that another, unmatched payment row already holds is left and listed."""
+import re
 from difflib import SequenceMatcher
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
-from portal.management.commands.import_kseb import compact, same_person
 from portal.models import Collection, ProjectWork
 
 
-def score(a, b):
-    ka, kb = compact(a), compact(b)
-    if not ka or not kb:
-        return 0.0
-    if ka == kb:
-        return 1.0
-    if same_person(a, b):
-        return 0.95
-    return SequenceMatcher(None, ka, kb).ratio()
+def toks(s):
+    return re.findall(r"[a-z0-9]+", (s or "").lower())
+
+
+def same(a, b):
+    ta, tb = toks(a), toks(b)
+    if not ta or not tb:
+        return False
+    ja, jb = "".join(ta), "".join(tb)
+    if ja == jb or "".join(sorted(ta)) == "".join(sorted(tb)):
+        return True
+    sh, lg = (ta, tb) if len(ja) <= len(jb) else (tb, ta)
+    if len("".join(sh)) >= 5 and "".join(sh) in "".join(lg):
+        return True
+    sig = [t for t in sh if len(t) >= 3]
+    if not sig:
+        return False
+    return all(any(t == u or SequenceMatcher(None, t, u).ratio() >= 0.7 for u in lg) for t in sig)
 
 
 class Command(BaseCommand):
@@ -29,53 +41,70 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--unlink", action="store_true", help="also take off a wrong link when the customer has no payment row of its own")
 
     def handle(self, *args, **options):
-        dry = options["dry_run"]
+        dry, unlink_too = options["dry_run"], options["unlink"]
         works = list(ProjectWork.objects.select_related("collection"))
         cols = list(Collection.objects.all())
-        moved = unlinked = linked = 0
+        moved = checked = linked = 0
 
         def money(c):
-            return "deal %s received %s" % (c.net_value, c.received) if c else "-"
+            return "deal %s received %s" % (c.net_value, c.received)
 
-        # 1. projects linked to another customer's payment row
-        for w in works:
+        wrong = [w for w in works if w.collection_id and not same(w.collection.customer, w.name)]
+        taken = {w.collection_id for w in works if w.collection_id and w not in wrong}
+        for w in wrong:
             c = w.collection
-            if not c or score(c.customer, w.name) >= 0.85:
-                continue
-            best, hit = 0.0, None
-            for x in cols:
-                s = score(x.customer, w.name)
-                if s > best:
-                    best, hit = s, x
-            if hit and best >= 0.88 and hit.pk != c.pk:
-                self.stdout.write("   MOVE   %-12s %-26s  payment row '%s' (%s)  ->  '%s' %s (%s)" % (w.project_id or "no id", w.name[:26], c.customer, c.project_id, hit.customer, hit.project_id, money(hit)))
+            free = [x for x in cols if x.pk not in taken and x.pk != c.pk and same(x.customer, w.name)]
+            if len(free) == 1:
+                x = free[0]
+                self.stdout.write("   MOVE   %-12s %-28s payment row '%s' (%s)  ->  '%s' (%s, %s)" % (w.project_id or "no id", w.name[:28], c.customer, c.project_id, x.customer, x.project_id, money(x)))
                 moved += 1
-                w.collection = hit
+                taken.add(x.pk)
+                w.collection = x
+                if not dry:
+                    w.save(update_fields=["collection"])
             else:
-                self.stdout.write("   UNLINK %-12s %-26s  payment row '%s' (%s, %s) is another customer; no payment row of this name" % (w.project_id or "no id", w.name[:26], c.customer, c.project_id, money(c)))
-                unlinked += 1
-                w.collection = None
-            if not dry:
-                w.save(update_fields=["collection"])
-        # 2. payment rows left without a project
+                checked += 1
+                self.stdout.write("   CHECK  %-12s %-28s is linked to the payment row of '%s' (%s, %s): no free row of its own name%s" % (
+                    w.project_id or "no id", w.name[:28], c.customer, c.project_id, money(c), "  -> link taken off" if unlink_too else ""))
+                if unlink_too:
+                    w.collection = None
+                    if not dry:
+                        w.save(update_fields=["collection"])
+                else:
+                    taken.add(c.pk)
         taken = {w.collection_id for w in works if w.collection_id}
         for c in cols:
             if c.pk in taken:
                 continue
-            best, hit = 0.0, None
-            for w in works:
-                if w.collection_id:
-                    continue
-                s = score(c.customer, w.name)
-                if s > best:
-                    best, hit = s, w
-            if hit and best >= 0.88:
-                self.stdout.write("   LINK   %-12s %-26s  <- payment row '%s' (%s, %s)" % (hit.project_id or "no id", hit.name[:26], c.customer, c.project_id, money(c)))
+            hits = [w for w in works if not w.collection_id and same(c.customer, w.name)]
+            if len(hits) == 1:
+                w = hits[0]
+                self.stdout.write("   LINK   %-12s %-28s <- payment row '%s' (%s, %s)" % (w.project_id or "no id", w.name[:28], c.customer, c.project_id, money(c)))
                 linked += 1
-                hit.collection = c
+                w.collection = c
                 taken.add(c.pk)
                 if not dry:
-                    hit.save(update_fields=["collection"])
-        self.stdout.write(self.style.SUCCESS("%s: %d projects moved to their own payment row, %d unlinked, %d payment rows newly linked." % ("DRY RUN, nothing saved" if dry else "Done", moved, unlinked, linked)))
+                    w.save(update_fields=["collection"])
+        # the workbook is the main list: the payment row gets the number of its project
+        plan = [(w.collection, w.project_id) for w in works if w.collection_id and w.project_id and w.collection.project_id != w.project_id and same(w.collection.customer, w.name)]
+        moving = {c.pk for c, _n in plan}
+        held = {c.project_id: c for c in cols if c.pk not in moving}
+        todo, blocked = [], 0
+        for c, new in plan:
+            if new in held:
+                blocked += 1
+                self.stdout.write("   NUMBER %-12s payment row '%s' keeps %s: that number is held by the payment row '%s'" % (new, c.customer, c.project_id, held[new].customer))
+            else:
+                self.stdout.write("   NUMBER payment row '%-26s' %s  ->  %s" % (c.customer[:26], c.project_id, new))
+                todo.append((c, new))
+        if todo and not dry:
+            with transaction.atomic():
+                for c, _n in todo:                       # two steps, so two rows can swap numbers
+                    Collection.objects.filter(pk=c.pk).update(project_id="TMP-%d" % c.pk)
+                for c, new in todo:
+                    Collection.objects.filter(pk=c.pk).update(project_id=new)
+        self.stdout.write(self.style.SUCCESS("%d payment rows %s the workbook's number, %d kept theirs." % (len(todo), "would take" if dry else "took", blocked)))
+        self.stdout.write(self.style.SUCCESS("%s: %d moved, %d newly linked, %d to check by hand." % ("DRY RUN, nothing saved" if dry else "Done", moved, linked, checked)))
