@@ -22,6 +22,7 @@ STEPS = [("site_visit", "Site visit"), ("feasibility", "Feasibility approval"), 
          ("panel", "Panel mounting"), ("electrical", "Electrical work"), ("inverter", "Inverter installation"),
          ("inspection", "KSEB inspection"), ("commissioning", "Commissioning"), ("handover", "Document handover")]
 
+LOAN_STEPS = {"loan_approval": ("Bank loan approval", "ബാങ്ക് ലോൺ അംഗീകാരം"), "bank1": ("Bank first payment", "ബാങ്ക് ആദ്യ ഗഡു"), "bank2": ("Final bank payment", "ബാങ്ക് അവസാന ഗഡു")}
 STEP_ML = {"site_visit": "സൈറ്റ് സന്ദർശനം", "feasibility": "ഫീസിബിലിറ്റി അംഗീകാരം", "material": "സാധനങ്ങൾ എത്തിക്കൽ", "structure": "സ്ട്രക്ചർ പണി",
            "panel": "പാനൽ സ്ഥാപിക്കൽ", "electrical": "ഇലക്ട്രിക്കൽ പണി", "inverter": "ഇൻവെർട്ടർ സ്ഥാപിക്കൽ", "inspection": "കെഎസ്ഇബി പരിശോധന",
            "commissioning": "കമ്മീഷനിംഗ്", "handover": "രേഖകൾ കൈമാറൽ"}
@@ -32,13 +33,13 @@ TEXT = {
            "today": "today", "tomorrow": "tomorrow", "in_days": "in %d days", "overdue": "date has passed, we will update you", "all_done": "All steps are complete. Thank you!",
            "system": "Your system", "capacity": "Capacity", "panels": "Solar panels", "inverter": "Inverter", "type": "System type", "project_id": "Project ID", "place": "Place",
            "contact": "Your contact", "engineer": "Site engineer", "call": "Call", "wa": "Message us on WhatsApp", "updated": "Updated", "tagline": "Powering the future with clean energy",
-           "back": "Back to project", "lang_en": "English", "lang_ml": "മലയാളം", "wa_hello": "Hello Dehlsen Energy, I am %s (project %s)."},
+           "back": "Back to project", "m_view": "See what is delivered", "m_delivered": "Delivered", "m_pending": "Pending", "m_panels": "Solar panels", "m_inverter": "Inverter", "m_other": "Other materials", "m_none": "The material list will be shared soon.", "lang_en": "English", "lang_ml": "മലയാളം", "wa_hello": "Hello Dehlsen Energy, I am %s (project %s)."},
     "ml": {"hello": "നമസ്കാരം", "title": "നിങ്ങളുടെ സോളാർ പ്രോജക്റ്റ്", "steps_done": "ഘട്ടങ്ങൾ പൂർത്തിയായി", "of": "/", "schedule": "നിങ്ങളുടെ ഷെഡ്യൂൾ", "done": "പൂർത്തിയായി",
            "completed": "പൂർത്തിയാക്കി", "planned_for": "തീയതി", "rescheduled": "പുതിയ തീയതി ഉടൻ അറിയിക്കാം", "soon": "തീയതി ഉടൻ അറിയിക്കാം", "next": "അടുത്ത ഘട്ടം",
            "today": "ഇന്ന്", "tomorrow": "നാളെ", "in_days": "%d ദിവസത്തിനുള്ളിൽ", "overdue": "തീയതി കഴിഞ്ഞു, പുതിയ തീയതി അറിയിക്കാം",
            "all_done": "എല്ലാ ഘട്ടങ്ങളും പൂർത്തിയായി. നന്ദി!", "system": "നിങ്ങളുടെ സിസ്റ്റം", "capacity": "ശേഷി", "panels": "സോളാർ പാനലുകൾ", "inverter": "ഇൻവെർട്ടർ",
            "type": "സിസ്റ്റം തരം", "project_id": "പ്രോജക്റ്റ് ഐഡി", "place": "സ്ഥലം", "contact": "ബന്ധപ്പെടാൻ", "engineer": "സൈറ്റ് എൻജിനീയർ", "call": "വിളിക്കുക",
-           "wa": "വാട്സ്ആപ്പിൽ സന്ദേശം അയയ്ക്കുക", "updated": "പുതുക്കിയത്", "tagline": "Powering the future with clean energy", "back": "പ്രോജക്റ്റിലേക്ക് തിരികെ",
+           "wa": "വാട്സ്ആപ്പിൽ സന്ദേശം അയയ്ക്കുക", "updated": "പുതുക്കിയത്", "tagline": "Powering the future with clean energy", "back": "പ്രോജക്റ്റിലേക്ക് തിരികെ", "m_view": "എന്തെല്ലാം എത്തി എന്ന് കാണുക", "m_delivered": "എത്തി", "m_pending": "എത്താനുണ്ട്", "m_panels": "സോളാർ പാനലുകൾ", "m_inverter": "ഇൻവെർട്ടർ", "m_other": "മറ്റ് സാധനങ്ങൾ", "m_none": "സാധനങ്ങളുടെ പട്ടിക ഉടൻ അറിയിക്കാം.",
            "lang_en": "English", "lang_ml": "മലയാളം", "wa_hello": "നമസ്കാരം ഡെൽസൻ എനർജി, ഞാൻ %s (പ്രോജക്റ്റ് %s)."},
 }
 
@@ -56,6 +57,12 @@ def _later_work(w, today):
 def _done(w, key, today):
     """The progress screen's 'Panel' and 'Inverter' ticks mean the MATERIAL has arrived, not that it is mounted or fitted,
     so the customer's mounting / installation steps are read from the work that follows them."""
+    if key == "loan_approval":
+        return bool(w.loan_sanctioned_on)
+    if key == "bank1":
+        return bool(w.bank1_received_on)
+    if key == "bank2":
+        return bool(w.bank2_received_on)
     if key == "site_visit":
         return bool(w.site_estimation)
     if key == "feasibility":
@@ -86,6 +93,33 @@ def _date(v):
         return None
 
 
+def step_keys(w, lang="en"):
+    """The steps of this customer: a bank-loan customer also sees the loan approval and the two bank payments."""
+    i = 1 if lang == "ml" else 0
+    base = [(k, STEP_ML[k] if lang == "ml" else lb) for k, lb in STEPS]
+    if not w.is_loan:
+        return base
+    loan = {k: v[i] for k, v in LOAN_STEPS.items()}
+    out = []
+    for k, lb in base:
+        out.append((k, lb))
+        if k == "feasibility":                       # the loan is approved before the material and the work
+            out += [("loan_approval", loan["loan_approval"]), ("bank1", loan["bank1"])]
+    out.append(("bank2", loan["bank2"]))           # the bank's second payment comes after the work
+    return out
+
+
+def _expected_sanction(w):
+    """The expected sanction date saved on the loan (best effort: the loan is found through the quotation of the lead)."""
+    try:
+        from .models import BankLoan
+        qid = (w.collection.quotation_id if w.collection_id else None) or w.quotation_id
+        loan = BankLoan.objects.filter(lead__quotation_id=qid).first() if qid else None
+        return loan.expected_on if loan and loan.expected_on else None
+    except Exception:
+        return None
+
+
 def steps_of(w, today=None, lang="en"):
     """Every step with its planned date and state: done / late / planned / later."""
     today = today or timezone.localdate()
@@ -93,10 +127,55 @@ def steps_of(w, today=None, lang="en"):
     if "install" in plan and "panel" not in plan:          # dates saved before panel and inverter were separate steps
         plan["panel"] = plan["install"]
     out = []
-    for key, label in STEPS:
+    for key, label in step_keys(w, lang):
         planned, done = _date(plan.get(key)), _done(w, key, today)
+        if key == "loan_approval" and not planned and not done:
+            planned = _expected_sanction(w)
         state = "done" if done else ("late" if planned and planned < today else ("planned" if planned else "later"))
-        out.append({"key": key, "label": STEP_ML[key] if lang == "ml" else label, "planned": planned, "done": done, "state": state})
+        out.append({"key": key, "label": label, "planned": planned, "done": done, "state": state})
+    return out
+
+
+def _qty(q):
+    q = float(q or 0)
+    return str(int(q)) if q == int(q) else ("%.2f" % q).rstrip("0").rstrip(".")
+
+
+def material_of(w, t):
+    """What is delivered and what is pending, for the customer.  -> [{label, delivered, items: [{text, delivered}]}]
+    The items are the customer's material list in the store (panels, inverter, other materials).  An item is delivered when the store has marked it done,
+    or when the project says that kind of material has arrived (panel / inverter / BOS ticks) or the material was dispatched."""
+    all_in = w.material_dispatched is True
+    ticks = {"panels": bool(w.panel_done) or all_in, "inverter": bool(w.inverter_done) or all_in, "other": bool(w.bos) or all_in}
+    cust = None
+    try:
+        from store.models import Customer as StoreCustomer
+        from quotations import dashboard_stats as stats
+        customers = list(StoreCustomer.objects.prefetch_related("lines"))
+        cust = project_work.find_store_customer(w, {c.quotation_id: c for c in customers if c.quotation_id}, [(stats.name_key(c.name), c) for c in customers], stats)
+    except Exception:
+        cust = None
+    groups = {"panels": [], "inverter": [], "other": []}
+    if cust is not None:
+        for line in cust.lines.all():
+            if not (line.quantity or 0):
+                continue
+            name = (line.name or "").lower()
+            key = "panels" if ("panel" in name or "module" in name) else ("inverter" if "inverter" in name else "other")
+            text = " ".join(x for x in (line.name, line.make) if x)
+            groups[key].append({"text": "%s - %s %s" % (text, _qty(line.quantity), line.unit or ""), "delivered": ticks[key] or line.store_status == "done"})
+    else:                                                    # no material list yet: the three main parts from the project
+        if w.panel_make or w.panel_count:
+            groups["panels"].append({"text": " x ".join(str(x) for x in (w.panel_count, w.panel_make) if x), "delivered": ticks["panels"]})
+        if w.inverter_make:
+            groups["inverter"].append({"text": w.inverter_make, "delivered": ticks["inverter"]})
+        groups["other"].append({"text": "Structure, cables and fittings" if t is TEXT["en"] else "സ്ട്രക്ചർ, കേബിളുകൾ, മറ്റ് സാധനങ്ങൾ", "delivered": ticks["other"]})
+    out = []
+    for key, label in (("panels", t["m_panels"]), ("inverter", t["m_inverter"]), ("other", t["m_other"])):
+        items = groups[key]
+        if items:
+            out.append({"label": label, "delivered": all(i["delivered"] for i in items), "items": items,
+                        "n_done": sum(1 for i in items if i["delivered"])})
     return out
 
 
@@ -223,7 +302,7 @@ def manage(request, pk):
     if request.method == "POST":
         plan = dict(w.customer_plan or {})
         plan.pop("install", None)
-        for key, _label in STEPS:
+        for key, _label in step_keys(w):
             raw = (request.POST.get("plan_" + key) or "").strip()
             if raw and _date(raw):
                 plan[key] = raw
@@ -290,7 +369,7 @@ def public(request, token):
     back = reverse_manage(w) if (getattr(user, "is_authenticated", False) and project_work.can_edit(user)) else ""
     response = render(request, "portal/track_public.html", {
         "w": w, "steps": steps, "n_done": n_done, "n_all": len(steps), "pct": int(n_done * 100 / len(steps)), "t": t, "lang": lang,
-        "next": _next_step(steps, t, today), "system": _system_rows(w, t), "contact": CONTACT_PHONE, "engineer": w.engineer, "today": today, "back": back,
+        "next": _next_step(steps, t, today), "material": material_of(w, t), "system": _system_rows(w, t), "contact": CONTACT_PHONE, "engineer": w.engineer, "today": today, "back": back,
         "wa_contact": wa_link(CONTACT_PHONE, t["wa_hello"] % (w.name, w.project_id or "-"))})
     response["Cache-Control"] = "no-store"
     response["X-Robots-Tag"] = "noindex, nofollow"

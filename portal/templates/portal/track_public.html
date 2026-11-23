@@ -24,6 +24,9 @@ body.ml h1,body.ml .card h2{font-family:Uroob,"Noto Sans Malayalam",Poppins,sans
 .pill{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;background:#e3f5ea;color:#1f7a43;margin-left:6px}
 .sys{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-top:6px}.sys div small{display:block;color:#667385;font-size:11px}.sys div b{font-size:14px}
 .btn{display:block;text-align:center;text-decoration:none;font-weight:700;border-radius:12px;padding:12px;margin-top:10px;color:#fff}.btn.call{background:var(--copper)}.btn.wa{background:#25D366}
+.mat{margin-top:6px}.mat summary{cursor:pointer;color:var(--blue);font-size:12px;font-weight:600}
+.mg{margin-top:8px;background:#f6f8fb;border-radius:10px;padding:8px 10px}.mg b{font-size:13px}.mp{float:right;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;background:#fff0dd;color:#b35a08}.mp.ok{background:#e3f5ea;color:#1f7a43}
+.mi{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;padding:4px 0;border-top:1px solid #e6ebf2;margin-top:4px;color:#445}.mi:first-of-type{margin-top:6px}.mi i{flex:none;font-style:normal;color:#b8c0cc;width:14px}.mi.ok i{color:#2e9e5b;font-weight:700}.mi span{flex:1}.mi em{font-style:normal;font-size:11px;color:#b35a08}.mi.ok em{color:#1f7a43}
 .foot{text-align:center;font-size:11px;color:#8794a6;margin-top:14px}
 </style></head><body class="{{ lang }}">
 {% if back %}<div class="back"><a href="{{ back }}">&lsaquo; {{ t.back }}</a></div>{% endif %}
@@ -37,7 +40,10 @@ body.ml h1,body.ml .card h2{font-family:Uroob,"Noto Sans Malayalam",Poppins,sans
 <div class="card"><h2>{{ t.schedule }}</h2>
 <div class="tl">{% for s in steps %}<div class="st {{ s.state }}"><div class="dot">{% if s.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</div>
 <div><b>{{ s.label }}{% if s.done %}<span class="pill">{{ t.done }}</span>{% endif %}</b>
-<small>{% if s.done %}{{ t.completed }}{% elif s.state == "late" %}{{ t.planned_for }} {{ s.planned|date:"d M Y" }} &middot; {{ t.rescheduled }}{% elif s.planned %}{{ t.planned_for }} {{ s.planned|date:"d M Y" }}{% else %}{{ t.soon }}{% endif %}</small></div></div>{% endfor %}</div></div>
+<small>{% if s.done %}{{ t.completed }}{% elif s.state == "late" %}{{ t.planned_for }} {{ s.planned|date:"d M Y" }} &middot; {{ t.rescheduled }}{% elif s.planned %}{{ t.planned_for }} {{ s.planned|date:"d M Y" }}{% else %}{{ t.soon }}{% endif %}</small>
+{% if s.key == "material" %}{% if material %}<details class="mat"><summary>{{ t.m_view }}</summary>{% for g in material %}<div class="mg"><b>{{ g.label }}</b><span class="mp {% if g.delivered %}ok{% endif %}">{% if g.delivered %}{{ t.m_delivered }}{% else %}{{ g.n_done }}/{{ g.items|length }} {{ t.m_delivered }}{% endif %}</span>
+{% for i in g.items %}<div class="mi {% if i.delivered %}ok{% endif %}"><i>{% if i.delivered %}&#10003;{% else %}&#9675;{% endif %}</i><span>{{ i.text }}</span><em>{% if i.delivered %}{{ t.m_delivered }}{% else %}{{ t.m_pending }}{% endif %}</em></div>{% endfor %}</div>{% endfor %}</details>{% endif %}{% endif %}
+</div></div>{% endfor %}</div></div>
 {% if system %}<div class="card"><h2>{{ t.system }}</h2><div class="sys">{% for label, value in system %}<div><small>{{ label }}</small><b>{{ value }}</b></div>{% endfor %}</div></div>{% endif %}
 <div class="card"><h2>{{ t.contact }}</h2>
 {% if engineer %}<p style="margin:2px 0 0;font-size:13px;color:#3a4552">{{ t.engineer }}: <b>{{ engineer }}</b></p>{% endif %}
