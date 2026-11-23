@@ -56,9 +56,22 @@ class Command(BaseCommand):
             elif addr_w and addr_r and addr_w != addr_r and p1 and p2 and p1 != p2:
                 n_id += 1
                 self.stdout.write("ID    %-13s same name '%s' but phone AND address differ: portal %s / workbook %s" % (pid, w.name, w.phone, r.get("phone")))
+        n_field = 0
+        for pid, r in sorted(data.items()):
+            w = by_id.get(pid)
+            if not w or not alike(r.get("name", ""), w.name):
+                continue
+            bad = []
+            for f, wf in (("email", "email"), ("consumer_no", "kseb_consumer_no"), ("alt_phone", "alt_phone"), ("pincode", "pincode")):
+                a, b = compact(str(r.get(f) or "")), compact(str(getattr(w, wf) or ""))
+                if a and b and a != b:
+                    bad.append("%s portal '%s' / workbook '%s'" % (f, getattr(w, wf), r.get(f)))
+            if bad:
+                n_field += 1
+                self.stdout.write("FIELD %-13s %s: %s" % (pid, w.name, "; ".join(bad)))
         for w in works:
             c = w.collection
             if c and not alike(c.customer, w.name):
                 n_link += 1
                 self.stdout.write("LINK  %-13s project '%s' %s | payment row %s '%s' booked %s" % (w.project_id or "no id", w.name, w.phone or "-", c.project_id, c.customer, c.booking_date))
-        self.stdout.write(self.style.SUCCESS("%d id mismatches, %d wrong payment links (nothing was changed)." % (n_id, n_link)))
+        self.stdout.write(self.style.SUCCESS("%d id mismatches, %d wrong field values, %d wrong payment links (nothing was changed)." % (n_id, n_field, n_link)))
