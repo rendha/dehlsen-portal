@@ -141,42 +141,20 @@ def _qty(q):
     return str(int(q)) if q == int(q) else ("%.2f" % q).rstrip("0").rstrip(".")
 
 
+MATERIAL_NAMES = {"structure_mat": ("Structure material", "സ്ട്രക്ചർ സാധനങ്ങൾ"), "panel_done": ("Solar panels", "സോളാർ പാനലുകൾ"), "bos": ("BOS kit (cables and fittings)", "BOS കിറ്റ് (കേബിളുകൾ, ഫിറ്റിംഗ്സ്)"),
+                  "inverter_done": ("Inverter", "ഇൻവെർട്ടർ"), "meter_mat": ("Net meter", "നെറ്റ് മീറ്റർ")}
+
+
 def material_of(w, t):
-    """What is delivered and what is pending, for the customer.  -> [{label, delivered, items: [{text, delivered}]}]
-    The items are the customer's material list in the store (panels, inverter, other materials).  An item is delivered when the store has marked it done,
-    or when the project says that kind of material has arrived (panel / inverter / BOS ticks) or the material was dispatched."""
-    all_in = w.material_dispatched is True
-    ticks = {"panels": bool(w.panel_done) or all_in, "inverter": bool(w.inverter_done) or all_in, "other": bool(w.bos) or all_in}
-    cust = None
-    try:
-        from store.models import Customer as StoreCustomer
-        from quotations import dashboard_stats as stats
-        customers = list(StoreCustomer.objects.prefetch_related("lines"))
-        cust = project_work.find_store_customer(w, {c.quotation_id: c for c in customers if c.quotation_id}, [(stats.name_key(c.name), c) for c in customers], stats)
-    except Exception:
-        cust = None
-    groups = {"panels": [], "inverter": [], "other": []}
-    if cust is not None:
-        for line in cust.lines.all():
-            if not (line.quantity or 0):
-                continue
-            name = (line.name or "").lower()
-            key = "panels" if ("panel" in name or "module" in name) else ("inverter" if "inverter" in name else "other")
-            text = " ".join(x for x in (line.name, line.make) if x)
-            groups[key].append({"text": "%s - %s %s" % (text, _qty(line.quantity), line.unit or ""), "delivered": ticks[key] or line.store_status == "done"})
-    else:                                                    # no material list yet: the three main parts from the project
-        if w.panel_make or w.panel_count:
-            groups["panels"].append({"text": " x ".join(str(x) for x in (w.panel_count, w.panel_make) if x), "delivered": ticks["panels"]})
-        if w.inverter_make:
-            groups["inverter"].append({"text": w.inverter_make, "delivered": ticks["inverter"]})
-        groups["other"].append({"text": "Structure, cables and fittings" if t is TEXT["en"] else "സ്ട്രക്ചർ, കേബിളുകൾ, മറ്റ് സാധനങ്ങൾ", "delivered": ticks["other"]})
-    out = []
-    for key, label in (("panels", t["m_panels"]), ("inverter", t["m_inverter"]), ("other", t["m_other"])):
-        items = groups[key]
-        if items:
-            out.append({"label": label, "delivered": all(i["delivered"] for i in items), "items": items,
-                        "n_done": sum(1 for i in items if i["delivered"])})
-    return out
+    """What is delivered and what is pending, for the customer: the five material items the project team ticks (structure material, panels, BOS kit, inverter, net meter).
+    -> [{label, delivered, items: [{text, delivered}]}]"""
+    en = t is TEXT["en"]
+    items = []
+    for key, _label, _wt in project_work.MATERIAL_ITEMS:
+        name = MATERIAL_NAMES[key][0 if en else 1]
+        extra = {"panel_done": " x ".join(str(x) for x in (w.panel_count, w.panel_make) if x), "inverter_done": w.inverter_make or ""}.get(key, "")
+        items.append({"text": name + (" - " + extra if extra else ""), "delivered": bool(getattr(w, key)) or w.material_dispatched is True})
+    return [{"label": "Material" if en else "സാധനങ്ങൾ", "delivered": all(i["delivered"] for i in items), "items": items, "n_done": sum(1 for i in items if i["delivered"])}]
 
 
 def ensure_token(w):
