@@ -25,7 +25,7 @@ def same(a, b):
     if not ta or not tb:
         return False
     ja, jb = "".join(ta), "".join(tb)
-    if ja == jb or "".join(sorted(ta)) == "".join(sorted(tb)):
+    if ja == jb or "".join(sorted(ta)) == "".join(sorted(tb)) or (len(ja) >= 6 and sorted(ja) == sorted(jb)):
         return True
     sh, lg = (ta, tb) if len(ja) <= len(jb) else (tb, ta)
     if len("".join(sh)) >= 5 and "".join(sh) in "".join(lg):
@@ -110,5 +110,12 @@ class Command(BaseCommand):
         for c in cols:
             if c.pk not in linked_ids:
                 self.stdout.write("   NO PROJECT  payment row '%s' (%s, %s): no project of this name is linked to it" % (c.customer, c.project_id, money(c)))
+                cand = [w for w in works if same(c.customer, w.name)]
+                for w in cand:
+                    self.stdout.write("        same name: project %s '%s' (%s)  payment row now: %s" % (w.project_id or "no id", w.name, w.project_stage or "-", w.collection.customer if w.collection_id else "none"))
+                if not cand:
+                    near = [w for w in works if w.project_id == c.project_id or (c.project_id and w.project_id and w.project_id[-3:] == c.project_id[-3:] and w.project_id[:4] == c.project_id[:4])]
+                    for w in near[:3]:
+                        self.stdout.write("        same number: project %s '%s'" % (w.project_id, w.name))
         self.stdout.write(self.style.SUCCESS("%d payment rows %s the workbook's number, %d kept theirs." % (len(todo), "would take" if dry else "took", blocked)))
         self.stdout.write(self.style.SUCCESS("%s: %d moved, %d newly linked, %d to check by hand." % ("DRY RUN, nothing saved" if dry else "Done", moved, linked, checked)))
