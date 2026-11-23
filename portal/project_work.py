@@ -367,6 +367,7 @@ def _rows_for(request):
                      "now_key": stage_now(w)[0], "now": stage_now(w)[1], "next": stage_now(w)[2], "owner": _owner(w), "name": w.collection.customer if (w.collection_id and w.collection.customer) else w.name, "qv": qv, "bank": bank_wait, "bank_late": bank_late, "clocks": kseb_clocks(w, today), "warranty": warranty_end(w),
                      "kseb_done": kseb_steps(w)[1], "kseb_next": kseb_steps(w)[2],
                      "mat": material_pct(w, cust), "work": work_pct(w), "paper": paper_pct(w), "hand": handover_pct(w)})
+    rows.sort(key=lambda r: (r["w"].booking_date or r["w"].commission_date or datetime.date.min, r["w"].project_id or ""), reverse=True)      # the latest won project first; no date last
     return rows
 
 
@@ -405,7 +406,7 @@ def progress(request):
     if tab == "risk":
         shown.sort(key=lambda r: -r["ex"]["gap"])
     elif tab == "live":
-        shown.sort(key=lambda r: (r["w"].booking_date or datetime.date.min, r["w"].project_id or ""), reverse=True)      # the last won project first
+        shown.sort(key=lambda r: (r["w"].booking_date or r["w"].commission_date or datetime.date.min, r["w"].project_id or ""), reverse=True)      # the last won project first
     elif tab in ("finished", "docs"):
         shown.sort(key=lambda r: (r["w"].commission_date or datetime.date.min), reverse=True)
     more = len(shown) > 120 and request.GET.get("all") != "1"
