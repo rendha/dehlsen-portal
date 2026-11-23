@@ -1,0 +1,69 @@
+{% extends "portal/base.html" %}
+{% block title %}Lead report · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.seg{display:inline-flex;border:1px solid var(--blue);border-radius:10px;overflow:hidden;margin:0 0 10px}.seg a{padding:8px 16px;text-decoration:none;font-size:14px;font-weight:700;background:#fff;color:var(--blue)}.seg a.on{background:var(--blue);color:#fff}
+.nav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}.nav a,.nav button{background:#fff;border:1px solid var(--line);color:var(--ink);padding:7px 12px;border-radius:10px;text-decoration:none;font:inherit;font-size:13px;cursor:pointer}
+.nav input,.nav select{margin:0;padding:7px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:13px;width:auto}
+.box{background:#fff;border-radius:14px;padding:14px;margin:0 0 12px;box-shadow:0 2px 10px rgba(30,50,80,.06)}
+.box h2{font-size:15px;margin:0 0 8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}.stat .l{color:var(--mut);font-size:12px}.stat .v{font-size:24px;font-weight:700}.stat .d{font-size:11px;color:var(--mut)}.d.up{color:#1f7a43}.d.down{color:#b02a1c}
+.tb{width:100%;border-collapse:collapse}.tb th,.tb td{padding:8px 6px;border-bottom:1px solid var(--line);font-size:13px;text-align:center}.tb th:first-child,.tb td:first-child{text-align:left}.tb th{font-size:11px;color:var(--mut);text-transform:uppercase}
+.wrap{overflow-x:auto}.muted{color:var(--mut);font-size:12px}
+.p{display:inline-block;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}.p.hot{background:#fde8e8;color:#b02f2f}.p.medium{background:#fff3e0;color:#b35a08}.p.cold{background:#e8f1fb;color:#2a5a95}
+.bar{display:inline-block;height:9px;background:#3B73B9;border-radius:5px;vertical-align:middle}
+.alert{background:#fdecea;color:#b02a1c;border-radius:10px;padding:6px 10px;margin:4px 0;font-size:13px}
+.won{color:#1f7a43;font-weight:700}.lost{color:#666}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Lead report</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'leads' %}">&lsaquo; Leads</a></div>
+
+<div class="seg"><a href="?p=day" class="{% if kind == 'day' %}on{% endif %}">Daily</a><a href="?p=week" class="{% if kind == 'week' %}on{% endif %}">Weekly</a><a href="?p=month" class="{% if kind == 'month' %}on{% endif %}">Monthly</a></div>
+
+<form class="nav" method="get">
+<input type="hidden" name="p" value="{{ kind }}">
+<a href="{{ prev_q }}{% if who %}&who={{ who }}{% endif %}">&lsaquo; Previous</a>
+{% if kind == 'day' %}<a href="?p=day&date={{ today|date:'Y-m-d' }}">Today</a>
+<input type="date" name="from" value="{{ first|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"><span class="muted">to</span><input type="date" name="to" value="{{ last|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+{% elif kind == 'week' %}<a href="?p=week">This week</a><input type="date" name="date" value="{{ first|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+{% else %}<a href="?p=month">This month</a><input type="month" name="month" value="{{ month }}" max="{{ today|date:'Y-m' }}">{% endif %}
+{% if head and staff %}<select name="who"><option value="">Everybody</option>{% for id, name in staff %}<option value="{{ id }}" {% if who == id|stringformat:'s' %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>{% endif %}
+<button type="submit">Show</button>
+{% if next_q %}<a href="{{ next_q }}{% if who %}&who={{ who }}{% endif %}">Next &rsaquo;</a>{% endif %}
+<a href="?p={{ kind }}&{% if kind == 'month' %}month={{ month }}{% elif kind == 'week' %}date={{ first|date:'Y-m-d' }}{% else %}from={{ first|date:'Y-m-d' }}&to={{ last|date:'Y-m-d' }}{% endif %}{% if who %}&who={{ who }}{% endif %}&csv=1">Download Excel (CSV)</a>
+</form>
+
+<div class="box">
+<div class="muted">{{ label }}</div>
+<div class="stats" style="margin-top:8px">
+{% for s in stats %}<div class="stat"><div class="l">{{ s.name }}</div><div class="v">{{ s.value }}</div><div class="d {% if s.diff > 0 %}up{% elif s.diff < 0 %}down{% endif %}">{% if s.diff > 0 %}+{{ s.diff }}{% elif s.diff < 0 %}{{ s.diff }}{% else %}same{% endif %} vs before ({{ s.prev }})</div></div>{% endfor %}
+<div class="stat"><div class="l">Win rate</div><div class="v">{{ win_rate }}</div><div class="d">won of won + lost</div></div>
+</div>
+</div>
+
+{% if head %}<div class="box"><h2>By person</h2><div class="wrap"><table class="tb">
+<thead><tr><th>Person</th><th>New</th><th>Hot</th><th>Med</th><th>Cold</th>{% for k, l in kinds %}<th>{{ l }}</th>{% endfor %}</tr></thead>
+<tbody>{% for p in people %}<tr><td><b>{{ p.name }}</b></td><td>{{ p.new }}</td><td>{{ p.hot }}</td><td>{{ p.medium }}</td><td>{{ p.cold }}</td><td>{{ p.call }}</td><td>{{ p.visit }}</td><td>{{ p.quote }}</td><td>{{ p.passed }}</td><td class="won">{{ p.won }}</td><td>{{ p.lost }}</td></tr>
+{% empty %}<tr><td colspan="11" class="muted">Nothing happened in this period.</td></tr>{% endfor %}</tbody></table></div>
+<p class="muted" style="margin:6px 0 0">New = leads entered by the person. The other columns count what the person did on a lead in this period (a lead is counted once per person).</p></div>{% endif %}
+
+{% if days %}<div class="box"><h2>Day by day</h2><div class="wrap"><table class="tb">
+<thead><tr><th>Day</th><th>New leads</th><th></th><th>Won</th><th>Lost</th></tr></thead>
+<tbody>{% for d in days %}<tr><td>{{ d.date|date:"D d M" }}</td><td>{{ d.new }}</td><td style="text-align:left"><i class="bar" style="width:{{ d.bar }}px"></i></td><td class="won">{{ d.won|default:"" }}</td><td>{{ d.lost|default:"" }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+
+{% if won_list %}<div class="box"><h2>Won ({{ won_list|length }})</h2>
+{% for w in won_list %}<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>{{ w.lead.customer_name }}</b> <span class="muted">{{ w.lead.lead_no }} &middot; {{ w.lead.area }} &middot; {{ w.when|date:"d M H:i" }}{% if w.by %} &middot; by {{ w.by }}{% endif %}</span></div>{% endfor %}</div>{% endif %}
+
+{% if lost_list %}<div class="box"><h2>Lost ({{ lost_list|length }})</h2>
+{% for w in lost_list %}<div style="padding:6px 0;border-bottom:1px solid var(--line)"><b>{{ w.lead.customer_name }}</b> <span class="muted">{{ w.lead.lead_no }} &middot; {{ w.when|date:"d M H:i" }}{% if w.lead.lost_reason %} &middot; {{ w.lead.lost_reason }}{% endif %}</span></div>{% endfor %}</div>{% endif %}
+
+<div class="box"><h2>New leads ({{ new_leads|length }})</h2><div class="wrap"><table class="tb">
+<thead><tr><th>Customer</th><th>When</th><th>Place</th><th>Priority</th><th>Entered by</th><th>Given to</th></tr></thead>
+<tbody>{% for l in new_leads %}<tr><td><b>{{ l.customer_name }}</b><div class="muted">{{ l.lead_no }}{% if l.phone %} &middot; {{ l.phone }}{% endif %}</div></td><td>{{ l.created_at|date:"d M H:i" }}</td><td>{{ l.area }}</td><td><span class="p {{ l.priority }}">{{ l.get_priority_display }}</span></td><td>{{ l.entered_by.get_full_name|default:l.entered_by.username }}</td><td>{% if l.assigned_to %}{{ l.assigned_to.get_full_name|default:l.assigned_to.username }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">No new lead in this period.</td></tr>{% endfor %}</tbody></table></div></div>
+
+<div class="box"><h2>Pipeline today</h2>
+<div class="stats"><div class="stat"><div class="l">Open leads</div><div class="v">{{ pipeline.open }}</div></div><div class="stat"><div class="l">Hot</div><div class="v">{{ pipeline.hot }}</div></div><div class="stat"><div class="l">Medium</div><div class="v">{{ pipeline.medium }}</div></div><div class="stat"><div class="l">Cold</div><div class="v">{{ pipeline.cold }}</div></div><div class="stat"><div class="l">Open for 7+ days</div><div class="v">{{ pipeline.stale }}</div></div></div>
+{% for l in pipeline.visit_late %}<div class="alert">Site visit date passed: <b>{{ l.customer_name }}</b> ({{ l.lead_no }}) - was due {{ l.site_visit_by|date:"d M" }}</div>{% endfor %}
+{% for l in pipeline.quote_late %}<div class="alert">Quotation date passed: <b>{{ l.customer_name }}</b> ({{ l.lead_no }}) - was due {{ l.quotation_by|date:"d M" }}</div>{% endfor %}
+</div>
+</div>{% endblock %}

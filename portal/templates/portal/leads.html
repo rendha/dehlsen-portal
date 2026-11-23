@@ -29,7 +29,7 @@
 .ldate{display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border-radius:8px;background:#eef2f7;color:#445}.ldate.soon{background:#fff0dd;color:#b35a08;font-weight:700}.ldate.late{background:#fdecea;color:#b02a1c;font-weight:700}.ldate.done{background:#e3f5ea;color:#1f7a43}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div>{% if head %}<a class="pill" href="{% url 'lead_unlinked' %}">Old quotations</a> {% endif %}<a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+<div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'lead_report' %}">Report</a> {% if head %}<a class="pill" href="{% url 'lead_unlinked' %}">Old quotations</a> {% endif %}<a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
 {% for m in messages %}<div class="note ok">{{ m }}</div>{% endfor %}
 <a class="btn o auto" href="{% url 'lead_new' %}" style="margin-bottom:14px;display:block;text-align:center;text-decoration:none">+ Add a lead</a>
 
