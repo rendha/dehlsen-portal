@@ -24,7 +24,19 @@ def alike(a, b):
 class Command(BaseCommand):
     help = "Read-only: list projects that look mixed up (name from one customer, details from another)."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--find", default="", help="show every project that has this word in any field, e.g. --find rayees")
+
     def handle(self, *args, **options):
+        word = (options.get("find") or "").strip().lower()
+        if word:
+            for w in ProjectWork.objects.select_related("collection"):
+                blob = " ".join(str(getattr(w, f.name) or "") for f in ProjectWork._meta.fields).lower()
+                if word in blob:
+                    self.stdout.write("%-12s | %s | ph %s | %s | email %s | place %s | stage %s | booked %s | consumer %s | payment row: %s" % (
+                        w.project_id or "no id", w.name, w.phone, (w.site_address or "")[:45], w.email, w.location, w.project_stage, w.booking_date, w.kseb_consumer_no,
+                        ("%s %s" % (w.collection.project_id, w.collection.customer)) if w.collection_id else "none"))
+            return
         data = json.loads((Path(__file__).resolve().parents[2] / "data" / "master_seed.json").read_text(encoding="utf-8"))
         works = list(ProjectWork.objects.select_related("collection"))
         by_id = {w.project_id: w for w in works if w.project_id}

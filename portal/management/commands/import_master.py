@@ -55,6 +55,14 @@ class Command(BaseCommand):
             if not name:
                 continue
             w, why = finder.find(pid, r, works, by_id, by_cname, by_phone, collections, [])
+            # matched WITHOUT the project id: refuse when the names are unlike (same phone only) or when both have a phone and the phones differ (two people with one name)
+            if w is not None and w.project_id != pid and not str(why).startswith("payment sheet"):
+                p1, p2 = last10(r.get("phone", "")), last10(w.phone)
+                ka, kb = compact(name), compact(w.name)
+                alike = same_person(name, w.name) or (ka and kb and (ka in kb or kb in ka or SequenceMatcher(None, ka, kb).ratio() >= 0.75))
+                if (why == "same phone" and not alike) or (p1 and p2 and p1 != p2):
+                    self.stdout.write("   skip  %s  %s  !=  %s %s  (%s) - not the same customer" % (pid, name, w.project_id or "no id", w.name, why or "same name"))
+                    w = None
             # a guessed (name / phone) match is refused when that portal project already has a DIFFERENT project id or was already taken by another row
             if w is not None and why and ((w.project_id and w.project_id != pid) or id(w) in claimed):
                 self.stdout.write("   skip  %s  %s  !=  %s %s  (%s) - treated as a different project" % (pid, name, w.project_id, w.name, why))
