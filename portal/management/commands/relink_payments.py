@@ -33,7 +33,7 @@ def same(a, b):
     sig = [t for t in sh if len(t) >= 3]
     if not sig:
         return False
-    return all(any(t == u or SequenceMatcher(None, t, u).ratio() >= 0.7 for u in lg) for t in sig)
+    return all(any(t == u or (t[0] == u[0] and SequenceMatcher(None, t, u).ratio() >= 0.7) for u in lg) for t in sig)
 
 
 class Command(BaseCommand):
@@ -106,5 +106,9 @@ class Command(BaseCommand):
                     Collection.objects.filter(pk=c.pk).update(project_id="TMP-%d" % c.pk)
                 for c, new in todo:
                     Collection.objects.filter(pk=c.pk).update(project_id=new)
+        linked_ids = {w.collection_id for w in works if w.collection_id}
+        for c in cols:
+            if c.pk not in linked_ids:
+                self.stdout.write("   NO PROJECT  payment row '%s' (%s, %s): no project of this name is linked to it" % (c.customer, c.project_id, money(c)))
         self.stdout.write(self.style.SUCCESS("%d payment rows %s the workbook's number, %d kept theirs." % (len(todo), "would take" if dry else "took", blocked)))
         self.stdout.write(self.style.SUCCESS("%s: %d moved, %d newly linked, %d to check by hand." % ("DRY RUN, nothing saved" if dry else "Done", moved, linked, checked)))
