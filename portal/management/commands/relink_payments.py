@@ -80,6 +80,16 @@ class Command(BaseCommand):
             if c.pk in taken:
                 continue
             hits = [w for w in works if not w.collection_id and same(c.customer, w.name)]
+            if len(hits) > 1 and c.project_id:                       # the same financial year as the payment row's number
+                fy = [w for w in hits if (w.project_id or "")[:7] == c.project_id[:7]]
+                hits = fy or hits
+            if len(hits) > 1:                                       # then the closest spelling
+                best = max(SequenceMatcher(None, "".join(toks(c.customer)), "".join(toks(w.name))).ratio() for w in hits)
+                top = [w for w in hits if SequenceMatcher(None, "".join(toks(c.customer)), "".join(toks(w.name))).ratio() >= best - 0.0001]
+                if len(top) == 1:
+                    hits = top
+                else:
+                    self.stdout.write("   AMBIGUOUS payment row '%s' (%s): %s" % (c.customer, c.project_id, ", ".join("%s %s" % (w.project_id or "no id", w.name) for w in hits)))
             if len(hits) == 1:
                 w = hits[0]
                 self.stdout.write("   LINK   %-12s %-28s <- payment row '%s' (%s, %s)" % (w.project_id or "no id", w.name[:28], c.customer, c.project_id, money(c)))
