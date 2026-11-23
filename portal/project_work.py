@@ -142,38 +142,45 @@ def kseb_steps(w):
     return rows, sum(1 for r in rows if r["done"]), nxt
 
 
-MATERIAL_TICKS = ("bos", "inverter_done", "panel_done")
-WORK_TICKS = ("site_estimation", "design", "structure", "electrical", "inv_program", "testing")
+MATERIAL_ITEMS = [("structure_mat", "Structure material", 20), ("panel_done", "Panel delivery", 30), ("bos", "BOS kit", 20), ("inverter_done", "Inverter delivery", 20), ("meter_mat", "Net meter", 10)]
+WORK_ITEMS = [("site_estimation", "Site estimation", 5), ("design", "Design", 5), ("structure", "Structure work", 15), ("panel_mount", "Panel mounting", 25), ("electrical", "Electrical work", 20),
+              ("earthing", "Earthing work", 10), ("meter_fix", "Net meter fixing", 10), ("testing", "Testing / programming / inspection", 10)]
+PAPER_ITEMS = [("kp_feas", "KSEB feasibility", 30), ("kp_docs", "Document submission", 40), ("kp_meter", "Net meter submission", 20), ("kp_comm", "Commissioning", 10)]
+NEW_KEYS = ("structure_mat", "meter_mat", "panel_mount", "earthing")
+PAPER_KEYS = tuple(k for k, _l, _w in PAPER_ITEMS)
+WORK_GATE = WORK_GATE + NEW_KEYS
 
 
-def material_pct(w, cust):
-    """How much of the material is delivered.  From the store's list (value of the items the store marked Done) when the customer is in the store;
-    else from the three material ticks (BOS, inverter, panel)."""
-    if cust is not None:
-        lines = [l for l in cust.lines.all() if l.quantity > 0]
-        total = sum((l.amount for l in lines), 0)
-        if lines and total > 0:
-            done = [l for l in lines if l.store_status == "done"]
-            sent = sum((l.amount for l in done), 0)
-            return {"pct": int(round(float(sent) * 100 / float(total))), "text": "%d of %d items dispatched" % (len(done), len(lines))}
-    n = sum(1 for k in MATERIAL_TICKS if getattr(w, k))
-    return {"pct": int(round(n * 100 / len(MATERIAL_TICKS))), "text": "%d of 3 (BOS, inverter, panel)" % n}
+def paper_done(w, key):
+    if key == "kp_feas":
+        return bool(w.feasibility_date) or w.feasibility == "ok"
+    if key == "kp_docs":
+        return bool(kseb_date(w, "docs"))
+    if key == "kp_meter":
+        return bool(kseb_date(w, "netmeter_app"))
+    return w.commissioned
+
+
+def _weighted(w, items, done=None):
+    rows = [{"key": k, "label": l, "weight": wt, "on": bool(done(k) if done else getattr(w, k))} for k, l, wt in items]
+    pct = sum(r["weight"] for r in rows if r["on"])
+    left = [r["label"] for r in rows if not r["on"]]
+    return {"pct": pct, "items": rows, "text": ("%d of %d done" % (sum(1 for r in rows if r["on"]), len(rows))) + ((" \u00b7 left: " + ", ".join(left[:2]) + ("..." if len(left) > 2 else "")) if left else "")}
+
+
+def material_pct(w, cust=None):
+    """Material delivered: structure material 20, panels 30, BOS kit 20, inverter 20, net meter 10 (percent of each ticked item added)."""
+    return _weighted(w, MATERIAL_ITEMS)
 
 
 def work_pct(w):
-    """Site work only: estimation, design, structure, electrical, inverter programming, testing."""
-    n = sum(1 for k in WORK_TICKS if getattr(w, k))
-    return {"pct": int(round(n * 100 / len(WORK_TICKS))), "text": "%d of %d work stages" % (n, len(WORK_TICKS))}
+    """Site work: estimation 5, design 5, structure 15, panel mounting 25, electrical 20, earthing 10, net meter fixing 10, testing/programming/inspection 10."""
+    return _weighted(w, WORK_ITEMS)
 
 
 def paper_pct(w):
-    """KSEB and PM Surya Ghar paperwork: application, documents, feasibility, registration fee, inspection, net meter, certificate, subsidy.
-    The subsidy step is left out for a 'no subsidy' customer."""
-    steps = kseb_steps(w)[0]
-    if "no subsidy" in (w.scheme or "").lower():
-        steps = [s for s in steps if s["key"] != "subsidy"]
-    n = sum(1 for s in steps if s["done"])
-    return {"pct": int(round(n * 100 / len(steps))), "text": "%d of %d KSEB steps" % (n, len(steps))}
+    """KSEB paperwork: feasibility 30, document submission 40, net meter submission 20, commissioning 10."""
+    return _weighted(w, PAPER_ITEMS, lambda k: paper_done(w, k))
 
 
 def handover_pct(w):
@@ -375,7 +382,7 @@ def progress(request):
     user = request.user
     editor, director = can_edit(user), _director(user)
     rows = _rows_for(request)
-    tab = request.GET.get("tab") if request.GET.get("tab") in dict(TABS) else "all"
+    tab = request.GET.get("tab") if request.GET.get("tab") in dict(TABS) else "live"      # the page opens on the Live tab (one row per stage)
     q = (request.GET.get("q") or "").strip().lower()
     counts = {"risk": sum(1 for r in rows if r["risk"]), "bank": sum(1 for r in rows if r["bank"]),
               "live": sum(1 for r in rows if not r["finished"]), "finished": sum(1 for r in rows if r["finished"]), "docs": sum(1 for r in rows if r["docs"]),
@@ -409,8 +416,15 @@ def progress(request):
         shown.sort(key=lambda r: (r["w"].booking_date or r["w"].commission_date or datetime.date.min, r["w"].project_id or ""), reverse=True)      # the last won project first
     elif tab in ("finished", "docs"):
         shown.sort(key=lambda r: (r["w"].commission_date or datetime.date.min), reverse=True)
-    more = len(shown) > 120 and request.GET.get("all") != "1"
-    return render(request, "portal/progress.html", {
+    grouped, groups = (tab == "live" and not ff and not stage), []
+    if grouped:                                   # the Live tab: one row per stage with its customers (the latest booking first)
+        order = [s for s in STAGES15 if s not in ("Not Updated", "On Hold", "Cancelled", "Commissioned")] + ["Not Updated", "On Hold", "Cancelled", "Commissioned"]
+        by_stage = {}
+        for r in shown:
+            by_stage.setdefault(stage_of(r["w"]), []).append(r)
+        groups = [{"stage": s, "rows": by_stage[s]} for s in order if s in by_stage]
+    more = (not grouped) and len(shown) > 120 and request.GET.get("all") != "1"
+    return render(request, "portal/progress.html", {"grouped": grouped, "groups": groups,
         "rows": shown[:120] if more else shown, "f_label": FILTERS[ff][0] if ff else "", "f": ff, "st": st_pick, "stage_chips": stage_chips, "work_chips": work_chips, "tab_label": dict(TABS)[tab] if tab != "all" else "", "more": more, "total_shown": len(shown), "tabs": [(k, l, counts[k]) for k, l in TABS], "tab": tab, "q": q,
         "editor": editor, "director": director, "risk_total": risk_total, "red_limit": EXPOSURE_RED, "stages": ProjectWork.STAGES, "stage": stage, "feas_choices": ProjectWork.FEASIBILITY})
 
@@ -446,13 +460,27 @@ def progress_update(request, pk):
         messages.warning(request, "Only Fidha, Riswan and the directors can update a project.")
         return redirect(back)
     stage = P.get("stage")
-    if stage in STAGE_KEYS:
+    if stage in PAPER_KEYS:
+        today, on = timezone.localdate(), paper_done(w, stage)
+        kseb = dict(w.kseb or {})
+        if stage == "kp_feas":
+            w.feasibility_date, w.feasibility = (None, "") if on else (today, "ok")
+        elif stage == "kp_docs":
+            kseb.pop("docs", None) if on else kseb.__setitem__("docs", today.isoformat())
+        elif stage == "kp_meter":
+            kseb.pop("netmeter_app", None) if on else kseb.__setitem__("netmeter_app", today.isoformat())
+        else:
+            w.commission_date = None if on else today
+        w.kseb = kseb
+    elif stage in STAGE_KEYS or stage in NEW_KEYS:
         if not getattr(w, stage):
             why = gate_message(w, stage)
             if why:
                 messages.warning(request, why)
                 return redirect(back + "#p%d" % w.pk)
         setattr(w, stage, not getattr(w, stage))
+        if stage == "testing" and w.testing:
+            w.inv_program = True
         if w.testing and w.meter_fix and not w.commission_date:
             w.commission_date = timezone.localdate()
     else:

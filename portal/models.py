@@ -387,6 +387,11 @@ class ProjectWork(models.Model):
     inv_program = models.BooleanField("inverter programming", default=False)
     testing = models.BooleanField(default=False)
     meter_fix = models.BooleanField(default=False)
+    # extra weighted items of the Material delivered / Site work bars
+    structure_mat = models.BooleanField("structure material delivered", default=False)
+    meter_mat = models.BooleanField("net meter delivered", default=False)
+    panel_mount = models.BooleanField("panel mounting", default=False)
+    earthing = models.BooleanField("earthing work", default=False)
 
     wifi = models.BooleanField("Wi-Fi connected", null=True, blank=True)
     work_status = models.CharField(max_length=300, blank=True, help_text="What is holding it / where it is, e.g. waiting for documentation")

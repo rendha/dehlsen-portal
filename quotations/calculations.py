@@ -86,6 +86,7 @@ BOS_AMOUNTS = {
     (Decimal("4"), None): Decimal("10000"),          # 4 kW uses the 3 kW BOS amount (change this number to change it)
     (Decimal("5"), "1PH"): Decimal("12000"),
     (Decimal("5"), "3PH"): Decimal("15000"),
+    (Decimal("7"), None): Decimal("13000"),           # 7 kW uses the same BOS amount as 8 kW (its inverter is the 8 kW one) - change this number to change it
     (Decimal("8"), None): Decimal("13000"),
     (Decimal("10"), None): Decimal("13000"),          # 10 kW uses the same BOS amount as 8 kW
 }
@@ -176,6 +177,19 @@ def plain_number(value):
     if d == d.to_integral_value():
         return str(int(d))
     return format(d.normalize(), "f")
+
+
+INVERTER_STANDARD_KW = (3, 4, 5, 8, 10)          # the inverter sizes that are sold
+
+
+def default_inverter_kw(system_size):
+    """The inverter that goes with a plant unless it is changed: the smallest standard inverter that is not smaller than the plant
+    (3 -> 3, 4 -> 4, 5 -> 5, 6 and 7 -> 8, 8 -> 8, 10 -> 10).  A plant above 10 kW gets its own size."""
+    size = decimal_or_zero(system_size)
+    for kw in INVERTER_STANDARD_KW:
+        if kw >= size:
+            return Decimal(kw)
+    return size
 
 
 def bos_amount_for(system_size, phase_token):
@@ -649,7 +663,7 @@ def _compute(quotation):
     selected = {"inverter_type": clean_text(quotation.inverter_type), "dc_cable": clean_text(quotation.dc_cable),
                 "ac_wire": clean_text(quotation.ac_wire)}
 
-    inverter_kw = decimal_or_zero(quotation.inverter_kw) or Decimal(quotation.system_size or 0)
+    inverter_kw = decimal_or_zero(quotation.inverter_kw) or default_inverter_kw(quotation.system_size)
     micro_name = ""
     if selected["inverter_type"].lower() == "other":
         rate = decimal_or_zero(quotation.inverter_rate)

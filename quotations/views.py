@@ -22,6 +22,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from .calculations import (
+    default_inverter_kw,
     labour_amounts,
     material_list,
     PANEL_SHORTFALL_ALLOWED_PERCENT,
@@ -376,6 +377,7 @@ def create_quotation(request):
         structure_type=structure_type,
         system_type=system_type,
         capacity=system_size_raw,
+        inverter_kw=default_inverter_kw(system_size),           # 7 kW plant -> the 8 kW inverter
         date=timezone.localdate(),
         validity_days=15,
 
@@ -646,7 +648,7 @@ def quotation_detail(request, quotation_id):
 
         # ---- inverter ----
         inverter_kw_raw = clean_text(request.POST.get("inverter_kw"))
-        quotation.inverter_kw = decimal_or_zero(inverter_kw_raw) if inverter_kw_raw else quotation.system_size
+        quotation.inverter_kw = decimal_or_zero(inverter_kw_raw) if inverter_kw_raw else default_inverter_kw(quotation.system_size)
 
         inverter_type = clean_text(request.POST.get("inverter_type"))
         quotation.inverter_type = inverter_type

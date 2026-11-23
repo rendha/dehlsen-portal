@@ -58,7 +58,7 @@ def _done(w, key, today):
     """The progress screen's 'Panel' and 'Inverter' ticks mean the MATERIAL has arrived, not that it is mounted or fitted,
     so the customer's mounting / installation steps are read from the work that follows them."""
     if key == "loan_approval":
-        return bool(w.loan_sanctioned_on)
+        return bool(w.loan_sanctioned_on or w.bank1_received_on)       # the bank paid the first part: it was approved
     if key == "bank1":
         return bool(w.bank1_received_on)
     if key == "bank2":
