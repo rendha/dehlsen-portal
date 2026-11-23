@@ -405,7 +405,7 @@ def progress(request):
     if tab == "risk":
         shown.sort(key=lambda r: -r["ex"]["gap"])
     elif tab == "live":
-        shown.sort(key=lambda r: (-r["w"].progress, r["w"].name.lower()))
+        shown.sort(key=lambda r: (r["w"].booking_date or datetime.date.min, r["w"].project_id or ""), reverse=True)      # the last won project first
     elif tab in ("finished", "docs"):
         shown.sort(key=lambda r: (r["w"].commission_date or datetime.date.min), reverse=True)
     more = len(shown) > 120 and request.GET.get("all") != "1"
