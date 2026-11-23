@@ -20,11 +20,16 @@ def toks(s):
     return re.findall(r"[a-z0-9]+", (s or "").lower())
 
 
+ALIAS = set()
+
+
 def same(a, b):
     ta, tb = toks(a), toks(b)
     if not ta or not tb:
         return False
     ja, jb = "".join(ta), "".join(tb)
+    if (ja, jb) in ALIAS or (jb, ja) in ALIAS:
+        return True
     if ja == jb or "".join(sorted(ta)) == "".join(sorted(tb)) or (len(ja) >= 6 and sorted(ja) == sorted(jb)):
         return True
     sh, lg = (ta, tb) if len(ja) <= len(jb) else (tb, ta)
@@ -41,10 +46,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--same", action="append", default=[], help='two names that are the same customer, e.g. --same "SATHEESH STAFF=SATHEESH KUMAR P K"')
+        parser.add_argument("--renumber", action="append", default=[], help='give a payment row a number of your choice, e.g. --renumber "SIDHIQUE PUTHIYAGHADI=DH26-27/174"')
         parser.add_argument("--unlink", action="store_true", help="also take off a wrong link when the customer has no payment row of its own")
 
     def handle(self, *args, **options):
         dry, unlink_too = options["dry_run"], options["unlink"]
+        for pair in options["same"]:
+            if "=" in pair:
+                x, y = pair.split("=", 1)
+                ALIAS.add(("".join(toks(x)), "".join(toks(y))))
         works = list(ProjectWork.objects.select_related("collection"))
         cols = list(Collection.objects.all())
         moved = checked = linked = 0
@@ -100,16 +111,28 @@ class Command(BaseCommand):
                     w.save(update_fields=["collection"])
         # the workbook is the main list: the payment row gets the number of its project
         plan = [(w.collection, w.project_id) for w in works if w.collection_id and w.project_id and w.collection.project_id != w.project_id and same(w.collection.customer, w.name)]
-        moving = {c.pk for c, _n in plan}
-        held = {c.project_id: c for c in cols if c.pk not in moving}
-        todo, blocked = [], 0
-        for c, new in plan:
-            if new in held:
-                blocked += 1
-                self.stdout.write("   NUMBER %-12s payment row '%s' keeps %s: that number is held by the payment row '%s'" % (new, c.customer, c.project_id, held[new].customer))
-            else:
-                self.stdout.write("   NUMBER payment row '%-26s' %s  ->  %s" % (c.customer[:26], c.project_id, new))
-                todo.append((c, new))
+        for pair in options["renumber"]:
+            if "=" in pair:
+                x, y = pair.split("=", 1)
+                for c in cols:
+                    if "".join(toks(c.customer)) == "".join(toks(x)) and c.project_id != y.strip():
+                        plan.append((c, y.strip()))
+        stay = {c.pk for c in cols} - {c.pk for c, _n in plan}      # rows that keep their number
+        todo, shown = list(plan), set()
+        while True:                                              # a row cannot take a number that a staying row holds
+            held = {c.project_id: c for c in cols if c.pk in stay}
+            blockedrows = [(c, n) for c, n in todo if n in held]
+            if not blockedrows:
+                break
+            for c, n in blockedrows:
+                if c.pk not in shown:
+                    shown.add(c.pk)
+                    self.stdout.write("   NUMBER %-12s payment row '%s' keeps %s: that number is held by the payment row '%s'" % (n, c.customer, c.project_id, held[n].customer))
+                stay.add(c.pk)
+            todo = [(c, n) for c, n in todo if c.pk not in stay]
+        blocked = len(shown)
+        for c, new in todo:
+            self.stdout.write("   NUMBER payment row '%-26s' %s  ->  %s" % (c.customer[:26], c.project_id, new))
         if todo and not dry:
             with transaction.atomic():
                 for c, _n in todo:                       # two steps, so two rows can swap numbers
