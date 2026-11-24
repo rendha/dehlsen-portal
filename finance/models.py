@@ -65,6 +65,11 @@ class Proforma(models.Model):
         return sum((p.applied for p in self.payments.filter(invoice__isnull=True)), ZERO)
 
     @property
+    def balance(self):
+        """What is still to be paid on this proforma: its amount less the advance already paid."""
+        return (self.amount or ZERO) - self.advance_paid
+
+    @property
     def invoice(self):
         return self.invoices.first()
 
