@@ -23,9 +23,21 @@ class FileMixin(forms.Form):
 
     def customer_picker(self):
         """Make 'Customer / site' a pick-from-the-list box (you can still type something else)."""
+        from portal.models import Collection
         from store.models import Customer
-        names = sorted({n.strip() for n in Customer.objects.values_list("name", flat=True) if n and n.strip()}, key=str.lower)
-        self.customer_options = names
+        seen, opts = set(), []
+        for name, pid in Collection.objects.order_by("customer").values_list("customer", "project_id"):
+            n = (name or "").strip()
+            if n and (n.lower(), pid) not in seen:
+                seen.add((n.lower(), pid))
+                opts.append((n, pid))
+        have = {n.lower() for n, _ in opts}
+        for name in Customer.objects.order_by("name").values_list("name", flat=True):
+            n = (name or "").strip()
+            if n and n.lower() not in have:
+                have.add(n.lower())
+                opts.append((n, ""))
+        self.customer_options = opts
         if "customer_name" in self.fields:
             self.fields["customer_name"].widget = forms.TextInput(attrs={"list": "fin-customers", "autocomplete": "off", "placeholder": "Start typing a customer name, or pick from the list"})
             self.fields["customer_name"].help_text = "Pick a customer from the list. You can also type a site name that is not a customer."
