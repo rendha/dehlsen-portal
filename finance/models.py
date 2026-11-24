@@ -153,3 +153,16 @@ class Payment(models.Model):
     @property
     def applied(self):
         return (self.amount or ZERO) - (self.fee or ZERO)
+
+
+class Attachment(models.Model):
+    """The vendor's proforma / invoice as a PDF or photo, kept in the database so it survives redeploys."""
+    proforma = models.OneToOneField(Proforma, null=True, blank=True, on_delete=models.CASCADE, related_name="attachment")
+    invoice = models.OneToOneField(Invoice, null=True, blank=True, on_delete=models.CASCADE, related_name="attachment")
+    name = models.CharField(max_length=200)
+    content_type = models.CharField(max_length=60)
+    data = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name

@@ -10,7 +10,7 @@
 <dt>Amount (incl. GST)</dt><dd>&#8377; {{ inv.amount|inr }}</dd><dt>Paid</dt><dd>&#8377; {{ inv.paid|inr }}</dd>
 <dt>Advance deducted</dt><dd>&#8377; {{ inv.advance_applied|inr }}{% if inv.proforma %} (proforma <a href="{% url 'fin_proforma' inv.proforma.pk %}">{{ inv.proforma.number|default:"view" }}</a>){% endif %}</dd>
 <dt>Balance</dt><dd><b>&#8377; {{ inv.balance|inr }}</b>{% if inv.balance < 0 %} (paid more than the bill){% endif %}</dd>
-{% if inv.remarks %}<dt>Remarks</dt><dd>{{ inv.remarks }}</dd>{% endif %}{% if inv.pdf_link %}<dt>PDF</dt><dd><a href="{{ inv.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}
+{% if inv.remarks %}<dt>Remarks</dt><dd>{{ inv.remarks }}</dd>{% endif %}{% if att %}<dt>File</dt><dd><a href="{% url 'fin_file' att.pk %}" target="_blank" rel="noopener">{{ att.name }}</a></dd>{% endif %}{% if inv.pdf_link %}<dt>PDF</dt><dd><a href="{{ inv.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}
 {% if inv.check_note %}<dt>To confirm</dt><dd>{{ inv.check_note }}</dd>{% endif %}</dl>
 {% if edit %}<div class="bar" style="margin-top:12px">
 <form method="post" action="{% url 'fin_invoice_flag' inv.pk %}">{% csrf_token %}<input type="hidden" name="what" value="received"><button class="btn auto w">{% if inv.material_received %}Unmark material received{% else %}Mark material received{% endif %}</button></form>

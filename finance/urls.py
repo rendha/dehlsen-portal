@@ -21,6 +21,7 @@ urlpatterns = [
     path("vendors/<int:pk>/", views.vendor_edit, name="fin_vendor"),
     path("confirm/", views.to_confirm, name="fin_confirm"),
     path("confirm/<str:kind>/<int:pk>/clear/", views.confirm_clear, name="fin_confirm_clear"),
+    path("file/<int:pk>/", views.attachment_file, name="fin_file"),
     path("export/", views.export_payables, name="fin_export"),
     path("receivables/", receivables.receivables, name="fin_receivables"),
     path("receivables/<int:pk>/", receivables.receivable, name="fin_receivable"),

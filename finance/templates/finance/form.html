@@ -1,6 +1,6 @@
 {% extends "finance/base.html" %}
 {% block content %}<div class="card"><h3 style="margin:0 0 6px">{{ title }}</h3>{% if note %}<div class="note">{{ note }}</div>{% endif %}
-<form method="post">{% csrf_token %}{{ form.non_field_errors }}<div class="fgrid">
+<form method="post"{% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}{{ form.non_field_errors }}<div class="fgrid">
 {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label style="display:flex;align-items:center">{{ f }} {{ f.label }}</label>{% else %}{{ f.label_tag }}{{ f }}{% endif %}
 {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}{{ f.errors }}</div>{% endfor %}</div>
 <button class="btn" type="submit">Save</button></form></div>

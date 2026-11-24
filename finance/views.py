@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 from store.views import is_accounts, is_boss, is_project, is_store
 
 from .forms import InvoiceForm, PaymentForm, ProformaForm, VendorForm
-from .models import ZERO, Invoice, Payment, Proforma, Vendor
+from .models import ZERO, Attachment, Invoice, Payment, Proforma, Vendor
 
 
 def can_view(u):
@@ -130,18 +130,20 @@ def proforma_detail(request, pk):
     if not can_view(request.user):
         return _deny()
     pf = get_object_or_404(Proforma.objects.select_related("vendor"), pk=pk)
-    return render(request, "finance/proforma.html", _ctx(request, "proformas", pf=pf, payments=pf.payments.all(), form=PaymentForm(), invoice=pf.invoice))
+    return render(request, "finance/proforma.html", _ctx(request, "proformas", pf=pf, payments=pf.payments.all(), form=PaymentForm(), invoice=pf.invoice,
+                                                                   att=Attachment.objects.filter(proforma=pf).only("id", "name").first()))
 
 
 @login_required
 def proforma_new(request):
     if not can_add_proforma(request.user):
         return _deny("Only Accounts and Store add proformas.")
-    form = ProformaForm(request.POST or None)
+    form = ProformaForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         pf = form.save(commit=False)
         pf.created_by = request.user
         pf.save()
+        form.save_file(pf)
         messages.success(request, "Proforma saved. It waits for approval and is not counted as owed.")
         return redirect("fin_proforma", pk=pf.pk)
     return render(request, "finance/form.html", _ctx(request, "proformas", form=form, title="New proforma (a vendor's request for money)",
@@ -153,9 +155,10 @@ def proforma_edit(request, pk):
     if not can_edit(request.user):
         return _deny("Only Accounts edit proformas.")
     pf = get_object_or_404(Proforma, pk=pk)
-    form = ProformaForm(request.POST or None, instance=pf)
+    form = ProformaForm(request.POST or None, request.FILES or None, instance=pf)
     if request.method == "POST" and form.is_valid():
         form.save()
+        form.save_file(pf)
         return redirect("fin_proforma", pk=pf.pk)
     return render(request, "finance/form.html", _ctx(request, "proformas", form=form, title="Edit proforma"))
 
@@ -198,11 +201,12 @@ def invoice_new(request):
     if pf:
         initial = {"vendor": pf.vendor_id, "proforma": pf.pk, "company": pf.company, "delivery_to": pf.delivery_to, "customer_name": pf.customer_name,
                    "description": pf.description, "amount": pf.amount, "credit_days": pf.vendor.credit_days, "date": timezone.localdate()}
-    form = InvoiceForm(request.POST or None, initial=initial)
+    form = InvoiceForm(request.POST or None, request.FILES or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         inv = form.save(commit=False)
         inv.created_by = request.user
         inv.save()
+        form.save_file(inv)
         if inv.proforma_id:
             Proforma.objects.filter(pk=inv.proforma_id).update(status=Proforma.INVOICED)
         messages.success(request, "Invoice saved.%s" % (" The advance paid on its proforma is deducted." if inv.proforma_id and inv.advance_applied else ""))
@@ -216,9 +220,10 @@ def invoice_edit(request, pk):
     if not can_edit(request.user):
         return _deny()
     inv = get_object_or_404(Invoice, pk=pk)
-    form = InvoiceForm(request.POST or None, instance=inv)
+    form = InvoiceForm(request.POST or None, request.FILES or None, instance=inv)
     if request.method == "POST" and form.is_valid():
         inv = form.save()
+        form.save_file(inv)
         if inv.proforma_id:
             Proforma.objects.filter(pk=inv.proforma_id).update(status=Proforma.INVOICED)
         return redirect("fin_invoice", pk=pk)
@@ -234,7 +239,8 @@ def invoice_detail(request, pk):
     if not can_view(request.user):
         return _deny()
     inv = get_object_or_404(_invoices(), pk=pk)
-    return render(request, "finance/invoice.html", _ctx(request, "payables", inv=inv, payments=inv.payments.all(), form=PaymentForm(initial={"amount": inv.balance if inv.balance > 0 else ""})))
+    return render(request, "finance/invoice.html", _ctx(request, "payables", inv=inv, payments=inv.payments.all(), form=PaymentForm(initial={"amount": inv.balance if inv.balance > 0 else ""}),
+                                                                   att=Attachment.objects.filter(invoice=inv).only("id", "name").first()))
 
 
 @login_required
@@ -333,3 +339,16 @@ def confirm_clear(request, kind, pk):
     if model:
         model.objects.filter(pk=pk).update(check_note="")
     return redirect("fin_confirm")
+
+
+@login_required
+def attachment_file(request, pk):
+    """Open an uploaded proforma / invoice file."""
+    if not can_view(request.user):
+        return _deny()
+    a = get_object_or_404(Attachment, pk=pk)
+    resp = HttpResponse(bytes(a.data), content_type=a.content_type)
+    resp["Content-Disposition"] = 'inline; filename="%s"' % "".join(c for c in a.name if c.isalnum() or c in " ._-")[:100]
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Security-Policy"] = "sandbox"
+    return resp

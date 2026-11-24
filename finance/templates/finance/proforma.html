@@ -4,6 +4,7 @@
 <dl class="kv"><dt>Status</dt><dd><span class="tag {% if pf.status == 'pending' %}a{% elif pf.status == 'invoiced' %}g{% endif %}">{{ pf.get_status_display }}</span>{% if pf.status_note %} {{ pf.status_note }}{% endif %}</dd>
 <dt>Date</dt><dd>{{ pf.date|date:"d M Y" }}</dd><dt>Company</dt><dd>{{ pf.company }}</dd><dt>Deliver to</dt><dd>{{ pf.delivery_to }}{% if pf.customer_name %} &middot; {{ pf.customer_name }}{% endif %}</dd>
 <dt>Material</dt><dd>{{ pf.description|default:"-" }}</dd><dt>Amount (incl. GST)</dt><dd><b>&#8377; {{ pf.amount|inr }}</b></dd><dt>Advance paid</dt><dd>&#8377; {{ pf.advance_paid|inr }}</dd>
+{% if att %}<dt>File</dt><dd><a href="{% url 'fin_file' att.pk %}" target="_blank" rel="noopener">{{ att.name }}</a></dd>{% endif %}
 {% if pf.pdf_link %}<dt>PDF</dt><dd><a href="{{ pf.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}
 {% if pf.check_note %}<dt>To confirm</dt><dd>{{ pf.check_note }}</dd>{% endif %}</dl>
 {% if invoice %}<p class="note ok">Invoice entered: <a href="{% url 'fin_invoice' invoice.pk %}">{{ invoice.number|default:"view invoice" }}</a>. The advance is deducted there.</p>{% endif %}
