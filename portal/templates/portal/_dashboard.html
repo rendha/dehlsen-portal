@@ -7,7 +7,7 @@
 .jr .s i{display:block;height:5px;border-radius:5px;margin-top:6px}.jr .s em{font-style:normal;font-size:11px;color:var(--mut)}
 .d2{display:grid;gap:14px}@media(min-width:820px){.d2{grid-template-columns:1.25fr 1fr}.d3{grid-template-columns:repeat(3,1fr)!important}}
 .d3{display:grid;gap:14px}
-.at{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.at:last-child{border:0}
+.att>summary{display:flex;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;font-size:16px}.att>summary::-webkit-details-marker{display:none}.att>summary::after{content:"\25B8";color:var(--blue);margin-left:10px}.att[open]>summary::after{content:"\25BE"}.att .tot{margin-left:auto;background:#fff0dd;color:#b35a08;border-radius:999px;padding:2px 14px;font-weight:700;font-size:15px}.att .tot.z{background:#eef1f5;color:var(--mut)}.att[open]>summary{margin-bottom:6px}.at{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.at:last-child{border:0}
 .at b.n{font-size:26px;width:44px;color:#8a5a00}.at b.n.z{color:var(--mut)}.at .t{flex:1}.at .t b{display:block;font-size:14px}.at .t small{color:var(--mut);font-size:12px}
 .bar{height:9px;border-radius:9px;background:#e8edf4;overflow:hidden;margin:6px 0}.bar>i{display:block;height:100%;background:var(--blue)}
 .kv{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)}.kv:last-child{border:0}
@@ -21,8 +21,8 @@
 <div class="jr" style="margin-top:10px">{% for s in dash.journey %}<div class="s"><small>{{ forloop.counter }} · {{ s.step }}</small><b>{{ s.n }}</b><span>{{ s.label }}</span><i style="background:{{ s.color }}"></i>{% if s.pct is not None %}<em>{{ s.pct }}% of the step before</em>{% endif %}</div>{% endfor %}</div></div>{% endif %}
 
 <div class="d2">
-{% if dash.attention %}<div class="card"><b>Needs attention today</b>
-{% for a in dash.attention %}<div class="at"><b class="n {% if not a.n %}z{% endif %}">{{ a.n }}</b><div class="t"><b>{{ a.title }}</b><small>{{ a.sub }}</small></div><a class="pill" style="background:#fff;color:var(--ink);border:1px solid var(--line)" href="{{ a.url }}">Open</a></div>{% endfor %}</div>{% endif %}
+{% if dash.attention %}<details class="card att"><summary><b>Needs attention today</b><span class="tot{% if not dash.attention_total %} z{% endif %}">{{ dash.attention_total }}</span></summary>
+{% for a in dash.attention %}<div class="at"><b class="n {% if not a.n %}z{% endif %}">{{ a.n }}</b><div class="t"><b>{{ a.title }}</b><small>{{ a.sub }}</small></div><a class="pill" style="background:#fff;color:var(--ink);border:1px solid var(--line)" href="{{ a.url }}">Open</a></div>{% endfor %}</details>{% endif %}
 </div>
 
 <div class="d3">

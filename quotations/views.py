@@ -916,7 +916,7 @@ def person_dashboard(request):
     def make_item(q):
         line = stats.format_summary(stats.summarize(stats.rows_of([q])))
         return {"id": q.id, "offer_no": q.offer_no, "business_name": q.business_name, "location": q.location, "date": q.date,
-                "pdf_name": pdf_filename(q), "is_customer": q.is_customer,
+                "pdf_name": pdf_filename(q), "is_customer": q.is_customer, "lost": q.lost,
                 "category": q.category, "kw_display": line["kw_display"], "value_display": line["value_display"],
                 "profit_display": line["profit_display"], "profit_negative": line["profit_negative"],
                 "search": stats.search_text(q) + " " + line["value_text"] + " " + line["kw_text"]}
@@ -928,6 +928,7 @@ def person_dashboard(request):
         item["others"] = [make_item(by_id[r["id"]]) for r in group["others"]]
         item["chosen"] = group["chosen"]
         confirmed = [x for x in [item] + item["others"] if x["is_customer"]]
+        item["lost"] = any(x["lost"] for x in [item] + item["others"])
         item["customer_id"] = confirmed[0]["id"] if confirmed else None
         item["customer_offer"] = confirmed[0]["offer_no"] if confirmed else ""
         item["preselect"] = item["customer_id"] or item["id"]
@@ -1083,13 +1084,30 @@ def confirm_customer(request, quotation_id=None):
     else:
         key = stats.client_key(stats.rows_of([quotation])[0])
         same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
-        Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False)     # one confirmed quotation per client
+        Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False, lost=False)     # one confirmed quotation per client (and no longer lost)
         Quotation.objects.filter(id=quotation.id).update(counted=True, is_customer=True)
         try:                                         # the new customer appears in Project progress / master data by itself (portal only)
             from portal.project_sync import ensure_projects
             ensure_projects(quotation_ids=[quotation.id])
         except Exception:
             pass
+    return redirect(_safe_next(request, reverse("quotation_detail", args=[quotation.id])))
+
+
+def mark_lost(request):
+    """POST: the client said NO - every quotation of the client is marked Lost (and the client is no longer a customer).  undo=1 reopens it."""
+    if request.method != "POST":
+        return HttpResponseBadRequest("POST only")
+    raw = request.POST.get("quotation_id", "")
+    if not raw.isdigit():
+        return HttpResponseBadRequest("Choose a quotation.")
+    quotation = get_object_or_404(Quotation, id=int(raw))
+    key = stats.client_key(stats.rows_of([quotation])[0])
+    same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
+    if request.POST.get("undo"):
+        Quotation.objects.filter(id__in=same).update(lost=False)
+    else:
+        Quotation.objects.filter(id__in=same).update(lost=True, is_customer=False)
     return redirect(_safe_next(request, reverse("quotation_detail", args=[quotation.id])))
 
 

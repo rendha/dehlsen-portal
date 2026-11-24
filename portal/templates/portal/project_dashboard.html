@@ -7,14 +7,14 @@
 .pn{background:#fff;border-radius:14px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 8px rgba(30,50,80,.07);overflow-x:auto}.pn h2{margin:0 0 6px;font-size:15px}
 .pn table{width:100%;border-collapse:collapse;font-size:13px}.pn td,.pn th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}.pn td.r,.pn th.r{text-align:right}
 .bar{height:8px;background:#e8edf3;border-radius:4px;min-width:60px}.bar i{display:block;height:8px;background:var(--blue);border-radius:4px}
-.nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 14px}
-.nav a{display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:14px;text-decoration:none;color:var(--ink);box-shadow:0 2px 10px rgba(30,50,80,.09);border:2px solid transparent}
-.nav a:hover,.k a:hover{border-color:var(--blue)}.nav .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;color:#fff;flex:none}
-.nav b{display:block;font-size:15px}.nav small{color:var(--mut);font-size:12px}
+.nav{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:10px 0 14px}@media(min-width:760px){.nav{grid-template-columns:repeat(3,1fr)}}
+.nav a{display:block;text-align:center;background:#fff;border-radius:18px;padding:22px 14px;text-decoration:none;color:var(--ink);box-shadow:0 4px 16px rgba(30,50,80,.08);border:2px solid transparent;transition:.15s}.nav a:hover{transform:translateY(-3px)}.nav a>span:last-child{display:block}
+.nav a:hover,.k a:hover{border-color:var(--blue)}.nav .ic{width:60px;height:60px;border-radius:16px;display:grid;place-items:center;font-size:28px;color:#fff;margin:0 auto 10px}
+.nav b{display:block;font-size:18px;margin-bottom:4px}.nav small{color:var(--mut);font-size:13px}
 .k a{display:block;text-decoration:none;color:var(--ink);background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 2px 8px rgba(30,50,80,.07);border:2px solid transparent}
 .k a b{display:block;font-size:22px}.k a small{color:var(--mut);font-size:11px}.k a.bad b{color:#b02a1c}.k a.warn b{color:#b35a08}
 h3.sh{margin:16px 2px 6px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
-.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+.pn>summary{font-size:16px;font-weight:700;cursor:pointer;list-style:none;padding:2px 0}.pn>summary::-webkit-details-marker{display:none}.pn>summary::before{content:"\25B8";display:inline-block;width:18px;color:var(--blue)}.pn[open]>summary::before{content:"\25BE"}.pn[open]>summary{margin-bottom:8px}.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
 </style>{% endblock %}
 {% block body %}<div class="app">
 <div class="top"><div><h1>Project dashboard</h1><small>{{ d.n }} projects &middot; as on {{ d.today|date:"j M Y" }}</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
@@ -47,35 +47,35 @@ h3.sh{margin:16px 2px 6px;font-size:13px;letter-spacing:.04em;text-transform:upp
 <a href="{% url 'progress' %}?f=nameload" class="{% if d.nameload_pending %}warn{% endif %}"><b>{{ d.nameload_pending }}</b><small>Name change or load change pending ({{ d.name_pending }} name &middot; {{ d.load_pending }} load)</small></a>
 </div>
 <div class="two">
-<div class="pn"><h2>1. Projects by stage</h2><table><tr><th>Stage</th><th class="r">Projects</th><th class="r">kW</th><th>%</th></tr>
-{% for s, c, k, p in d.stages %}<tr><td>{{ s }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></div>
-<div class="pn"><h2>2. Bookings by month</h2><table><tr><th>Month</th><th class="r">Projects</th><th class="r">kW</th></tr>
-{% for m, c, k in d.months %}<tr><td>{{ m|date:"M Y" }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+<details class="pn"><summary>1. Projects by stage</summary><table><tr><th>Stage</th><th class="r">Projects</th><th class="r">kW</th><th>%</th></tr>
+{% for s, c, k, p in d.stages %}<tr><td>{{ s }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></details>
+<details class="pn"><summary>2. Bookings by month</summary><table><tr><th>Month</th><th class="r">Projects</th><th class="r">kW</th></tr>
+{% for m, c, k in d.months %}<tr><td>{{ m|date:"M Y" }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></details>
 </div>
 <div class="two">
-<div class="pn"><h2>3. Region</h2><table>{% for a, c, k in d.regions %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
+<details class="pn"><summary>3. Region</summary><table>{% for a, c, k in d.regions %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
 <h2 style="margin-top:10px">Segment</h2><table>{% for a, c, k in d.segments %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
 <h2 style="margin-top:10px">ALMM</h2><table>{% for a, c, k in d.almm %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table>
-<h2 style="margin-top:10px">System type</h2><table>{% for a, c, k in d.systems %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table></div>
-<div class="pn"><h2>4. Sales in-charge</h2><table><tr><th>Name</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.sales %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+<h2 style="margin-top:10px">System type</h2><table>{% for a, c, k in d.systems %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }} kW</td></tr>{% endfor %}</table></details>
+<details class="pn"><summary>4. Sales in-charge</summary><table><tr><th>Name</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.sales %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></details>
 </div>
 <div class="two">
-<div class="pn"><h2>5. Panel brands</h2><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.panels %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
-<div class="pn"><h2>Inverter brands</h2><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.inverters %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></div>
+<details class="pn"><summary>5. Panel brands</summary><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.panels %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></details>
+<details class="pn"><summary>Inverter brands</summary><table><tr><th>Brand</th><th class="r">Projects</th><th class="r">kW</th></tr>{% for a, c, k in d.inverters %}<tr><td>{{ a }}</td><td class="r">{{ c }}</td><td class="r">{{ k|floatformat:0 }}</td></tr>{% endfor %}</table></details>
 </div>
 <div class="two">
-<div class="pn"><h2>6. Data completeness - what still has to be collected</h2><table><tr><th>Field</th><th class="r">Filled</th><th class="r">Missing</th><th>%</th></tr>
-{% for f, a, b, p in d.complete %}<tr><td>{{ f }}</td><td class="r">{{ a }}</td><td class="r">{{ b }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></div>
-<div class="pn"><h2>7. Time frame - average days</h2><table><tr><th>Interval</th><th class="r">Average</th><th class="r">Projects</th><th class="r">Target</th></tr>
-{% for name, av, target in d.frames %}<tr><td>{{ name }}</td><td class="r">{% if av.0 is not None %}{{ av.0|floatformat:1 }}{% else %}-{% endif %}</td><td class="r">{{ av.1 }}</td><td class="r">{{ target }}</td></tr>{% endfor %}</table></div>
+<details class="pn"><summary>6. Data completeness - what still has to be collected</summary><table><tr><th>Field</th><th class="r">Filled</th><th class="r">Missing</th><th>%</th></tr>
+{% for f, a, b, p in d.complete %}<tr><td>{{ f }}</td><td class="r">{{ a }}</td><td class="r">{{ b }}</td><td><div class="bar"><i style="width:{{ p|floatformat:0 }}%"></i></div></td></tr>{% endfor %}</table></details>
+<details class="pn"><summary>7. Time frame - average days</summary><table><tr><th>Interval</th><th class="r">Average</th><th class="r">Projects</th><th class="r">Target</th></tr>
+{% for name, av, target in d.frames %}<tr><td>{{ name }}</td><td class="r">{% if av.0 is not None %}{{ av.0|floatformat:1 }}{% else %}-{% endif %}</td><td class="r">{{ av.1 }}</td><td class="r">{{ target }}</td></tr>{% endfor %}</table></details>
 </div>
-<div class="pn" id="alerts"><h2>8. Alerts - who needs attention</h2><table><tr><th>Alert</th><th class="r">Projects</th><th>Customers (first 6)</th></tr>
-{% for name, count, who in d.alerts %}<tr><td>{{ name }}</td><td class="r">{{ count }}</td><td>{{ who|join:", " }}</td></tr>{% endfor %}</table></div>
+<details class="pn" id="alerts"><summary>8. Alerts - who needs attention</summary><table><tr><th>Alert</th><th class="r">Projects</th><th>Customers (first 6)</th></tr>
+{% for name, count, who in d.alerts %}<tr><td>{{ name }}</td><td class="r">{{ count }}</td><td>{{ who|join:", " }}</td></tr>{% endfor %}</table></details>
 <div class="two">
-<div class="pn"><h2>Capacity</h2><table><tr><td>Total DC (kWp) &middot; data for {{ d.dc_have }} of {{ d.n }}</td><td class="r">{{ d.dc_total|floatformat:1 }}</td></tr><tr><td>DC installed (commissioned)</td><td class="r">{{ d.dc_done|floatformat:1 }}</td></tr><tr><td>Total AC / inverter (kW) &middot; data for {{ d.ac_have }} of {{ d.n }}</td><td class="r">{{ d.ac_total|floatformat:0 }}</td></tr><tr><td>AC installed (commissioned)</td><td class="r">{{ d.ac_done|floatformat:0 }}</td></tr><tr><td>Total project value</td><td class="r">&#8377;{{ d.value|floatformat:0 }}</td></tr></table></div>
-<div class="pn"><h2>9. Handover and warranty</h2><table>{% for name, c in d.handover %}<tr><td>{{ name }}</td><td class="r">{{ c }}</td></tr>{% endfor %}</table></div>
-<div class="pn"><h2>10. Contractor payouts (labour)</h2><table><tr><th></th><th class="r">Agreed</th><th class="r">Paid</th><th class="r">Balance</th></tr>
+<details class="pn"><summary>Capacity</summary><table><tr><td>Total DC (kWp) &middot; data for {{ d.dc_have }} of {{ d.n }}</td><td class="r">{{ d.dc_total|floatformat:1 }}</td></tr><tr><td>DC installed (commissioned)</td><td class="r">{{ d.dc_done|floatformat:1 }}</td></tr><tr><td>Total AC / inverter (kW) &middot; data for {{ d.ac_have }} of {{ d.n }}</td><td class="r">{{ d.ac_total|floatformat:0 }}</td></tr><tr><td>AC installed (commissioned)</td><td class="r">{{ d.ac_done|floatformat:0 }}</td></tr><tr><td>Total project value</td><td class="r">&#8377;{{ d.value|floatformat:0 }}</td></tr></table></details>
+<details class="pn"><summary>9. Handover and warranty</summary><table>{% for name, c in d.handover %}<tr><td>{{ name }}</td><td class="r">{{ c }}</td></tr>{% endfor %}</table></details>
+<details class="pn"><summary>10. Contractor payouts (labour)</summary><table><tr><th></th><th class="r">Agreed</th><th class="r">Paid</th><th class="r">Balance</th></tr>
 {% for name, a, p, b in d.contractors %}<tr><td>{{ name }}</td><td class="r">&#8377;{{ a|floatformat:0 }}</td><td class="r">&#8377;{{ p|floatformat:0 }}</td><td class="r">&#8377;{{ b|floatformat:0 }}</td></tr>{% endfor %}</table>
 <h2 style="margin-top:10px">Balance by contractor</h2><table><tr><th>Contractor</th><th class="r">Agreed</th><th class="r">Paid</th><th class="r">Balance</th></tr>
-{% for name, a, p, b in d.per_contractor %}<tr><td>{{ name }}</td><td class="r">&#8377;{{ a|floatformat:0 }}</td><td class="r">&#8377;{{ p|floatformat:0 }}</td><td class="r">&#8377;{{ b|floatformat:0 }}</td></tr>{% endfor %}</table></div>
-</div></div>{% endblock %}
+{% for name, a, p, b in d.per_contractor %}<tr><td>{{ name }}</td><td class="r">&#8377;{{ a|floatformat:0 }}</td><td class="r">&#8377;{{ p|floatformat:0 }}</td><td class="r">&#8377;{{ b|floatformat:0 }}</td></tr>{% endfor %}</table></details>
+</div></div><script>(function(){function o(){var e=document.getElementById(location.hash.slice(1));if(e&&e.tagName==="DETAILS")e.open=true}window.addEventListener("hashchange",o);o()})();</script>{% endblock %}

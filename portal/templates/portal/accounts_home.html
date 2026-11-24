@@ -1,0 +1,36 @@
+{% extends "portal/base.html" %}
+{% block title %}Accounts · Dehlsen Energy{% endblock %}
+{% block head %}<style>
+.grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(min-width:760px){.grid4{grid-template-columns:repeat(3,1fr)}}
+.tile{position:relative;display:block;color:inherit;text-decoration:none;background:var(--card);border-radius:18px;padding:26px 14px;text-align:center;box-shadow:0 4px 16px rgba(30,50,80,.08);border:2px solid transparent;transition:.15s}
+.tile:hover{transform:translateY(-3px);border-color:var(--blue)}
+.tile .ic{width:64px;height:64px;border-radius:16px;display:grid;place-items:center;font-size:30px;margin:0 auto 10px;color:#fff}
+.tile h3{margin:0 0 4px;font-size:19px}.tile p{margin:0;color:var(--mut);font-size:13px}
+.badge{position:absolute;top:10px;right:12px;background:var(--red);color:#fff;border-radius:999px;min-width:26px;height:26px;display:grid;place-items:center;font-size:13px;font-weight:700;padding:0 7px}
+h3.sec{margin:20px 2px 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+</style>{% endblock %}
+{% block body %}<div class="app">
+<div class="top"><div><h1>Accounts</h1><small>Money in, money out and buying</small></div><a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+
+<h3 class="sec">Money in &middot; what customers pay us</h3>
+<div class="grid4">
+<a class="tile" href="{% url 'fin_receivables' %}">{% if n_receipts %}<span class="badge">{{ n_receipts }}</span>{% endif %}<div class="ic" style="background:#1f7a4d">&#8377;</div><h3>Receivables</h3><p>What customers still owe us</p></a>
+<a class="tile" href="{% url 'fin_received' %}">{% if n_unchecked %}<span class="badge">{{ n_unchecked }}</span>{% endif %}<div class="ic" style="background:#2e9e5b">&#10003;</div><h3>Received</h3><p>Payments received, tick and check</p></a>
+<a class="tile" href="{% url 'cust_home' %}"><div class="ic" style="background:#0b7285">&#128100;</div><h3>Customers</h3><p>Money received from customers, balance, confirm payments</p></a>
+{% if n_confirm and not limited %}<a class="tile" href="{% url 'fin_confirm' %}"><span class="badge">{{ n_confirm }}</span><div class="ic" style="background:#d64545">&#9888;</div><h3>To confirm</h3><p>Entries waiting for a check</p></a>{% endif %}
+</div>
+
+{% if not limited %}<h3 class="sec">Money out &middot; what we pay</h3>
+<div class="grid4">
+<a class="tile" href="{% url 'fin_home' %}"><div class="ic" style="background:#b35a08">&#128179;</div><h3>Payables</h3><p>Vendor bills we owe</p></a>
+<a class="tile" href="{% url 'fin_proformas' %}">{% if n_wait %}<span class="badge">{{ n_wait }}</span>{% endif %}<div class="ic" style="background:#6a4bc4">&#128209;</div><h3>Proformas</h3><p>Proforma invoices, approvals</p></a>
+<a class="tile" href="{% url 'fin_advances' %}"><div class="ic" style="background:#3b5bdb">&#128181;</div><h3>Advances</h3><p>Advances paid to vendors</p></a>
+<a class="tile" href="{% url 'fin_vendors' %}"><div class="ic" style="background:#555">&#127970;</div><h3>Vendors</h3><p>Supplier list and details</p></a>
+</div>{% endif %}
+
+<h3 class="sec">Buying</h3>
+<div class="grid4">
+<a class="tile" href="/project/procurement/"><div class="ic" style="background:#0f9d9a">&#128230;</div><h3>Procurement</h3><p>Buying, material lists, stock, supplier payments</p></a>
+</div>
+</div>{% endblock %}

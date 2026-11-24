@@ -29,6 +29,43 @@ def _row(c, pending):
             "pct": int(min(100, got * 100 / net)) if net > 0 else 0, "pending": len(pending), "pending_sum": _inr(sum((p.amount for p in pending), ZERO))}
 
 
+def _expense_map(collections):
+    """The expense of each site: the supplier bills of the customer (Procurement purchases) plus the labour amounts (structure, electrical) in the store.
+    The store customer is the same customer by quotation, else by a very close name.  -> {collection id: (material, labour)}"""
+    out = {}
+    try:
+        from difflib import SequenceMatcher
+        from django.db.models import Sum
+        from quotations import dashboard_stats as stats
+        from store.models import Customer as StoreCustomer, Labour, Purchase
+        mat = {r["customer"]: r["t"] for r in Purchase.objects.exclude(customer=None).values("customer").annotate(t=Sum("amount"))}
+        lab = {r["customer"]: r["t"] for r in Labour.objects.values("customer").annotate(t=Sum("amount"))}
+        ids = set(mat) | set(lab)
+        if not ids:
+            return out
+        customers = list(StoreCustomer.objects.filter(pk__in=ids))
+        by_q = {c.quotation_id: c for c in customers if c.quotation_id}
+        keys = [(stats.name_key(c.name), c) for c in customers]
+        for col in collections:
+            hit = by_q.get(col.quotation_id) if col.quotation_id else None
+            if hit is None:
+                k = stats.name_key(col.customer)
+                best = 0.0
+                for ck, c in keys:
+                    if not k or not ck:
+                        continue
+                    sc = 1.0 if ck == k else SequenceMatcher(None, k, ck).ratio()
+                    if sc > best:
+                        best, hit = sc, c
+                if best < 0.88:
+                    hit = None
+            if hit is not None:
+                out[col.pk] = (Decimal(mat.get(hit.pk) or 0), Decimal(lab.get(hit.pk) or 0))
+    except Exception:
+        return {}
+    return out
+
+
 @login_required
 def home(request):
     q = (request.GET.get("q") or "").strip()
@@ -41,13 +78,20 @@ def home(request):
     cols = Collection.objects.all()
     if q:
         cols = cols.filter(Q(customer__icontains=q) | Q(project_id__icontains=q) | Q(sales_name__icontains=q) | Q(region__icontains=q))
+    spent = _expense_map(list(cols))
     rows = [_row(c, by_c.get(c.pk, [])) for c in cols.order_by("customer")]
+    for r in rows:
+        m, l = spent.get(r["c"].pk, (ZERO, ZERO))
+        r["bought"] = _inr(m + l) if (m + l) else ""
+        r["mat"], r["lab"] = _inr(m), _inr(l)
     if show == "owing":
         rows = [r for r in rows if r["left_n"] > 0 or r["nodeal"]]
         rows.sort(key=lambda r: -r["left_n"])
     elif show == "pending":
         rows = [r for r in rows if r["pending"]]
-    allc = list(Collection.objects.all())
+    allc = list(cols)                      # the totals at the top follow the search (everybody when nothing is searched)
+    bought_total = sum((m + l for m, l in spent.values()), ZERO)
+    pend_all = [p for p in pend_all if p.collection_id in {c.pk for c in allc}] if q else pend_all
     sold = sum((Decimal(c.net_value or 0) for c in allc), ZERO)
     got = sum((Decimal(c.received or 0) for c in allc), ZERO)
     waiting = []
@@ -55,7 +99,7 @@ def home(request):
         for p in pend_all:
             waiting.append({"p": p, "amount": _inr(p.amount), "by": (p.entered_by.get_full_name() or p.entered_by.get_username()) if p.entered_by else "", "c": p.collection})
     ctx = {"rows": rows[:400], "more": max(len(rows) - 400, 0), "q": q, "show": show, "confirmer": confirmer, "waiting": waiting,
-           "n": len(allc), "sold": _inr(sold), "got": _inr(got), "left": _inr(max(sold - got, ZERO)),
+           "n": len(allc), "bought": _inr(bought_total), "sold": _inr(sold), "got": _inr(got), "left": _inr(max(sold - got, ZERO)),
            "pend_n": len(pend_all), "pend_sum": _inr(sum((p.amount for p in pend_all), ZERO)), "next": request.get_full_path()}
     return render(request, "portal/customers.html", ctx)
 

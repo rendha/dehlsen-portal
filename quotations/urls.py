@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/materials/estimate/", views.materials_estimate, name="materials_estimate"),
     path("quotation/<int:quotation_id>/customer/", views.confirm_customer, name="confirm_customer"),
     path("customer/confirm/", views.confirm_customer, name="confirm_customer_choice"),
+    path("customer/lost/", views.mark_lost, name="quotation_lost"),
     path("quotation/<int:quotation_id>/counted/", views.set_counted, name="set_counted"),
     path("margin/", views.low_margin, name="low_margin"),
     path("rates/unlock/", views.unlock_rates, name="unlock_rates"),

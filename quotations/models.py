@@ -766,6 +766,9 @@ class Quotation(models.Model):
     # True once the client said yes: the quotation became a customer.  Only these are offered to the separate materials website.
     is_customer = models.BooleanField(default=False)
 
+    # True when the client said no (marked Lost on the quotation list); Won = is_customer
+    lost = models.BooleanField(default=False)
+
     structure_total = models.DecimalField(
         max_digits=14,
         decimal_places=2,

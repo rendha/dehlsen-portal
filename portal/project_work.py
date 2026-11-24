@@ -14,7 +14,7 @@ from . import payments, sales
 from .models import Collection, ProjectWork
 
 EDITORS = {"fidha", "riswan"}                     # the only people who tick stages and update a project (user name or first name)
-TABS = [("live", "Live"), ("risk", "At risk"), ("bank", "Bank pending"), ("finished", "Finished"), ("docs", "Waiting documents"), ("pay", "Payment pending"), ("feas", "Feasibility issue"), ("all", "All")]
+TABS = [("live", "Live"), ("risk", "At risk"), ("bank", "Bank pending"), ("finished", "Finished"), ("docs", "Waiting documents"), ("pay", "Payment pending"), ("feas", "Feasibility issue"), ("unbooked", "Not booked yet"), ("all", "All")]
 EXPOSURE_RED = Decimal("25000")          # material at site worth this much more than the money received = red (below that, amber)
 BANK_LATE_DAYS = 15                      # the bank's final payment is late this many days after commissioning
 WORK_GATE = ("bos", "inverter_done", "panel_done", "electrical", "structure")   # physical work: a loan project waits for the bank's first payment
@@ -369,6 +369,7 @@ def _rows_for(request):
         bank_late = bool(w.is_loan and w.commissioned and not w.bank2_received_on and w.commission_date
                          and (today - w.commission_date).days > BANK_LATE_DAYS)
         rows.append({"w": w, "due": d, "finished": w.commissioned, "docs": w.commissioned and not w.handover,
+                     "unbooked": bool(not w.project_id and not w.commissioned and (not w.collection_id or not (w.collection.received or 0))),
                      "pay": bool(d and (d["overdue"] > 0 or d["balance"] > 0)), "feas": w.feasibility == "issue",
                      "overdue": bool(d and d["overdue"] > 0), "ex": ex, "risk": bool(ex and ex["gap"] > 0 and not w.commissioned),
                      "now_key": stage_now(w)[0], "now": stage_now(w)[1], "next": stage_now(w)[2], "owner": _owner(w), "name": w.collection.customer if (w.collection_id and w.collection.customer) else w.name, "qv": qv, "bank": bank_wait, "bank_late": bank_late, "clocks": kseb_clocks(w, today), "warranty": warranty_end(w),
@@ -386,9 +387,9 @@ def progress(request):
     q = (request.GET.get("q") or "").strip().lower()
     counts = {"risk": sum(1 for r in rows if r["risk"]), "bank": sum(1 for r in rows if r["bank"]),
               "live": sum(1 for r in rows if not r["finished"]), "finished": sum(1 for r in rows if r["finished"]), "docs": sum(1 for r in rows if r["docs"]),
-              "pay": sum(1 for r in rows if r["pay"]), "feas": sum(1 for r in rows if r["feas"]), "all": len(rows)}
+              "pay": sum(1 for r in rows if r["pay"]), "feas": sum(1 for r in rows if r["feas"]), "unbooked": sum(1 for r in rows if r["unbooked"]), "all": len(rows)}
     pick = {"risk": lambda r: r["risk"], "bank": lambda r: r["bank"], "live": lambda r: not r["finished"], "finished": lambda r: r["finished"], "docs": lambda r: r["docs"], "pay": lambda r: r["pay"],
-            "feas": lambda r: r["feas"], "all": lambda r: True}[tab]
+            "feas": lambda r: r["feas"], "unbooked": lambda r: r["unbooked"], "all": lambda r: True}[tab]
     stage = request.GET.get("stage") if request.GET.get("stage") in set(STAGE_KEYS) | {"none", "done"} else ""
 
     def _hay(r):

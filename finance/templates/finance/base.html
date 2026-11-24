@@ -17,7 +17,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left
 input[type=checkbox]{width:auto;margin:6px 8px 12px 0}.inl{display:inline}.inl button{background:none;border:0;color:var(--red);cursor:pointer;font:inherit;font-size:12px}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Accounts</h1><small>What we owe vendors &middot; what customers owe us</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+<div class="top"><div><h1>Accounts</h1><small>What we owe vendors &middot; what customers owe us</small></div><a class="pill" href="{% url 'accounts_home' %}">&lsaquo; Accounts</a></div>
 <div class="tabs">
 {% if not limited %}<a href="{% url 'fin_home' %}" class="{% if tab == 'payables' %}on{% endif %}">Payables</a>
 <a href="{% url 'fin_proformas' %}" class="{% if tab == 'proformas' %}on{% endif %}">Proformas{% if n_wait %}<span class="n">{{ n_wait }}</span>{% endif %}</a>

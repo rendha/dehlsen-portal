@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
 {% block title %}Payment collection{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Payment collection</h1><small>Collected and still to collect</small></div><a class="pill" href="{% url 'home' %}">Home</a></div>
+<div class="top"><div><h1>Payment collection</h1><small>Collected and still to collect</small></div><a class="pill" href="{% url 'sales_home' %}">&lsaquo; Sales</a></div>
 {% with t=d.total %}
 <div class="card">
 <div style="font-weight:700;margin-bottom:6px">Whole company</div>

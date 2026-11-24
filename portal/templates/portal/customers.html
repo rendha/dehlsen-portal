@@ -12,14 +12,16 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left
 .mini.g{background:var(--green)}.mini.r{background:var(--red)}.pbar{height:6px;background:#e8eef6;border-radius:4px;margin-top:4px;min-width:70px}.pbar i{display:block;height:6px;background:var(--green);border-radius:4px}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Customers</h1><small>What every customer paid and still owes &middot; money received is confirmed by Accounts</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+<div class="top"><div><h1>Customers</h1><small>What every customer paid and still owes &middot; money received is confirmed by Accounts</small></div><a class="pill" href="{% url 'accounts_home' %}">&lsaquo; Accounts</a></div>
 {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
 <div class="cards">
 <div class="c"><small>Customers</small><b>{{ n }}</b></div>
 <div class="c"><small>Sold (total)</small><b>{{ sold }}</b></div>
 <div class="c"><small>Received (confirmed)</small><b>{{ got }}</b></div>
 <div class="c r"><small>Still to collect</small><b>{{ left }}</b></div>
+<div class="c"><small>Site expense (total)</small><b>{{ bought }}</b></div>
 </div>
+{% if q %}<p style="margin:-4px 2px 10px;font-size:13px;color:var(--mut)">These totals are for your search: <b>{{ q }}</b> &middot; <a href="{% url 'cust_home' %}">show everybody</a></p>{% endif %}
 {% if pend_n %}<div class="cards"><div class="c a"><small>Waiting for confirmation</small><b>{{ pend_sum }}</b><small>{{ pend_n }} payment{{ pend_n|pluralize }}</small></div></div>{% endif %}
 {% if confirmer and waiting %}<div class="card"><h3 style="margin:0 0 8px">Waiting for your confirmation</h3>
 <div class="scroll"><table class="t"><tr><th>Date</th><th>Customer</th><th class="n">Amount</th><th>Entered by</th><th>Note</th><th></th></tr>
@@ -31,11 +33,11 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}.t th{text-align:left
 <form method="get" class="bar"><input name="q" value="{{ q }}" placeholder="Search customer, project ID, sales person, region">
 <select name="show"><option value="all" {% if show == 'all' %}selected{% endif %}>All customers</option><option value="owing" {% if show == 'owing' %}selected{% endif %}>Money still to collect</option><option value="pending" {% if show == 'pending' %}selected{% endif %}>Waiting for confirmation</option></select>
 <button class="btn auto" type="submit">Show</button></form>
-<div class="scroll"><table class="t"><tr><th>Customer</th><th>Sales</th><th class="n">Sold</th><th class="n">Received</th><th class="n">Balance</th><th></th></tr>
+<div class="scroll"><table class="t"><tr><th>Customer</th><th>Sales</th><th class="n">Sold</th><th class="n">Received</th><th class="n">Balance</th><th class="n">Site expense</th><th></th></tr>
 {% for r in rows %}<tr><td><a href="{% url 'cust_detail' r.c.pk %}">{{ r.c.customer }}</a><br><small>{{ r.c.project_id }}{% if r.c.region %} &middot; {{ r.c.region }}{% endif %}</small></td><td>{{ r.c.sales_name }}</td>
 <td class="n">{% if r.nodeal %}<span class="tag a">deal value missing</span>{% else %}{{ r.net }}{% endif %}</td>
-<td class="n">{{ r.got }}<div class="pbar"><i style="width:{{ r.pct }}%"></i></div></td><td class="n">{{ r.left }}</td>
+<td class="n">{{ r.got }}<div class="pbar"><i style="width:{{ r.pct }}%"></i></div></td><td class="n">{{ r.left }}</td><td class="n">{% if r.bought %}{{ r.bought }}<br><small style="color:var(--mut)">material {{ r.mat }} &middot; labour {{ r.lab }}</small>{% else %}<span style="color:var(--mut)">-</span>{% endif %}</td>
 <td>{% if r.pending %}<span class="tag a">{{ r.pending }} waiting &middot; {{ r.pending_sum }}</span>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="6" style="color:var(--mut)">No customer found.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="7" style="color:var(--mut)">No customer found.</td></tr>{% endfor %}
 </table></div>{% if more %}<small style="color:var(--mut)">{{ more }} more - use the search to narrow it down.</small>{% endif %}</div>
 </div>{% endblock %}

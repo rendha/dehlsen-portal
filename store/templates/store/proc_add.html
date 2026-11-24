@@ -2,6 +2,7 @@
 {% block title %}Add a purchase{% endblock %}
 {% block content %}
 <style>.f label{display:block;font-size:12px;margin-top:10px;color:#6b7280}.f input,.f select{width:100%;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}</style>
+<p style="margin:0 0 8px"><a href="{% url 'proc_home' %}" style="font-weight:700">&lsaquo; Procurement</a></p>
 <h1>Add a purchase</h1><p class="muted">A bill from a supplier: for a customer, or for the general stock.</p>
 <div class="card f" style="max-width:640px">
 {% if error %}<div class="msg error">{{ error }}</div>{% endif %}

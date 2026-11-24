@@ -25,7 +25,7 @@
 .wa{width:100%;min-height:130px;font-family:inherit;font-size:13px;border-radius:10px;border:1px solid #d5d9e2;padding:8px}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Crew plan</h1><small>Who goes to which site &middot; tap a date to see the list</small></div><a class="pill" href="/">&lsaquo; Home</a></div>
+<div class="top"><div><h1>Crew plan</h1><small>Who goes to which site &middot; tap a date to see the list</small></div><a class="pill" href="{% url 'project_dashboard' %}">&lsaquo; Project</a></div>
 {% if messages %}{% for m in messages %}<div class="note {% if m.tags == 'error' %}bad{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
 
 <div class="card" style="max-width:640px;margin:8px auto">

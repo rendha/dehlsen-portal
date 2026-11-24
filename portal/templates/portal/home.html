@@ -20,18 +20,11 @@
 {% for r in margin_alert.latest %}<small>{{ r.person }} &middot; {{ r.client }} &middot; quoted &#8377;{{ r.their_value|floatformat:0 }} instead of &#8377;{{ r.calculated_value|floatformat:0 }}{% if r.loss %} &middot; <b style="display:inline">LOSS</b>{% endif %}</small>{% endfor %}
 <small>Tap to see the full list &rsaquo;</small></a>{% endif %}
 <div class="grid4">
-<a class="tile" href="/sales/"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Sales</h3><p>Quotations, reports, hybrid calculator</p></a>
+<a class="tile" href="{% url 'sales_home' %}"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Sales</h3><p>Quotations, reports, hybrid calculator</p></a>
 <a class="tile" href="{% url 'project_dashboard' %}"><div class="ic" style="background:var(--orange)">&#128203;</div><h3>Project</h3><p>Where every customer's work stands, KSEB, warranty</p></a>
-<a class="tile" href="/project/procurement/"><div class="ic" style="background:#0f9d9a">&#128230;</div><h3>Procurement</h3><p>Buying, material lists, stock, supplier payments</p></a>
-<a class="tile" href="{% if is_accounts or is_boss or is_director or not no_work_role %}{% url 'fin_home' %}{% else %}{% url 'fin_receivables' %}{% endif %}"><div class="ic" style="background:#1f7a4d">&#8377;</div><h3>Accounts</h3><p>{% if is_accounts or is_boss or is_director or not no_work_role %}Vendor bills, what customers owe us, payments{% else %}Your customers' payments and balance{% endif %}</p></a>
-<a class="tile" href="{% url 'cust_home' %}"><div class="ic" style="background:#0b7285">&#128100;</div><h3>Customers</h3><p>Money received from customers, balance, confirm payments</p></a>
+<a class="tile" href="{% url 'accounts_home' %}"><div class="ic" style="background:#1f7a4d">&#8377;</div><h3>Accounts</h3><p>Money in and out, customers, procurement</p></a>
 <a class="tile" href="/service/"><div class="ic" style="background:var(--green)">&#10022;</div><h3>Service</h3><p>Cleaning, schedule, customers</p></a>
-<a class="tile" href="{% url 'leads' %}"><div class="ic" style="background:#d64545">&#9733;</div><h3>Leads</h3><p>Calls, site visits, priority</p></a>
-<a class="tile" href="{% url 'crew' %}"><div class="ic" style="background:#c2570c">&#128119;</div><h3>Crew plan</h3><p>Who goes to which site, calendar</p></a>
 <a class="tile" href="{% url 'meetings' %}">{% if meeting_badge %}<span class="badge">{{ meeting_badge }}</span>{% endif %}<div class="ic" style="background:#3b5bdb">&#128197;</div><h3>Meetings</h3><p>Schedule, minutes, action items to check</p></a>
 <a class="tile" href="{% url 'task' %}">{% if task_badge %}<span class="badge">{{ task_badge }}</span>{% endif %}<div class="ic" style="background:var(--purple)">&#10004;</div><h3>Task</h3><p>Give a task, calendar, my tasks</p></a>
 </div>
-{% if show_collections and coll.total.projects %}{% include "portal/_collection_summary.html" %}{% endif %}
-{% if periods %}<h3 style="margin:18px 0 8px">{% if is_director %}Sales target{% else %}My sales target{% endif %} <a href="{% url 'targets' %}" style="font-size:13px;font-weight:400">full page</a></h3>{% include "portal/_targets.html" %}{% endif %}
-{% if dash %}{% include "portal/_dashboard.html" %}{% endif %}
 </div>{% endblock %}

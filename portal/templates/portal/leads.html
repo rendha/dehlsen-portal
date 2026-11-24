@@ -10,7 +10,7 @@
 .sum a.n.zero{opacity:.35}
 .lead{display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start}.lead:last-child{border:0}
 .lead .b{flex:1;min-width:0}.lead small{color:var(--mut);display:block}.lead{border-left:5px solid #E8730C;background:#fffaf3;padding-left:10px;border-radius:10px;margin:6px 0}.lead.done{background:#eaf7ef;border-left-color:#2e9e5b}.lead.lost{background:#f3f3f3;border-left-color:#999;opacity:.8}
-.stt{display:inline-block;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-right:4px;background:#fff0dd;color:#b35a08}.stt.done{background:#d5f0df;color:#1f7a43}.stt.lost{background:#e4e4e4;color:#666}
+.att>summary{display:flex;align-items:center;cursor:pointer;list-style:none;font-size:16px}.att>summary::-webkit-details-marker{display:none}.att>summary::after{content:"\25B8";color:var(--blue);margin-left:10px}.att[open]>summary::after{content:"\25BE"}.att .tot{margin-left:auto;background:#fff0dd;color:#b35a08;border-radius:999px;padding:2px 14px;font-weight:700;font-size:15px}.att .tot.z{background:#eef1f5;color:var(--mut)}.att[open]>summary{margin-bottom:6px}.stt{display:inline-block;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-right:4px;background:#fff0dd;color:#b35a08}.stt.done{background:#d5f0df;color:#1f7a43}.stt.lost{background:#e4e4e4;color:#666}
 .lead form{margin:0}.mini{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;font:inherit;font-size:12px;cursor:pointer}
 .st{display:inline-block;font-size:11px;border-radius:999px;padding:2px 9px;background:#eef3fa;color:var(--blue);font-weight:600}.st.quoted{background:#e8f1fb}.st.waiting{background:#fff3e0;color:#b35a08}.st.confirmed{background:#e3f5ea;color:var(--green)}.st.lost{background:#eee;color:#666}
 .hist{border-left:2px solid var(--line);margin:6px 0 0 4px;padding-left:10px}.hist small{margin:3px 0}details>summary{cursor:pointer;color:var(--blue);font-size:12px;margin-top:6px}.upd{background:#f7f9fc;border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-top:6px}.upd select,.upd input{margin:4px 0 6px;padding:7px 9px;font-size:13px}.upd label{font-size:12px}
@@ -29,14 +29,14 @@
 .ldate{display:inline-block;margin:3px 6px 0 0;padding:2px 8px;border-radius:8px;background:#eef2f7;color:#445}.ldate.soon{background:#fff0dd;color:#b35a08;font-weight:700}.ldate.late{background:#fdecea;color:#b02a1c;font-weight:700}.ldate.done{background:#e3f5ea;color:#1f7a43}
 </style>{% endblock %}
 {% block body %}<div class="app">
-<div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'lead_report' %}">Report</a> {% if head %}<a class="pill" href="{% url 'lead_unlinked' %}">Old quotations</a> {% endif %}<a class="pill" href="{% url 'home' %}">&lsaquo; Home</a></div>
+<div class="top"><div><h1>Leads</h1><small>{% if head %}Everybody's leads{% else %}Your leads{% endif %}</small></div><a class="pill" href="{% url 'lead_report' %}">Report</a> {% if head %}<a class="pill" href="{% url 'lead_unlinked' %}">Old quotations</a> {% endif %}<a class="pill" href="{% url 'sales_home' %}">&lsaquo; Sales</a></div>
 {% for m in messages %}<div class="note ok">{{ m }}</div>{% endfor %}
 <a class="btn o auto" href="{% url 'lead_new' %}" style="margin-bottom:14px;display:block;text-align:center;text-decoration:none">+ Add a lead</a>
 
 {% if head %}
-<div class="card"><h3 style="margin:0 0 6px">Needs attention today</h3>
+<details class="card att"><summary><b>Needs attention today</b><span class="tot{% if not attention_total %} z{% endif %}">{{ attention_total }}</span></summary>
 {% for a in attention %}<div class="lead"><b style="font-size:26px;width:44px;color:{% if a.n %}#8a5a00{% else %}var(--mut){% endif %}">{{ a.n }}</b><div class="b"><b>{{ a.title }}</b><small>{{ a.sub }}</small></div><a class="mini" style="text-decoration:none;color:var(--ink)" href="{{ a.url }}">Open</a></div>{% endfor %}
-</div>
+</details>
 <div class="card">
 <div class="tabs">
 <a class="chip {% if by == 'entered' %}on{% endif %}" href="?by=entered">Who entered</a>

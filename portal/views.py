@@ -101,7 +101,7 @@ def leads(request):
             {"n": overdue, "title": "Tasks past their due date", "sub": "Task · not finished yet", "url": reverse("task")},
         ]
     return render(request, "portal/leads.html", {
-        "attention": attention, "head": head, "summary": summary, "totals": totals, "items": items, "by": by, "who": who, "who_name": who_name,
+        "attention": attention, "attention_total": sum(a["n"] for a in attention), "head": head, "summary": summary, "totals": totals, "items": items, "by": by, "who": who, "who_name": who_name,
         "prio": prio, "show_done": show_done,
         "people_options": [{"id": u.id, "name": _person(u)} for u in User.objects.filter(is_active=True).order_by("first_name", "username")],
     })
@@ -660,14 +660,7 @@ def lead_done(request, pk):
 
 
 def home(request):
-    """The four buttons.  Everybody who signed in sees all four."""
-    show_dash = _is_director(request.user) or _is_lead_head(request.user)
-    rng = request.GET.get("r") if request.GET.get("r") in ("month", "quarter", "year") else "month"
-    periods = _periods(sales.for_user(request.user), director=_is_director(request.user))
-    try:
-        coll = payments.build(request.user, _is_director(request.user))
-    except Exception:           # the home page must open even if the payment tables are not ready
-        coll = None
+    """The home tiles (and the red margin notice for a director).  The payment collection, sales target and dashboard are on the Sales page."""
     margin_alert = None
     if _is_director(request.user):         # the red notice on the first page: quotations given below the calculated price
         try:
@@ -679,9 +672,40 @@ def home(request):
                 margin_alert = {"count": len(found), "latest": found[:3]}
         except Exception:
             margin_alert = None
-    return render(request, "portal/home.html", {"margin_alert": margin_alert, "coll": coll, "name": request.user.get_full_name() or request.user.get_username(),
-                                                "dash": dashboard.build(rng) if show_dash else None, "rng": rng,
-                                                "periods": periods, "is_director": _is_director(request.user), "show_collections": coll is not None})
+    return render(request, "portal/home.html", {"margin_alert": margin_alert, "name": request.user.get_full_name() or request.user.get_username()})
+
+
+def sales_home(request):
+    """Sales: the Leads and Quotation buttons, then the payment collection, the sales target and (directors, lead heads) the dashboard."""
+    show_dash = _is_director(request.user) or _is_lead_head(request.user)
+    rng = request.GET.get("r") if request.GET.get("r") in ("month", "quarter", "year") else "month"
+    periods = _periods(sales.for_user(request.user), director=_is_director(request.user))
+    try:
+        coll = payments.build(request.user, _is_director(request.user))
+    except Exception:           # the page must open even if the payment tables are not ready
+        coll = None
+    dash = dashboard.build(rng) if show_dash else None
+    try:
+        if dash and dash.get("attention"):
+            dash["attention_total"] = sum(a["n"] for a in dash["attention"])
+    except Exception:
+        pass
+    return render(request, "portal/sales_home.html", {"coll": coll, "dash": dash, "rng": rng, "periods": periods,
+                                                      "is_director": _is_director(request.user), "show_collections": coll is not None})
+
+
+def accounts_home(request):
+    """Accounts as tiles: money in (Receivables, Received, Customers, To confirm), money out (Payables, Proformas, Advances, Vendors) and Procurement.
+    A person with limited Accounts access (a sales person) sees only the money-in tiles."""
+    ctx = {"limited": False, "n_confirm": 0, "n_wait": 0, "n_receipts": 0, "n_unchecked": 0}
+    try:
+        from finance import views as fv
+        from finance.receivables import limited
+        ctx.update(fv._ctx(request, ""))
+        ctx["limited"] = bool(limited(request.user))
+    except Exception:
+        pass
+    return render(request, "portal/accounts_home.html", ctx)
 
 
 def targets(request):

@@ -5,6 +5,7 @@
 <style>.f label{display:block;font-size:12px;margin-top:10px;color:#6b7280}.f input,.f select{width:100%;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pk{display:grid;grid-template-columns:26px 1fr 90px 90px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #e5e7eb}.pk input[type=checkbox]{width:20px;height:20px}
 .xr{display:grid;grid-template-columns:1fr 80px 90px;gap:8px;margin-top:6px}</style>
+<p style="margin:0 0 8px"><a href="{% url 'proc_home' %}" style="font-weight:700">&lsaquo; Procurement</a></p>
 <h1>Order material</h1><p class="muted">Pick the customer, tick the materials, choose the vendor. It is saved in Accounts as a <b>proforma</b> (a request, not owed until the invoice comes).</p>
 <div class="card f" style="max-width:700px">
 {% if error %}<div class="msg error">{{ error }}</div>{% endif %}

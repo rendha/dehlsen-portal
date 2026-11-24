@@ -205,7 +205,10 @@
                         <button type="submit" style="background:none;border:0;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px">Undo</button></form>
                 </div>
                 {% endif %}
-                <form method="post" action="{% url 'confirm_customer_choice' %}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                {% if item.lost %}<div><span style="background:#eceff3;color:#555;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:bold">Lost</span>
+                    <form method="post" action="{% url 'quotation_lost' %}" style="display:inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="quotation_id" value="{{ item.id }}"><input type="hidden" name="undo" value="1">
+                        <button type="submit" style="background:none;border:0;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px">Undo</button></form></div>{% endif %}
+                {% if not item.lost %}<form method="post" action="{% url 'confirm_customer_choice' %}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                     {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
                     {% if item.others %}
                     <select name="quotation_id" style="padding:9px;border:1px solid #d1d5db;border-radius:8px;max-width:100%">
@@ -213,9 +216,10 @@
                         {% for other in item.others %}<option value="{{ other.id }}" {% if other.id == item.preselect %}selected{% endif %}>{{ other.offer_no }} · {{ other.kw_display }} · {{ other.value_display }}</option>{% endfor %}
                     </select>
                     {% else %}<input type="hidden" name="quotation_id" value="{{ item.id }}">{% endif %}
-                    <button type="submit" style="border:0;border-radius:8px;padding:10px 14px;font-weight:bold;cursor:pointer;background:#eef4fb;color:#3B73B9">Customer said OK{% if item.others %}: confirm the selected quotation{% endif %}</button>
-                    <span class="muted">Not OK? Use “+ Quote again” for a requote.</span>
-                </form>
+                    <button type="submit" style="border:0;border-radius:8px;padding:10px 22px;font-weight:bold;cursor:pointer;background:#e3f5ea;color:#1f7a43" onclick="return confirm('Mark as WON? The quotation becomes a customer.')">Won</button>
+                    <button type="submit" formaction="{% url 'quotation_lost' %}" style="border:0;border-radius:8px;padding:10px 22px;font-weight:bold;cursor:pointer;background:#eceff3;color:#555" onclick="return confirm('Mark as LOST? The client said no.')">Lost</button>
+                    <span class="muted">Not decided? Use “+ Quote again” for a requote.</span>
+                </form>{% endif %}
             </div>
 
             {% if item.others %}
