@@ -21,6 +21,15 @@ class FileMixin(forms.Form):
                                help_text="PDF, JPG or PNG up to 5 MB. On a phone you can pick a file or take a photo. Uploading again replaces the old file.",
                                widget=forms.ClearableFileInput(attrs={"accept": "application/pdf,image/*"}))
 
+    def customer_picker(self):
+        """Make 'Customer / site' a pick-from-the-list box (you can still type something else)."""
+        from store.models import Customer
+        names = sorted({n.strip() for n in Customer.objects.values_list("name", flat=True) if n and n.strip()}, key=str.lower)
+        self.customer_options = names
+        if "customer_name" in self.fields:
+            self.fields["customer_name"].widget = forms.TextInput(attrs={"list": "fin-customers", "autocomplete": "off", "placeholder": "Start typing a customer name, or pick from the list"})
+            self.fields["customer_name"].help_text = "Pick a customer from the list. You can also type a site name that is not a customer."
+
     def clean_pdf_file(self):
         up = self.cleaned_data.get("pdf_file")
         if not up or up is False:
@@ -56,6 +65,7 @@ class ProformaForm(FileMixin, forms.ModelForm):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["vendor"].queryset = Vendor.objects.filter(is_active=True)
+        self.customer_picker()
 
 
 class InvoiceForm(FileMixin, forms.ModelForm):
@@ -68,6 +78,7 @@ class InvoiceForm(FileMixin, forms.ModelForm):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["vendor"].queryset = Vendor.objects.filter(is_active=True)
+        self.customer_picker()
         self.fields["proforma"].required = False
         self.fields["proforma"].label = "From proforma (if any)"
 

@@ -3,6 +3,7 @@
 <form method="post"{% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}{{ form.non_field_errors }}<div class="fgrid">
 {% for f in form %}<div>{% if f.field.widget.input_type == 'checkbox' %}<label style="display:flex;align-items:center">{{ f }} {{ f.label }}</label>{% else %}{{ f.label_tag }}{{ f }}{% endif %}
 {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}{{ f.errors }}</div>{% endfor %}</div>
+{% if form.customer_options %}<datalist id="fin-customers">{% for n in form.customer_options %}<option value="{{ n }}">{% endfor %}</datalist>{% endif %}
 <button class="btn" type="submit">Save</button></form></div>
 {% if credit_map %}<script>
 (function(){var m={{ credit_map|safe }},v=document.getElementById("id_vendor"),c=document.getElementById("id_credit_days");
