@@ -825,7 +825,8 @@ def _task_row(task, user):
         "by": notify.name_of(task.created_by), "to": notify.name_of(task.assigned_to),
         "added": "%d %s" % (timezone.localtime(task.created_at).day, timezone.localtime(task.created_at).strftime("%b")),
         "due": task.due_text(), "left": task.left_text(), "done": task.done, "overdue": task.overdue,
-        "mine": task.assigned_to_id == user.id, "url": reverse("task_detail", args=[task.id]),
+        "mine": task.assigned_to_id == user.id, "self": bool(task.created_by_id and task.created_by_id == task.assigned_to_id),
+        "url": reverse("task_detail", args=[task.id]),
     }
 
 

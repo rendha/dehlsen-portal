@@ -1356,6 +1356,10 @@ def add_schedule_view(request):
     # opened from the "To be scheduled" list: the form is filled from that item, and the item is closed when this is saved
     from_request = request.POST.get('from_request') or request.GET.get('request') or ''
 
+    # opened from a visit that was rescheduled or only partly done: the new visit continues that one
+    from_schedule = request.POST.get('from_schedule') or request.GET.get('from_schedule') or ''
+    earlier = CleaningSchedule.objects.filter(pk=int(from_schedule)).select_related('service_type').first() if str(from_schedule).isdigit() else None
+
     if request.method == 'POST':
 
         form = CleaningScheduleForm(request.POST)
@@ -1363,6 +1367,9 @@ def add_schedule_view(request):
         if form.is_valid():
 
             schedule = form.save()
+            if earlier and earlier.pk != schedule.pk:
+                schedule.previous = earlier
+                schedule.save(update_fields=['previous'])
             if schedule.status in ('Rescheduled', 'Cancelled', 'Partially done') and (schedule.reason or '').strip():
                 _log_reason(schedule, schedule.status, schedule.reason)
 
@@ -1385,6 +1392,15 @@ def add_schedule_view(request):
         if wanted:
             initial.update(_request_initial(wanted))
 
+        if earlier:
+            initial.update({
+                'customer': earlier.customer_id, 'customer_name': earlier.customer_name, 'phone': earlier.phone, 'site': earlier.site_id,
+                'solar_kw': earlier.solar_kw, 'location': earlier.location, 'address': earlier.address, 'assigned_to': earlier.assigned_to_id,
+                'is_free': earlier.is_free, 'service': earlier.service_name,
+                'notes': 'Next visit after %s (%s)%s' % (earlier.scheduled_date.strftime('%d %b %Y'), earlier.status, (': ' + earlier.reason) if earlier.reason else ''),
+            })
+            initial = {k: val for k, val in initial.items() if val not in (None, '')}
+
         form = CleaningScheduleForm(initial=initial)
 
     return render(
@@ -1399,6 +1415,7 @@ def add_schedule_view(request):
             ),
             'button_text': 'Save Schedule',
             'from_request': from_request,
+            'from_schedule': earlier.pk if earlier else '',
         }
     )
 
@@ -1565,6 +1582,18 @@ STATUS_COLORS = {
 }
 
 
+def _visit_links(schedule):
+    """'Continued from 5 Dec (Partially done)' / 'Next visit: 12 Dec (Scheduled)' for the visit popup."""
+    lines = []
+    prev = schedule.previous
+    if prev:
+        lines.append('Continued from %s (%s)' % (prev.scheduled_date.strftime('%d %b %Y'), prev.status))
+    for n in schedule.next_visits.all():
+        if n.status != 'Cancelled':
+            lines.append('Next visit: %s (%s)' % (n.scheduled_date.strftime('%d %b %Y'), n.status))
+    return '\n'.join(lines)
+
+
 def _schedule_events(schedules, for_owner):
     """Turns schedules into FullCalendar events."""
 
@@ -1616,6 +1645,8 @@ def _schedule_events(schedules, for_owner):
             'notes': schedule.notes or '',
             'reason': schedule.reason or '',
             'assigned_to': assigned,
+            'links': _visit_links(schedule),
+            'has_next': any(n.status != 'Cancelled' for n in schedule.next_visits.all()),
             'accepted_at': timezone.localtime(schedule.accepted_at).strftime('%d %b, %I:%M %p') if schedule.accepted_at else '',
             'took': schedule.took_text,
         }
@@ -1650,7 +1681,8 @@ def schedule_events_api(request):
 
     schedules = (
         CleaningSchedule.objects
-        .select_related('customer', 'site', 'assigned_to', 'service_type')
+        .select_related('customer', 'site', 'assigned_to', 'service_type', 'previous')
+        .prefetch_related('next_visits')
         .all()
     )
 
@@ -1685,7 +1717,8 @@ def my_schedule_events_api(request):
         CleaningSchedule.objects
         .filter(assigned_to=request.user)
         .exclude(status='Cancelled')
-        .select_related('customer', 'site', 'assigned_to', 'service_type')
+        .select_related('customer', 'site', 'assigned_to', 'service_type', 'previous')
+        .prefetch_related('next_visits')
     )
 
     return JsonResponse(
@@ -1727,36 +1760,36 @@ def reschedule_api(request, pk):
             status=400
         )
 
+    if schedule.status in ('Completed', 'Cancelled'):
+        return JsonResponse({'success': False, 'error': 'This visit is %s, so it cannot be rescheduled.' % schedule.status.lower()}, status=400)
+
+    if schedule.status == 'Rescheduled' and schedule.next_visits.exclude(status='Cancelled').exists():
+        return JsonResponse({'success': False, 'error': 'This visit was already rescheduled. Drag the new visit instead.'}, status=400)
+
     try:
 
-        schedule.scheduled_date = datetime.strptime(
-            new_date,
-            '%Y-%m-%d'
-        ).date()
+        day = datetime.strptime(new_date, '%Y-%m-%d').date()
+        at = datetime.strptime(new_time, '%H:%M').time() if new_time else schedule.scheduled_time
 
-        if new_time:
+        # The old visit stays on its own date (as Rescheduled, or Partially done) and a NEW visit is made on the new date.
+        new_visit = CleaningSchedule.objects.create(
+            customer=schedule.customer, customer_name=schedule.customer_name, phone=schedule.phone, solar_kw=schedule.solar_kw,
+            site=schedule.site, service_type=schedule.service_type, location=schedule.location, address=schedule.address,
+            scheduled_date=day, scheduled_time=at, status='Scheduled', is_free=schedule.is_free,
+            assigned_to=schedule.assigned_to, previous=schedule,
+            notes='%s Rescheduled from %s: %s' % (timezone.localdate().strftime('%d %b %Y'), schedule.scheduled_date.strftime('%d %b %Y'), reason[:300]),
+        )
 
-            schedule.scheduled_time = datetime.strptime(
-                new_time,
-                '%H:%M'
-            ).time()
-
-        schedule.status = 'Rescheduled'
-
-        schedule.save()
-        _log_reason(schedule, 'Rescheduled', reason)
+        if schedule.status != 'Partially done':
+            schedule.status = 'Rescheduled'
+            schedule.save(update_fields=['status', 'updated_at'])
+        _log_reason(schedule, schedule.status, reason)
 
         return JsonResponse({
             'success': True,
-            'reason': schedule.reason,
-            'notes': schedule.notes,
-            'date': schedule.scheduled_date.isoformat(),
-            'time': (
-                schedule.scheduled_time.strftime('%H:%M')
-                if schedule.scheduled_time
-                else None
-            ),
             'status': schedule.status,
+            'new_id': new_visit.id,
+            'date': new_visit.scheduled_date.isoformat(),
         })
 
     except ValueError:
@@ -1889,6 +1922,7 @@ def my_schedule_view(request):
             assigned_to=request.user,
             status__in=['Scheduled', 'Rescheduled'],
         )
+        .exclude(status='Rescheduled', next_visits__isnull=False)      # the old visit stays on the calendar; the new one is the job
         .select_related('customer', 'site', 'service_type')
         .order_by('scheduled_date', 'scheduled_time')
     )

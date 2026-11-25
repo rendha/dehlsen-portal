@@ -186,6 +186,7 @@
 
         {% csrf_token %}
         {% if from_request %}<input type="hidden" name="from_request" value="{{ from_request }}">{% endif %}
+        {% if from_schedule %}<input type="hidden" name="from_schedule" value="{{ from_schedule }}">{% endif %}
 
 
         {% if form.non_field_errors %}

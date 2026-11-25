@@ -405,6 +405,12 @@ class CleaningSchedule(models.Model):
     accepted_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    # The earlier visit this one continues: set when a visit is rescheduled (the old one stays on its own date as "Rescheduled")
+    # or when the balance work of a "Partially done" visit is scheduled.
+    previous = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='next_visits'
+    )
+
     @property
     def took_text(self):
         """Accept only means 'I have seen this job' (it is often tapped the day before), so no time is worked out from it."""

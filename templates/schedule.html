@@ -157,7 +157,7 @@
 {% if read_only %}
 <style>
     /* look-only calendar: no status change, no edit, no delete */
-    label[for="modalStatus"], #modalStatus, #editButton, #deleteButton, #deleteConfirm { display: none !important; }
+    label[for="modalStatus"], #modalStatus, #editButton, #nextButton, #deleteButton, #deleteConfirm { display: none !important; }
 </style>
 {% endif %}
 
@@ -264,6 +264,11 @@
         <div class="detail-label">Notes</div>
         <div id="modalNotes" class="detail-value"></div>
 
+        <div id="modalLinksBox" style="display:none">
+            <div class="detail-label">Linked visits</div>
+            <div id="modalLinks" class="detail-value" style="white-space:pre-line"></div>
+        </div>
+
         <div id="modalReasonBox" style="display:none">
             <div class="detail-label">Reason</div>
             <div id="modalReason" class="detail-value"></div>
@@ -293,6 +298,7 @@
         <div class="d-flex flex-wrap gap-2">
             <a id="editButton" href="#" class="btn btn-primary">Edit</a>
             <a id="mapButton" href="#" target="_blank" rel="noopener" class="btn btn-outline-primary">🗺️ Map</a>
+            <a id="nextButton" href="#" class="btn btn-outline-success" hidden>➕ Schedule next visit</a>
             <button id="deleteButton" type="button" class="btn btn-outline-danger">Delete</button>
             <button type="button" class="btn btn-light ms-auto" onclick="closeModal()">Close</button>
         </div>
@@ -488,6 +494,8 @@ function showScheduleModal(event) {
     setText('modalAddress', p.address);
     setText('modalAssigned', p.assigned_to || 'Not assigned');
     setText('modalNotes', p.notes);
+    setText('modalLinks', p.links || '');
+    document.getElementById('modalLinksBox').style.display = p.links ? '' : 'none';
     setText('modalReason', p.reason);
     document.getElementById('modalReasonBox').style.display = (p.reason && NEEDS_REASON.indexOf(p.status) >= 0) ? '' : 'none';
     setText('modalTook', p.accepted_at ? ('Accepted ' + p.accepted_at) : '-');
@@ -498,6 +506,11 @@ function showScheduleModal(event) {
     const mapButton = document.getElementById('mapButton');
     mapButton.hidden = !p.map_link;
     mapButton.href = p.map_link || '#';
+
+    // a partly done or rescheduled visit that has no next visit yet: one tap opens the form, already linked to it
+    const nextButton = document.getElementById('nextButton');
+    nextButton.hidden = !((p.status === 'Partially done' || p.status === 'Rescheduled') && !p.has_next && p.edit_url);
+    nextButton.href = '/service/schedule/add/?from_schedule=' + event.id;
 
     document.getElementById('deleteConfirm').classList.add('d-none');
 
@@ -551,6 +564,11 @@ document.getElementById('modalStatus').addEventListener('change', function () {
             setText('modalReason', data.reason || '');
             setText('modalNotes', data.notes || '');
             document.getElementById('modalReasonBox').style.display = data.reason ? '' : 'none';
+            if (status === 'Rescheduled' || status === 'Partially done') {
+                if (window.confirm('Schedule the next visit now? It will be linked to this one.')) {
+                    window.location.href = '/service/schedule/add/?from_schedule=' + event.id;
+                }
+            }
         })
         .catch(() => alert('Could not update status. Check your internet connection.'));
     }
@@ -637,11 +655,8 @@ function doReschedule(event, info, reason) {
                 info.revert();
                 return;
             }
-            event.setExtendedProp('status', 'Rescheduled');
-            event.setExtendedProp('reason', data.reason || '');
-            event.setExtendedProp('notes', data.notes || '');
-            event.setProp('backgroundColor', STATUS_COLORS.Rescheduled);
-            event.setProp('borderColor', STATUS_COLORS.Rescheduled);
+            info.revert();                  // the old visit stays on its own date, marked Rescheduled
+            calendar.refetchEvents();       // and the new visit shows on the new date as Scheduled
         })
         .catch(() => {
             alert('Could not reschedule. Check your internet connection.');

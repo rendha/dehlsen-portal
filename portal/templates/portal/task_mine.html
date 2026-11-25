@@ -4,7 +4,7 @@
 <div class="top"><div><h1>My tasks</h1><small>{{ request.user.get_full_name|default:request.user.username }} · sorted by due date</small></div><a class="pill" href="{% url 'task' %}">&lsaquo; Task</a></div>
 <div class="card list">
 {% for r in mine %}<div class="it"><span class="dot" style="background:{% if r.overdue %}#d64545{% else %}#E8730C{% endif %}"></span>
-<div style="flex:1"><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>from {{ r.by }} · added {{ r.added }}</small>{% if r.details %}<small> · {{ r.details|truncatechars:70 }}</small>{% endif %}<br><span class="tag{% if r.overdue %} r{% endif %}">{{ r.due }} · {{ r.left }}</span></div>
+<div style="flex:1"><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>{% if r.self %}given by me to myself{% else %}from {{ r.by }}{% endif %} · added {{ r.added }}</small>{% if r.details %}<small> · {{ r.details|truncatechars:70 }}</small>{% endif %}<br><span class="tag{% if r.overdue %} r{% endif %}">{{ r.due }} · {{ r.left }}</span></div>
 <form method="post" action="{% url 'task_done' r.id %}" style="margin:0">{% csrf_token %}<button class="btn g auto" style="padding:8px 12px" type="submit">Mark done</button></form></div>
 {% empty %}<p style="color:var(--mut);margin:0">Nothing waiting for you. 🎉</p>{% endfor %}</div>
 
@@ -17,7 +17,7 @@
 
 {% if given %}<div class="card list"><h3 style="margin-top:0">Tasks I gave</h3>
 {% for r in given %}<div class="it {% if r.done %}dim{% endif %}"><span class="dot" style="background:{% if r.done %}#9aa5b4{% elif r.overdue %}#d64545{% else %}#E8730C{% endif %}"></span>
-<div><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>to {{ r.to }} · added {{ r.added }}</small><br><span class="tag{% if r.overdue %} r{% elif r.done %} g{% endif %}">{{ r.due }} · {{ r.left }}</span></div></div>{% endfor %}</div>{% endif %}
+<div><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>{% if r.self %}to myself{% else %}to {{ r.to }}{% endif %} · added {{ r.added }}</small>{% if r.details %}<small> · {{ r.details|truncatechars:70 }}</small>{% endif %}<br><span class="tag{% if r.overdue %} r{% elif r.done %} g{% endif %}">{{ r.due }} · {{ r.left }}</span></div></div>{% endfor %}</div>{% endif %}
 {% if finished %}<div class="card list"><h3 style="margin-top:0">Done recently</h3>
 {% for r in finished %}<div class="it dim"><span class="dot" style="background:#9aa5b4"></span><div style="flex:1"><a href="{{ r.url }}"><b>{{ r.type }}</b></a><small>from {{ r.by }}</small></div>
 <form method="post" action="{% url 'task_done' r.id %}" style="margin:0">{% csrf_token %}<input type="hidden" name="undo" value="1"><button class="btn w auto" style="padding:6px 10px" type="submit">Reopen</button></form></div>{% endfor %}</div>{% endif %}
