@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<p style="margin:10px 0 0"><a href="{% url 'sales_home' %}" style="font-weight:700;text-decoration:none">&larr; Sales</a></p>
 
 <style>
     /* Client view: hide other customers' private details */
@@ -399,12 +398,12 @@
                     </div>
                 </div>
 
-                <form method="post" action="{% url 'fill_site_coordinates' %}" id="fillCoordsForm">
+{% if user.is_staff %}                <form method="post" action="{% url 'fill_site_coordinates' %}" id="fillCoordsForm">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-warning" id="fillCoordsBtn">
                         Find missing locations
                     </button>
-                </form>
+                </form>{% endif %}
 
             </div>
 

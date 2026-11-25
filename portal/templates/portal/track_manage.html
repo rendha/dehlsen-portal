@@ -11,7 +11,7 @@
 <div class="top"><div><h1>Customer page</h1><small>{{ w.name }}{% if w.project_id %} &middot; {{ w.project_id }}{% endif %}{% if w.kw %} &middot; {{ w.kw }} kW{% endif %}</small></div><a class="pill" href="{% url 'progress_detail' w.id %}">&lsaquo; Project</a></div>
 {% for m in messages %}<div class="note" style="margin-bottom:8px">{{ m }}</div>{% endfor %}
 <form method="post" class="sec">{% csrf_token %}<h2>Planned dates the customer will see</h2>
-{% for s in steps %}<div class="row"><span>{{ s.label }}</span>{% if s.done %}<span class="tag done">Done</span>{% elif s.state == "late" %}<span class="tag late">Date passed</span>{% endif %}<input type="date" name="plan_{{ s.key }}" value="{{ s.planned|date:'Y-m-d' }}"></div>{% endfor %}
+{% for s in steps %}<div class="row"><span>{{ s.label }}</span>{% if s.done %}<span class="tag done">Done</span>{% elif s.state == "late" %}<span class="tag late">Date passed</span>{% endif %}{% if s.doc %}<small style="color:#888;margin-right:6px">Anupama</small>{% endif %}<input type="date" name="plan_{{ s.key }}" value="{{ s.planned|date:'Y-m-d' }}"{% if s.locked %} disabled title="Set by {% if s.doc %}Anupama{% else %}the project team{% endif %}"{% endif %}></div>{% endfor %}
 <small style="color:var(--mut)">A step is marked done by the project stage ticks (site estimation, feasibility, material dispatched, structure, panel, electrical, inverter, KSEB inspection, commissioning, documents handed over). Leave a date empty to hide it.</small>
 <div class="btns"><button class="btn" type="submit">Save dates</button></div></form>
 <div class="sec"><h2>Send to the customer</h2>

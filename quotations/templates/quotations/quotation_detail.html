@@ -149,6 +149,7 @@
             <a href="{% url 'quotation_dashboard' %}" class="top-back">&larr; Back to Quotations</a>
             <h1>{{ quotation.offer_no }}</h1>
             <p>Quotation Builder &middot; {{ quotation.business_name }}</p>
+            <p style="margin-top:4px;font-size:13px">{% if lead_link %}Lead: <a href="/leads/" style="color:inherit;font-weight:700">{% if lead_link.lead_no %}{{ lead_link.lead_no }}{% else %}#{{ lead_link.pk }}{% endif %}</a>{% else %}Lead: -{% endif %} &middot; {% if project_link %}Project: <b>{{ project_link.project_id }}</b>{% else %}Project: not confirmed yet{% endif %}</p>
         </div>
         <div class="header-price">
             <div class="label">Final Quotation Price</div>

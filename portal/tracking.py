@@ -120,7 +120,7 @@ def _expected_sanction(w):
         return None
 
 
-def steps_of(w, today=None, lang="en"):
+def steps_of(w, today=None, lang="en", customer=False):
     """Every step with its planned date and state: done / late / planned / later."""
     today = today or timezone.localdate()
     plan = dict(w.customer_plan or {})
@@ -128,6 +128,8 @@ def steps_of(w, today=None, lang="en"):
         plan["panel"] = plan["install"]
     out = []
     for key, label in step_keys(w, lang):
+        if customer and key in LOAN_STEPS:               # the customer's own page does not show the bank loan steps
+            continue
         planned, done = _date(plan.get(key)), _done(w, key, today)
         if key == "loan_approval" and not planned and not done:
             planned = _expected_sanction(w)
@@ -272,15 +274,30 @@ def wa_link(phone, text):
     return ("https://wa.me/%s?text=%s" % (digits, quote(text))) if len(digits) >= 11 else ""
 
 
+DOC_KEYS = {"feasibility", "inspection", "commissioning", "handover"}      # the dates given by the documentation person
+DOC_PEOPLE = {"anupama"}                                                     # user name or first name
+
+
+def _doc_person(user):
+    return bool({(user.get_username() or "").lower(), (user.first_name or "").lower()} & DOC_PEOPLE)
+
+
 def manage(request, pk):
-    """The project team: set the planned dates, copy the customer's link, send it on WhatsApp (English or Malayalam)."""
-    if not project_work.can_edit(request.user):
+    """The project team sets the planned dates (Fidha / Riswan: the work steps; Anupama: feasibility, KSEB inspection, commissioning and
+    document handover); copy the customer's link, send it on WhatsApp (English or Malayalam)."""
+    user = request.user
+    may_rest = project_work.can_edit(user)
+    may_doc = _doc_person(user) or getattr(user, "is_superuser", False) or project_work._director(user)
+    may_rest_steps = may_rest and not (_doc_person(user) and not getattr(user, "is_superuser", False) and not project_work._director(user))
+    if not (may_rest or may_doc):
         return HttpResponseForbidden("Only the project team sets the customer's schedule.")
     w = get_object_or_404(ProjectWork, pk=pk)
     if request.method == "POST":
         plan = dict(w.customer_plan or {})
         plan.pop("install", None)
         for key, _label in step_keys(w):
+            if (key in DOC_KEYS and not may_doc) or (key not in DOC_KEYS and not may_rest_steps):
+                continue                                  # not this person's date: it stays as it is
             raw = (request.POST.get("plan_" + key) or "").strip()
             if raw and _date(raw):
                 plan[key] = raw
@@ -292,6 +309,9 @@ def manage(request, pk):
         return redirect("progress_customer", pk=w.pk)
     url = request.build_absolute_uri("/track/%s/" % ensure_token(w))
     steps = steps_of(w)
+    for st in steps:
+        st["locked"] = (st["key"] in DOC_KEYS and not may_doc) or (st["key"] not in DOC_KEYS and not may_rest_steps)
+        st["doc"] = st["key"] in DOC_KEYS
     has_dates = any(s["planned"] or s["done"] for s in steps)
     ml_steps = steps_of(w, lang="ml")
     ctx = {"w": w, "steps": steps, "url": url, "has_dates": has_dates, "no_phone": not wa_link(w.phone, "x"),
@@ -341,7 +361,7 @@ def public(request, token):
         raise Http404
     lang, today = _lang(request), timezone.localdate()
     t = TEXT[lang]
-    steps = steps_of(w, today, lang)
+    steps = steps_of(w, today, lang, customer=True)
     n_done = sum(1 for s in steps if s["done"])
     user = request.user
     back = reverse_manage(w) if (getattr(user, "is_authenticated", False) and project_work.can_edit(user)) else ""

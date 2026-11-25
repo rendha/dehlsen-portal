@@ -27,6 +27,11 @@ def can_edit(user):
     return bool(names & EDITORS) or bool(getattr(user, "is_superuser", False)) or _director(user)
 
 
+def _is_doc_person(user):
+    from .tracking import _doc_person
+    return _doc_person(user)
+
+
 def _director(user):
     from .views import _is_director
     return _is_director(user)
@@ -427,7 +432,7 @@ def progress(request):
     more = (not grouped) and len(shown) > 120 and request.GET.get("all") != "1"
     return render(request, "portal/progress.html", {"grouped": grouped, "groups": groups,
         "rows": shown[:120] if more else shown, "f_label": FILTERS[ff][0] if ff else "", "f": ff, "st": st_pick, "stage_chips": stage_chips, "work_chips": work_chips, "tab_label": dict(TABS)[tab] if tab != "all" else "", "more": more, "total_shown": len(shown), "tabs": [(k, l, counts[k]) for k, l in TABS], "tab": tab, "q": q,
-        "editor": editor, "director": director, "risk_total": risk_total, "red_limit": EXPOSURE_RED, "stages": ProjectWork.STAGES, "stage": stage, "feas_choices": ProjectWork.FEASIBILITY})
+        "editor": editor, "dates_editor": editor or _is_doc_person(user), "director": director, "risk_total": risk_total, "red_limit": EXPOSURE_RED, "stages": ProjectWork.STAGES, "stage": stage, "feas_choices": ProjectWork.FEASIBILITY})
 
 
 @require_POST
@@ -595,7 +600,7 @@ def project_detail(request, pk):
     steps, n_done, nxt = kseb_steps(w)
     today = timezone.localdate()
     return render(request, "portal/project_detail.html", {
-        "w": w, "editor": editor, "steps": steps, "n_done": n_done, "next": nxt, "clocks": kseb_clocks(w, today), "warranties": warranty_list(w),
+        "w": w, "editor": editor, "dates_editor": editor or _is_doc_person(request.user), "steps": steps, "n_done": n_done, "next": nxt, "clocks": kseb_clocks(w, today), "warranties": warranty_list(w),
         "problems": serial_problems(w, counter), "serial_n": len(panel_serial_list(w)),
         "elec_bal": w.electrical_amount - w.electrical_paid, "struct_bal": w.structure_amount - w.structure_paid})
 

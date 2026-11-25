@@ -283,6 +283,34 @@ def _open_lead_by_phone(Lead, phone):
     return None
 
 
+def _lead_of_quotation(quotation):
+    """The lead this quotation belongs to: the lead that points at it, else the lead whose history names its offer number
+    (older quotations of the same lead), else the open lead with the same phone number."""
+    Lead = _lead_model()
+    if Lead is None:
+        return None
+    lead = Lead.objects.filter(quotation_id=quotation.id).first()
+    if lead is None and quotation.offer_no:
+        try:
+            from portal.models import LeadEvent
+            ev = LeadEvent.objects.filter(kind="quoted", text__contains=quotation.offer_no).select_related("lead").order_by("-id").first()
+            lead = ev.lead if ev else None
+        except Exception:
+            lead = None
+    return lead or _open_lead_by_phone(Lead, quotation.phone)
+
+
+def _project_of_quotation(quotation, lead=None):
+    """The project number when this quotation (or another one of the same lead) was confirmed."""
+    try:
+        from portal.models import Collection
+        ids = [quotation.id] + ([lead.quotation_id] if lead is not None and lead.quotation_id else [])
+        col = Collection.objects.filter(quotation_id__in=ids).exclude(project_id="").order_by("-id").first()
+        return col
+    except Exception:
+        return None
+
+
 @transaction.atomic
 def create_quotation(request):
 
@@ -295,7 +323,7 @@ def create_quotation(request):
         lead_id = request.GET.get("lead") if str(request.GET.get("lead") or "").isdigit() else ""
         Lead = _lead_model()
         if not lead_id and source is not None and Lead is not None:      # quoting again: the customer's lead is used
-            found = _open_lead_by_phone(Lead, source.phone)
+            found = _lead_of_quotation(source)        # the lead this quotation belongs to, so a re-quote never makes a new lead
             lead_id = str(found.pk) if found else ""
         if lead_id:                        # "Make quotation" on a lead: its details are filled in
             try:
@@ -790,6 +818,8 @@ def quotation_detail(request, quotation_id):
         "quotations/quotation_detail.html",
         {
             "quotation": quotation,
+            "lead_link": _lead_of_quotation(quotation),
+            "project_link": _project_of_quotation(quotation, _lead_of_quotation(quotation)),
             "site_details": _site_details_for(quotation),
             "panel_options": panel_options,
             "panel2_options": panel2_options,

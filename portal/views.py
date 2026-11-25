@@ -185,6 +185,10 @@ def _attach_stages(items):
         if key:
             by_phone.setdefault(key, []).append(r)
     today = timezone.localdate()
+    try:                       # quotation id -> project number (only confirmed quotations have one)
+        project_of = {c.quotation_id: c.project_id for c in Collection.objects.exclude(quotation_id__isnull=True).exclude(project_id="").only("quotation_id", "project_id")}
+    except Exception:
+        project_of = {}
     for l in items:
         found = list(by_phone.get(_digits(l.phone), []))
         if l.quotation_id in by_id and by_id[l.quotation_id] not in found:
@@ -192,9 +196,10 @@ def _attach_stages(items):
         found = [r for r in found if r["date"] >= timezone.localtime(l.created_at).date() - datetime.timedelta(days=1)] if l.quotation_id is None else found
         latest = max(found, key=lambda r: (r["date"], r["id"])) if found else None
         l.quote = latest
+        l.project_no = next((project_of[r["id"]] for r in sorted(found, key=lambda r: -r["id"]) if r["id"] in project_of), "")
         if l.lost:
             l.stage, l.stage_label = "lost", "Lost" + (" · %s" % l.lost_reason if l.lost_reason else "")
-        elif latest and any(r["is_customer"] for r in found):
+        elif (latest and any(r["is_customer"] for r in found)) or any(e.kind == "won" for e in l.events.all()):
             l.stage, l.stage_label = "confirmed", "Won"
         elif latest and (today - latest["date"]).days >= 7:
             l.stage, l.stage_label = "waiting", "Quoted · waiting %d days" % (today - latest["date"]).days
@@ -343,41 +348,60 @@ def _site_ready(lead):
     return bool(site and (site.roof_length or site.roof_width) or SitePhoto.objects.filter(lead=lead).exclude(caption=BILL).exists())
 
 
+def _visit_done(lead):
+    """The site visit counts as done when a visit / site-details line is in the history, or the site details are filled."""
+    return any(e.kind in ("visit", "site") for e in lead.events.all()) or _site_ready(lead)
+
+
+def _tell_riswan(request, lead):
+    """Won was clicked but nobody did the site visit: Riswan gets a phone alert."""
+    for u in User.objects.filter(is_active=True):
+        if u.username.lower() == "riswan" or (u.first_name or "").strip().lower() == "riswan":
+            try:
+                notify.send_push(u, "Site visit not done: %s" % lead.customer_name,
+                                 "%s marked this lead WON, but the site visit is not done yet." % _person(request.user), reverse("lead_site", args=[lead.pk]))
+            except Exception:
+                pass
+
+
 def _make_won(request, obj):
+    visit = _visit_done(obj)
     _attach_stages([obj])
-    if not obj.quote:
-        messages.error(request, "This lead has no quotation yet.")
-        return
-    from quotations import dashboard_stats as stats
-    from quotations.models import Quotation
-    quotation = Quotation.objects.get(pk=obj.quote["id"])
-    if not quotation.is_customer:
-        key = stats.client_key(stats.rows_of([quotation])[0])
-        same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
-        Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False)     # one confirmed quotation per client
-        Quotation.objects.filter(id=quotation.id).update(counted=True, is_customer=True)
-    if obj.quotation_id != quotation.id:
-        obj.quotation_id = quotation.id
-        obj.save(update_fields=["quotation_id"])
-    try:                                             # the new customer appears in Project progress / master data by itself
-        from .project_sync import ensure_projects
-        ensure_projects(quotation_ids=[quotation.id])
-    except Exception:
-        pass
-    _lead_log(obj, request.user, "won", "marked the lead WON - the customer said yes")
-    messages.success(request, "Won! %s is now a customer - the project person can prepare the material list." % obj.customer_name)
+    quotation = None
+    if obj.quote:
+        from quotations import dashboard_stats as stats
+        from quotations.models import Quotation
+        quotation = Quotation.objects.get(pk=obj.quote["id"])
+        if not quotation.is_customer:
+            key = stats.client_key(stats.rows_of([quotation])[0])
+            same = [q.id for q in Quotation.objects.all() if stats.client_key(stats.rows_of([q])[0]) == key]
+            Quotation.objects.filter(id__in=same).update(counted=False, is_customer=False)     # one confirmed quotation per client
+            Quotation.objects.filter(id=quotation.id).update(counted=True, is_customer=True)
+        if obj.quotation_id != quotation.id:
+            obj.quotation_id = quotation.id
+            obj.save(update_fields=["quotation_id"])
+        try:                                             # the new customer appears in Project progress / master data by itself
+            from .project_sync import ensure_projects
+            ensure_projects(quotation_ids=[quotation.id])
+        except Exception:
+            pass
+    _lead_log(obj, request.user, "won", "marked the lead WON - the customer said yes" + ("" if visit else " (site visit not done)"))
+    if not visit:
+        _tell_riswan(request, obj)
+    if quotation is None:
+        messages.success(request, "Won! %s is marked Won. There is no quotation yet - link or make one when ready.%s" % (obj.customer_name, "" if visit else " Riswan was told the site visit is not done."))
+    else:
+        messages.success(request, "Won! %s is now a customer - the project person can prepare the material list.%s" % (obj.customer_name, "" if visit else " Riswan was told the site visit is not done."))
 
 
 @require_POST
 def lead_won(request, pk):
-    """The customer said yes: the lead's newest quotation becomes a customer.  The site details must be filled in first."""
+    """The customer said yes.  No site details or quotation are needed; if the site visit is not done, Riswan is told."""
     obj = get_object_or_404(Lead, pk=pk)
     if not _may_touch(request.user, obj):
         return redirect("leads")
-    if not _site_ready(obj):
-        messages.warning(request, "Fill in the site details first (roof size or photos). Saving them will mark the lead Won.")
-        return redirect(reverse("lead_site", args=[obj.pk]) + "?then=won")
-    _make_won(request, obj)
+    if not any(e.kind == "won" for e in obj.events.all()):
+        _make_won(request, obj)
     return redirect(request.POST.get("next") if (request.POST.get("next") or "").startswith("/leads/") else "leads")
 
 

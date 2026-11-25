@@ -993,7 +993,6 @@ def customer_sites_api(request, customer_id):
     })
 
 
-@owner_required
 def canvassing_view(request):
     """
     Find existing installations near a new client.
