@@ -46,6 +46,7 @@ class Proforma(models.Model):
     customer_name = models.CharField("customer / site", max_length=150, blank=True)
     description = models.CharField(max_length=300, blank=True)
     amount = models.DecimalField("amount incl. GST", max_digits=12, decimal_places=2, default=ZERO)
+    buy_by = models.DateField("buy by (last date to purchase)", null=True, blank=True, help_text="The proforma is valid only until this date. Purchase the material before it.")
     status = models.CharField(max_length=10, choices=STATUSES, default=PENDING)
     status_note = models.CharField(max_length=300, blank=True)
     pdf_link = models.CharField("PDF link", max_length=500, blank=True)
@@ -63,6 +64,13 @@ class Proforma(models.Model):
     def advance_paid(self):
         """Money paid against this proforma before any invoice (money out, minus bank / card charges)."""
         return sum((p.applied for p in self.payments.filter(invoice__isnull=True)), ZERO)
+
+    @property
+    def buy_days(self):
+        """Days left to buy within the proforma's validity (negative = date passed). None when no date is set or it no longer matters."""
+        if not self.buy_by or self.status in (self.INVOICED, self.REJECTED, self.CANCELLED):
+            return None
+        return (self.buy_by - timezone.localdate()).days
 
     @property
     def balance(self):

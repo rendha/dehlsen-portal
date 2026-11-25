@@ -71,8 +71,8 @@ class VendorForm(forms.ModelForm):
 class ProformaForm(FileMixin, forms.ModelForm):
     class Meta:
         model = Proforma
-        fields = ["vendor", "number", "date", "company", "delivery_to", "customer_name", "description", "amount", "pdf_link"]
-        widgets = {"date": DateInput()}
+        fields = ["vendor", "number", "date", "buy_by", "company", "delivery_to", "customer_name", "description", "amount", "pdf_link"]
+        widgets = {"date": DateInput(), "buy_by": DateInput()}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)

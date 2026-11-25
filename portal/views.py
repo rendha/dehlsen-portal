@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 
 from . import dashboard, notify, payments, sales
 from .models import Collection, Payment
-from .models import Lead, LeadEvent, SiteDetails, SitePhoto, PushSubscription, Task, TaskType
+from .models import BankLoan, Lead, LeadEvent, SiteDetails, SitePhoto, PushSubscription, Task, TaskType
 
 CACHE_VERSION = "2"            # change when the icons or the offline page change, so phones fetch the new ones
 
@@ -50,7 +50,7 @@ def leads(request):
     head = _is_lead_head(request.user)
     by = "assigned" if request.GET.get("by") == "assigned" else "entered"
     field = "assigned_to_id" if by == "assigned" else "entered_by_id"
-    base = Lead.objects.select_related("entered_by", "assigned_to", "assigned_to2", "site").prefetch_related("events__by")
+    base = Lead.objects.select_related("entered_by", "assigned_to", "assigned_to2", "site", "loan").prefetch_related("events__by")
     who = request.GET.get("who", "")
     prio = request.GET.get("p", "")
     if prio not in ("hot", "medium", "cold"):
@@ -507,11 +507,25 @@ def lead_type(request, pk):
     return redirect(request.POST.get("next_url") if (request.POST.get("next_url") or "").startswith("/leads/") else "leads")
 
 
+
+def _set_loan(lead, user, want):
+    """Tick / untick 'Bank loan customer' on a lead.  Ticking opens the loan file (documents stage); unticking removes it only if nothing was entered yet."""
+    from . import loans
+    from .models import BankLoan
+    loan = BankLoan.objects.filter(lead=lead).first()
+    if want and loan is None:
+        BankLoan.objects.create(lead=lead, owner=loans._owner_default())
+        _lead_log(lead, user, "note", "marked as a bank loan customer", alert=False)
+    elif not want and loan is not None and loan.status == BankLoan.DOCS and not (loan.bank or loan.branch or loan.amount or loan.notes or loan.applied_on):
+        loan.delete()
+        _lead_log(lead, user, "note", "no longer a bank loan customer", alert=False)
+
+
 def lead_new(request):
     people = [u for u in User.objects.filter(is_active=True).order_by("first_name", "username")]
     error = ""
     values = {"customer_name": "", "phone": "", "area": "", "need_choice": "call", "other_text": "", "priority": "medium", "note": "", "assigned_to": "", "assigned_to2": "",
-              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": "", "map_link": "", "site_visit_by": "", "quotation_by": ""}
+              "customer_type": "", "dcr_choice": "", "system_type": "", "system_other": "", "map_link": "", "site_visit_by": "", "quotation_by": "", "bank_loan": ""}
     if request.method == "POST":
         values = {k: request.POST.get(k, "").strip() for k in values}
         person = User.objects.filter(pk=values["assigned_to"], is_active=True).first() if values["assigned_to"].isdigit() else None
@@ -547,6 +561,7 @@ def lead_new(request):
                 except Exception:
                     pass
             _save_bill(lead, request.FILES.getlist("bill"))
+            _set_loan(lead, request.user, bool(values["bank_loan"]))
             for target in (person, person2):
               if target and target.id != request.user.id:
                 try:
@@ -595,7 +610,8 @@ def lead_edit(request, pk):
               "priority": obj.priority, "note": obj.note, "assigned_to": str(obj.assigned_to_id or ""), "assigned_to2": str(obj.assigned_to2_id or ""),
               "customer_type": obj.customer_type, "dcr_choice": obj.dcr_choice, "system_type": obj.system_type, "system_other": obj.system_other,
               "map_link": obj.map_link, "site_visit_by": obj.site_visit_by.isoformat() if obj.site_visit_by else "",
-              "quotation_by": obj.quotation_by.isoformat() if obj.quotation_by else ""}
+              "quotation_by": obj.quotation_by.isoformat() if obj.quotation_by else "",
+              "bank_loan": "1" if BankLoan.objects.filter(lead=obj).exists() else ""}
     if request.method == "POST":
         values = {k: request.POST.get(k, "").strip() for k in values}
         person = User.objects.filter(pk=values["assigned_to"], is_active=True).first() if values["assigned_to"].isdigit() else None
@@ -627,6 +643,7 @@ def lead_edit(request, pk):
                 if pid.isdigit():
                     SitePhoto.objects.filter(lead=obj, pk=int(pid), caption=BILL).delete()
             added = _save_bill(obj, request.FILES.getlist("bill"))
+            _set_loan(obj, request.user, bool(values["bank_loan"]))
             try:
                 lead_dates.sync_tasks(obj, request.user)
             except Exception:

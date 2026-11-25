@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card"><h3 style="margin:0 0 10px">Proforma {{ pf.number|default:"(no number)" }} &middot; {{ pf.vendor.name }}</h3>
 <dl class="kv"><dt>Status</dt><dd><span class="tag {% if pf.status == 'pending' %}a{% elif pf.status == 'invoiced' %}g{% endif %}">{{ pf.get_status_display }}</span>{% if pf.status_note %} {{ pf.status_note }}{% endif %}</dd>
-<dt>Date</dt><dd>{{ pf.date|date:"d M Y" }}</dd><dt>Company</dt><dd>{{ pf.company }}</dd><dt>Deliver to</dt><dd>{{ pf.delivery_to }}{% if pf.customer_name %} &middot; {{ pf.customer_name }}{% endif %}</dd>
+<dt>Date</dt><dd>{{ pf.date|date:"d M Y" }}</dd><dt>Buy by</dt><dd>{% if pf.buy_by %}{{ pf.buy_by|date:"d M Y" }}{% if pf.buy_days is not None %} &middot; {% if pf.buy_days < 0 %}<span class="tag r">date passed</span>{% elif pf.buy_days <= 3 %}<span class="tag a">{{ pf.buy_days }} day{{ pf.buy_days|pluralize }} left</span>{% else %}{{ pf.buy_days }} days left{% endif %}{% endif %}{% else %}Not set{% endif %}</dd><dt>Company</dt><dd>{{ pf.company }}</dd><dt>Deliver to</dt><dd>{{ pf.delivery_to }}{% if pf.customer_name %} &middot; {{ pf.customer_name }}{% endif %}</dd>
 <dt>Material</dt><dd>{{ pf.description|default:"-" }}</dd><dt>Amount (incl. GST)</dt><dd><b>&#8377; {{ pf.amount|inr }}</b></dd><dt>Advance paid</dt><dd>&#8377; {{ pf.advance_paid|inr }}</dd><dt>Balance</dt><dd><b>&#8377; {{ pf.balance|inr }}</b></dd>
 {% if att %}<dt>File</dt><dd><a href="{% url 'fin_file' att.pk %}" target="_blank" rel="noopener">{{ att.name }}</a></dd>{% endif %}
 {% if pf.pdf_link %}<dt>PDF</dt><dd><a href="{{ pf.pdf_link }}" target="_blank" rel="noopener">open</a></dd>{% endif %}

@@ -52,6 +52,8 @@
 <input type="radio" name="priority" id="p2" value="medium" {% if values.priority == "medium" %}checked{% endif %}><label class="medium" for="p2">Medium</label>
 <input type="radio" name="priority" id="p3" value="hot" {% if values.priority == "hot" %}checked{% endif %}><label class="hot" for="p3">Hot</label>
 </div>
+<label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input type="checkbox" name="bank_loan" value="1" {% if values.bank_loan %}checked{% endif %} style="width:auto;margin:0"> <b>Bank loan customer</b></label>
+<small style="color:var(--mut)">Tick if the customer will pay through a bank loan. It shows on the lead, and the loan is followed on the Bank loan page until the bank sanctions it.</small>
 <label for="to">Give this lead to</label>
 <select id="to" name="assigned_to" required><option value="">Choose a person…</option>{% for p in people %}<option value="{{ p.id }}" {% if values.assigned_to == p.id|stringformat:"s" %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select>
 <label for="to2">Second person (optional)</label>
