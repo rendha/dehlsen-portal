@@ -606,9 +606,21 @@ def _render_html(template_name, context):
     return _engine.get_template(template_name).render(Context(context))
 
 
+_PDF_CACHE = {}          # sha256 of the page's HTML -> the PDF bytes of that page (the same page is never built twice)
+_PDF_CACHE_MAX = 60
+
+
 def _html_to_pdf(html):
-    from weasyprint import HTML          # imported here so a WeasyPrint problem only affects PDF creation
-    return HTML(string=html, base_url=ASSETS_URI).write_pdf()
+    import hashlib
+    key = hashlib.sha256(html.encode("utf-8")).hexdigest()
+    pdf = _PDF_CACHE.get(key)
+    if pdf is None:
+        from weasyprint import HTML          # imported here so a WeasyPrint problem only affects PDF creation
+        pdf = HTML(string=html, base_url=ASSETS_URI).write_pdf()
+        if len(_PDF_CACHE) >= _PDF_CACHE_MAX:
+            _PDF_CACHE.pop(next(iter(_PDF_CACHE)))
+        _PDF_CACHE[key] = pdf
+    return pdf
 
 
 def _part(template_name, context):

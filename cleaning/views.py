@@ -1502,7 +1502,8 @@ def _log_reason(schedule, status, reason):
     reason = (reason or '').strip()[:300]
     schedule.reason = reason
     line = '%s %s: %s' % (timezone.localdate().strftime('%d %b %Y'), status, reason)
-    schedule.notes = ((schedule.notes or '').rstrip() + '\n' + line).strip()
+    if line not in (schedule.notes or ''):           # the same reason is never written twice (status change, then drag)
+        schedule.notes = ((schedule.notes or '').rstrip() + '\n' + line).strip()
     schedule.save(update_fields=['reason', 'notes', 'updated_at'])
 
 

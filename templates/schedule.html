@@ -625,6 +625,18 @@ function localDate(d) {
 }
 
 function rescheduleEvent(event, info) {
+    const status = event.extendedProps.status;
+    if (status === 'Completed' || status === 'Cancelled') {          // cannot be moved: say so, do not ask for a reason first
+        alert('This visit is ' + status.toLowerCase() + ', so it cannot be rescheduled.');
+        info.revert();
+        return;
+    }
+    // A reason was already written when the status was changed (Rescheduled / Partially done): do not ask for it a second time.
+    const done = (event.extendedProps.reason || '').trim();
+    if ((status === 'Rescheduled' || status === 'Partially done') && done) {
+        doReschedule(event, info, done);
+        return;
+    }
     askReason('Why is this visit being rescheduled?').then(function (reason) {
         if (!reason) { info.revert(); return; }           // no reason, no change
         doReschedule(event, info, reason);

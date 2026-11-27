@@ -697,3 +697,37 @@ class BankLoan(models.Model):
     def waiting_days(self):
         d = self.applied_on or self.created_at.date()
         return (timezone.localdate() - d).days
+
+
+class GalleryProject(models.Model):
+    """One installation shown in the Sales gallery.  The grid shows its cover photo; tapping it opens all its photos."""
+    KINDS = [("home", "House"), ("flat", "Flat / Apartment"), ("commercial", "Commercial"), ("industrial", "Industrial"), ("other", "Other")]
+    title = models.CharField(max_length=120, blank=True)
+    place = models.CharField(max_length=100, blank=True)
+    capacity = models.CharField("capacity", max_length=30, blank=True, help_text="for example 5 kW")
+    kind = models.CharField(max_length=12, choices=KINDS, default="home")
+    cover = models.ForeignKey("GalleryPhoto", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return self.title or "Project %s" % self.pk
+
+
+class GalleryPhoto(models.Model):
+    """A photo of an installation (kept in the database, shrunk on upload, so it works on any hosting)."""
+    project = models.ForeignKey(GalleryProject, on_delete=models.CASCADE, related_name="photos")
+    data = models.BinaryField()
+    thumb = models.BinaryField()
+    content_type = models.CharField(max_length=60, default="image/jpeg")
+    source = models.CharField(max_length=200, blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return "Photo %s of %s" % (self.pk, self.project)

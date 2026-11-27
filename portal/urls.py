@@ -2,7 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.urls import path
 
-from . import crew, customers, loans, meetings, project_work, views, project_dashboard, leadlink, tracking, lead_report
+from . import crew, customers, gallery, loans, meetings, project_work, views, project_dashboard, leadlink, tracking, lead_report
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -22,6 +22,12 @@ urlpatterns = [
     path("leads/add/", views.lead_new, name="lead_new"),
     path("leads/report/", lead_report.report, name="lead_report"),
     path("sales-home/", views.sales_home, name="sales_home"),
+    path("gallery/", gallery.home, name="gallery"),
+    path("gallery/add/", gallery.add, name="gallery_add"),
+    path("gallery/<int:pk>/delete/", gallery.delete, name="gallery_delete"),
+    path("gallery/photo/<int:pk>/remove/", gallery.photo_delete, name="gallery_photo_delete"),
+    path("gallery/photo/<int:pk>/cover/", gallery.photo_cover, name="gallery_photo_cover"),
+    path("gallery/photo/<int:pk>/<str:size>/", gallery.photo, name="gallery_photo"),
     path("accounts-home/", views.accounts_home, name="accounts_home"),
     path("leads/unlinked/", leadlink.unlinked, name="lead_unlinked"),
     path("leads/from-quotation/<int:qid>/", leadlink.from_quotation, name="lead_from_quotation"),

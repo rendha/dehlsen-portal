@@ -13,6 +13,7 @@
 <a class="tile" href="{% url 'leads' %}"><div class="ic" style="background:#d64545">&#9733;</div><h3>Leads</h3><p>Calls, site visits, priority, lead report</p></a>
 <a class="tile" href="/sales/"><div class="ic" style="background:var(--blue)">&#8377;</div><h3>Quotation</h3><p>New quotation, reports, hybrid calculator</p></a>
 <a class="tile" href="/service/canvassing/"><div class="ic" style="background:#0f9d9a">&#128205;</div><h3>Locate our customer</h3><p>Find our installations near a new client</p></a>
+<a class="tile" href="{% url 'gallery' %}"><div class="ic" style="background:#e08a1e">&#128247;</div><h3>Gallery</h3><p>Our installations, to show a customer</p></a>
 </div>
 {% if show_collections and coll.total.projects %}{% include "portal/_collection_summary.html" %}{% endif %}
 {% if periods %}<h3 style="margin:18px 0 8px">{% if is_director %}Sales target{% else %}My sales target{% endif %} <a href="{% url 'targets' %}" style="font-size:13px;font-weight:400">full page</a></h3>{% include "portal/_targets.html" %}{% endif %}
